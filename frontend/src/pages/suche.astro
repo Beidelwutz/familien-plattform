@@ -1,0 +1,522 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Events suchen - Familien-Lokal Karlsruhe">
+  <main class="search-page">
+    <!-- Search Header -->
+    <section class="search-header">
+      <div class="container">
+        <div class="search-bar">
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Suche nach Events, Orten, Aktivitäten..."
+            class="search-input"
+          />
+          <button class="search-btn" aria-label="Suchen">
+            🔍
+          </button>
+        </div>
+        
+        <!-- Filter Chips -->
+        <div class="filter-chips" id="active-filters">
+          <!-- Active filters will be rendered here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="search-content container">
+      <!-- Sidebar Filters -->
+      <aside class="filters-sidebar" id="filters-sidebar">
+        <div class="filter-header">
+          <h3>Filter</h3>
+          <button class="filter-reset" id="reset-filters">Zurücksetzen</button>
+        </div>
+
+        <!-- Date Filter -->
+        <div class="filter-group">
+          <h4>Datum</h4>
+          <div class="filter-options">
+            <label class="filter-option">
+              <input type="radio" name="date" value="heute" />
+              <span>Heute</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="date" value="morgen" />
+              <span>Morgen</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="date" value="wochenende" />
+              <span>Wochenende</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="date" value="woche" />
+              <span>Diese Woche</span>
+            </label>
+            <label class="filter-option">
+              <input type="date" name="date-custom" class="date-picker" />
+            </label>
+          </div>
+        </div>
+
+        <!-- Age Filter -->
+        <div class="filter-group">
+          <h4>Alter</h4>
+          <div class="filter-options age-chips">
+            <label class="filter-chip">
+              <input type="checkbox" name="age" value="0-2" />
+              <span>0-2 Jahre</span>
+            </label>
+            <label class="filter-chip">
+              <input type="checkbox" name="age" value="3-5" />
+              <span>3-5 Jahre</span>
+            </label>
+            <label class="filter-chip">
+              <input type="checkbox" name="age" value="6-9" />
+              <span>6-9 Jahre</span>
+            </label>
+            <label class="filter-chip">
+              <input type="checkbox" name="age" value="10-14" />
+              <span>10-14 Jahre</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Price Filter -->
+        <div class="filter-group">
+          <h4>Preis</h4>
+          <div class="filter-options">
+            <label class="filter-option">
+              <input type="radio" name="price" value="kostenlos" />
+              <span>Kostenlos</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="price" value="bis10" />
+              <span>Bis 10€</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="price" value="bis30" />
+              <span>Bis 30€</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="price" value="alle" />
+              <span>Alle Preise</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Category Filter -->
+        <div class="filter-group">
+          <h4>Kategorie</h4>
+          <div class="filter-options">
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="museum" />
+              <span>🏛️ Museen</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="sport" />
+              <span>⚽ Sport</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="natur" />
+              <span>🌳 Natur</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="musik" />
+              <span>🎵 Musik</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="theater" />
+              <span>🎭 Theater</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="workshop" />
+              <span>🎨 Workshop</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="category" value="ferienlager" />
+              <span>⛺ Ferienlager</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Indoor/Outdoor Filter -->
+        <div class="filter-group">
+          <h4>Drinnen/Draußen</h4>
+          <div class="filter-options">
+            <label class="filter-option">
+              <input type="checkbox" name="location-type" value="indoor" />
+              <span>🏠 Indoor</span>
+            </label>
+            <label class="filter-option">
+              <input type="checkbox" name="location-type" value="outdoor" />
+              <span>🌤️ Outdoor</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Distance Filter -->
+        <div class="filter-group">
+          <h4>Entfernung</h4>
+          <div class="filter-options">
+            <label class="filter-option">
+              <input type="radio" name="distance" value="5" />
+              <span>Bis 5 km</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="distance" value="10" />
+              <span>Bis 10 km</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="distance" value="20" />
+              <span>Bis 20 km</span>
+            </label>
+            <label class="filter-option">
+              <input type="radio" name="distance" value="50" />
+              <span>Bis 50 km</span>
+            </label>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Results -->
+      <div class="results-container">
+        <!-- View Toggle -->
+        <div class="results-header">
+          <p class="results-count" id="results-count">Lade Events...</p>
+          <div class="view-toggle">
+            <button class="view-btn active" data-view="list" aria-label="Listenansicht">
+              📋
+            </button>
+            <button class="view-btn" data-view="map" aria-label="Kartenansicht">
+              🗺️
+            </button>
+          </div>
+        </div>
+
+        <!-- List View -->
+        <div class="results-list" id="results-list">
+          <!-- Event cards will be rendered here -->
+        </div>
+
+        <!-- Map View -->
+        <div class="results-map hidden" id="results-map">
+          <div id="map" class="map-container"></div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination" id="pagination">
+          <!-- Pagination will be rendered here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Filter Button -->
+    <button class="mobile-filter-btn" id="mobile-filter-btn">
+      Filter
+    </button>
+  </main>
+</BaseLayout>
+
+<style>
+  .search-page {
+    min-height: calc(100vh - 4rem);
+  }
+
+  .search-header {
+    background: var(--color-bg-secondary);
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .search-bar {
+    display: flex;
+    gap: 0.5rem;
+    max-width: 600px;
+    margin: 0 auto 1rem;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .search-btn {
+    padding: 0.875rem 1.25rem;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1.125rem;
+  }
+
+  .filter-chips {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .search-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .search-content {
+      grid-template-columns: 280px 1fr;
+    }
+  }
+
+  .filters-sidebar {
+    display: none;
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    height: fit-content;
+    position: sticky;
+    top: 5rem;
+  }
+
+  @media (min-width: 1024px) {
+    .filters-sidebar {
+      display: block;
+    }
+  }
+
+  .filters-sidebar.mobile-open {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 200;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  .filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .filter-header h3 {
+    margin: 0;
+  }
+
+  .filter-reset {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+
+  .filter-group {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .filter-group:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .filter-group h4 {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .filter-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0;
+  }
+
+  .filter-option input {
+    accent-color: var(--color-primary);
+  }
+
+  .age-chips {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .filter-chip {
+    display: inline-flex;
+    cursor: pointer;
+  }
+
+  .filter-chip input {
+    display: none;
+  }
+
+  .filter-chip span {
+    padding: 0.375rem 0.75rem;
+    background: var(--color-bg-secondary);
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  .filter-chip input:checked + span {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .date-picker {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    margin-top: 0.5rem;
+  }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .results-count {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--color-bg-secondary);
+    padding: 0.25rem;
+    border-radius: var(--border-radius);
+  }
+
+  .view-btn {
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .view-btn.active {
+    background: white;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .results-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+
+  .results-map {
+    height: 500px;
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+  }
+
+  .map-container {
+    width: 100%;
+    height: 100%;
+    background: var(--color-bg-secondary);
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+  }
+
+  .mobile-filter-btn {
+    display: block;
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.75rem 2rem;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 2rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    z-index: 100;
+  }
+
+  @media (min-width: 1024px) {
+    .mobile-filter-btn {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  // Mobile filter toggle
+  const mobileFilterBtn = document.getElementById('mobile-filter-btn');
+  const filtersSidebar = document.getElementById('filters-sidebar');
+  
+  mobileFilterBtn?.addEventListener('click', () => {
+    filtersSidebar?.classList.toggle('mobile-open');
+  });
+
+  // View toggle
+  const viewBtns = document.querySelectorAll('.view-btn');
+  const resultsList = document.getElementById('results-list');
+  const resultsMap = document.getElementById('results-map');
+
+  viewBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      viewBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const view = btn.getAttribute('data-view');
+      if (view === 'list') {
+        resultsList?.classList.remove('hidden');
+        resultsMap?.classList.add('hidden');
+      } else {
+        resultsList?.classList.add('hidden');
+        resultsMap?.classList.remove('hidden');
+      }
+    });
+  });
+</script>

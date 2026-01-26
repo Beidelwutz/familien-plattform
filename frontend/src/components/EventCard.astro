@@ -1,0 +1,252 @@
+---
+interface Props {
+  id: string;
+  title: string;
+  description?: string;
+  date: string;
+  location?: string;
+  priceType: 'free' | 'paid' | 'range' | 'unknown';
+  priceMin?: number;
+  ageMin?: number;
+  ageMax?: number;
+  isIndoor?: boolean;
+  isOutdoor?: boolean;
+  imageUrl?: string;
+  categories?: Array<{ name: string; icon?: string }>;
+  familyFitScore?: number;
+}
+
+const {
+  id,
+  title,
+  description,
+  date,
+  location,
+  priceType,
+  priceMin,
+  ageMin,
+  ageMax,
+  isIndoor,
+  isOutdoor,
+  imageUrl,
+  categories = [],
+  familyFitScore
+} = Astro.props;
+
+const formattedDate = new Date(date).toLocaleDateString('de-DE', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short'
+});
+
+const priceDisplay = priceType === 'free' 
+  ? 'Kostenlos' 
+  : priceMin 
+    ? `ab ${priceMin}€` 
+    : 'Preis auf Anfrage';
+
+const ageDisplay = ageMin !== undefined && ageMax !== undefined
+  ? `${ageMin}-${ageMax} J.`
+  : ageMin !== undefined
+    ? `ab ${ageMin} J.`
+    : null;
+---
+
+<article class="event-card">
+  <a href={`/event/${id}`} class="card-link">
+    <div class="card-image">
+      {imageUrl ? (
+        <img src={imageUrl} alt={title} loading="lazy" />
+      ) : (
+        <div class="placeholder-image">📅</div>
+      )}
+      {familyFitScore && familyFitScore >= 80 && (
+        <span class="score-badge">👨‍👩‍👧‍👦 {familyFitScore}%</span>
+      )}
+    </div>
+    
+    <div class="card-content">
+      <div class="card-badges">
+        {isIndoor && <span class="badge indoor">🏠 Indoor</span>}
+        {isOutdoor && <span class="badge outdoor">🌤️ Outdoor</span>}
+        {ageDisplay && <span class="badge age">{ageDisplay}</span>}
+      </div>
+      
+      <h3 class="card-title">{title}</h3>
+      
+      {description && (
+        <p class="card-description">{description.slice(0, 100)}{description.length > 100 ? '...' : ''}</p>
+      )}
+      
+      <div class="card-meta">
+        <span class="meta-item">
+          <span class="icon">📅</span>
+          {formattedDate}
+        </span>
+        {location && (
+          <span class="meta-item">
+            <span class="icon">📍</span>
+            {location}
+          </span>
+        )}
+      </div>
+      
+      <div class="card-footer">
+        <span class="price">{priceDisplay}</span>
+        <button class="save-btn" data-event-id={id} aria-label="Merken">
+          ❤️
+        </button>
+      </div>
+    </div>
+  </a>
+</article>
+
+<style>
+  .event-card {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+  }
+
+  .event-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+  }
+
+  .card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+
+  .card-image {
+    position: relative;
+    height: 160px;
+    background: var(--color-bg-secondary);
+  }
+
+  .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .placeholder-image {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+    color: white;
+  }
+
+  .score-badge {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card-content {
+    padding: 1rem;
+  }
+
+  .card-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+
+  .badge {
+    padding: 0.125rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .badge.indoor {
+    background: #e0f2fe;
+    color: #0369a1;
+  }
+
+  .badge.outdoor {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .badge.age {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-muted);
+  }
+
+  .card-title {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+  }
+
+  .card-description {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+    line-height: 1.4;
+  }
+
+  .card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .icon {
+    font-size: 0.875rem;
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .price {
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  .save-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    opacity: 0.5;
+    transition: all 0.2s;
+  }
+
+  .save-btn:hover,
+  .save-btn.saved {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+</style>

@@ -1,0 +1,474 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Quellen-Status - Admin - Familien-Lokal">
+  <main class="admin-page">
+    <div class="container">
+      <header class="page-header">
+        <a href="/admin" class="back-link">← Zurück zum Dashboard</a>
+        <h1>Quellen-Status</h1>
+        <p>Übersicht und Gesundheit aller Datenquellen</p>
+      </header>
+
+      <!-- Summary -->
+      <div class="summary-cards">
+        <div class="summary-card healthy">
+          <span class="card-value" id="healthy-count">--</span>
+          <span class="card-label">Gesund</span>
+        </div>
+        <div class="summary-card degraded">
+          <span class="card-value" id="degraded-count">--</span>
+          <span class="card-label">Eingeschränkt</span>
+        </div>
+        <div class="summary-card failing">
+          <span class="card-value" id="failing-count">--</span>
+          <span class="card-label">Fehlerhaft</span>
+        </div>
+        <div class="summary-card dead">
+          <span class="card-value" id="dead-count">--</span>
+          <span class="card-label">Tot</span>
+        </div>
+      </div>
+
+      <!-- Source List -->
+      <div class="source-list">
+        <table class="source-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Quelle</th>
+              <th>Typ</th>
+              <th>Letzter Erfolg</th>
+              <th>Events</th>
+              <th>Fehler</th>
+              <th>Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="source-table-body">
+            <!-- Sources will be rendered here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Source Detail Panel -->
+      <div class="detail-panel hidden" id="detail-panel">
+        <div class="panel-header">
+          <h2 id="panel-source-name">Quelle</h2>
+          <button class="panel-close" id="panel-close">×</button>
+        </div>
+        <div class="panel-content">
+          <div class="panel-section">
+            <h3>Konfiguration</h3>
+            <dl class="config-list" id="panel-config">
+              <!-- Config will be rendered here -->
+            </dl>
+          </div>
+          <div class="panel-section">
+            <h3>Letzte Fetches</h3>
+            <div class="fetch-log" id="panel-fetches">
+              <!-- Fetch log will be rendered here -->
+            </div>
+          </div>
+          <div class="panel-section">
+            <h3>Compliance</h3>
+            <div class="compliance-info" id="panel-compliance">
+              <!-- Compliance info will be rendered here -->
+            </div>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn btn-primary" id="trigger-fetch-btn">🔄 Jetzt abrufen</button>
+          <button class="btn btn-secondary" id="edit-source-btn">✏️ Bearbeiten</button>
+          <button class="btn btn-danger" id="disable-source-btn">⏸️ Deaktivieren</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .admin-page {
+    padding: 2rem 1rem;
+    background: var(--color-bg-secondary);
+    min-height: calc(100vh - 4rem);
+  }
+
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .summary-card {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    text-align: center;
+    border-left: 4px solid;
+  }
+
+  .summary-card.healthy { border-color: #10b981; }
+  .summary-card.degraded { border-color: #f59e0b; }
+  .summary-card.failing { border-color: #ef4444; }
+  .summary-card.dead { border-color: #6b7280; }
+
+  .card-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: bold;
+  }
+
+  .card-label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .source-list {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+  }
+
+  .source-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .source-table th,
+  .source-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .source-table th {
+    background: var(--color-bg-secondary);
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .source-table tbody tr {
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .source-table tbody tr:hover {
+    background: var(--color-bg-secondary);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .status-badge.healthy { background: #d1fae5; color: #065f46; }
+  .status-badge.degraded { background: #fef3c7; color: #92400e; }
+  .status-badge.failing { background: #fee2e2; color: #991b1b; }
+  .status-badge.dead { background: #f3f4f6; color: #374151; }
+
+  .source-type {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .fetch-trigger {
+    padding: 0.5rem;
+    background: var(--color-bg-secondary);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .fetch-trigger:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  /* Detail Panel */
+  .detail-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 100vh;
+    background: white;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-panel.hidden {
+    display: none;
+  }
+
+  .panel-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .panel-header h2 {
+    margin: 0;
+  }
+
+  .panel-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+  }
+
+  .panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+
+  .panel-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .panel-section h3 {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .config-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .config-list dt {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  .config-list dd {
+    margin: 0;
+    font-weight: 500;
+  }
+
+  .fetch-log {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .fetch-entry {
+    padding: 0.75rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+  }
+
+  .fetch-entry.success { border-left: 3px solid #10b981; }
+  .fetch-entry.error { border-left: 3px solid #ef4444; }
+
+  .panel-actions {
+    padding: 1.5rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--color-error);
+    border: 2px solid var(--color-error);
+  }
+
+  @media (max-width: 768px) {
+    .summary-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .source-table {
+      font-size: 0.875rem;
+    }
+
+    .detail-panel {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  // Mock source data
+  const mockSources = [
+    {
+      id: '1',
+      name: 'karlsruhe.de/events',
+      type: 'rss',
+      health_status: 'healthy',
+      last_success_at: '2026-01-26T10:00:00Z',
+      avg_events_per_fetch: 47,
+      consecutive_failures: 0
+    },
+    {
+      id: '2',
+      name: 'badisches-museum.de',
+      type: 'ics',
+      health_status: 'healthy',
+      last_success_at: '2026-01-26T08:00:00Z',
+      avg_events_per_fetch: 12,
+      consecutive_failures: 0
+    },
+    {
+      id: '3',
+      name: 'zoo-karlsruhe.de',
+      type: 'scraper',
+      health_status: 'degraded',
+      last_success_at: '2026-01-25T06:00:00Z',
+      avg_events_per_fetch: 2,
+      consecutive_failures: 1
+    },
+    {
+      id: '4',
+      name: 'ka-news.de/events',
+      type: 'scraper',
+      health_status: 'failing',
+      last_success_at: '2026-01-23T12:00:00Z',
+      avg_events_per_fetch: 0,
+      consecutive_failures: 5
+    },
+  ];
+
+  function renderSummary() {
+    const counts = {
+      healthy: mockSources.filter(s => s.health_status === 'healthy').length,
+      degraded: mockSources.filter(s => s.health_status === 'degraded').length,
+      failing: mockSources.filter(s => s.health_status === 'failing').length,
+      dead: mockSources.filter(s => s.health_status === 'dead').length,
+    };
+
+    document.getElementById('healthy-count')!.textContent = String(counts.healthy);
+    document.getElementById('degraded-count')!.textContent = String(counts.degraded);
+    document.getElementById('failing-count')!.textContent = String(counts.failing);
+    document.getElementById('dead-count')!.textContent = String(counts.dead);
+  }
+
+  function renderSourceTable() {
+    const tbody = document.getElementById('source-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = mockSources.map(source => {
+      const lastSuccess = source.last_success_at 
+        ? new Date(source.last_success_at).toLocaleString('de-DE')
+        : 'Nie';
+
+      return `
+        <tr data-id="${source.id}">
+          <td>
+            <span class="status-badge ${source.health_status}">
+              ${getStatusIcon(source.health_status)} ${getStatusLabel(source.health_status)}
+            </span>
+          </td>
+          <td><strong>${source.name}</strong></td>
+          <td><span class="source-type">${source.type}</span></td>
+          <td>${lastSuccess}</td>
+          <td>${source.avg_events_per_fetch}</td>
+          <td>${source.consecutive_failures}</td>
+          <td>
+            <button class="fetch-trigger" data-id="${source.id}" title="Jetzt abrufen">🔄</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Add click handlers
+    tbody.querySelectorAll('tr').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (!(e.target as HTMLElement).closest('.fetch-trigger')) {
+          openPanel(row.getAttribute('data-id'));
+        }
+      });
+    });
+
+    tbody.querySelectorAll('.fetch-trigger').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        triggerFetch((btn as HTMLElement).getAttribute('data-id'));
+      });
+    });
+  }
+
+  function getStatusIcon(status: string) {
+    switch (status) {
+      case 'healthy': return '●';
+      case 'degraded': return '◐';
+      case 'failing': return '○';
+      case 'dead': return '○';
+      default: return '?';
+    }
+  }
+
+  function getStatusLabel(status: string) {
+    switch (status) {
+      case 'healthy': return 'Gesund';
+      case 'degraded': return 'Eingeschränkt';
+      case 'failing': return 'Fehlerhaft';
+      case 'dead': return 'Tot';
+      default: return 'Unbekannt';
+    }
+  }
+
+  function openPanel(id: string | null) {
+    const panel = document.getElementById('detail-panel');
+    const source = mockSources.find(s => s.id === id);
+    
+    if (panel && source) {
+      document.getElementById('panel-source-name')!.textContent = source.name;
+      panel.classList.remove('hidden');
+    }
+  }
+
+  function triggerFetch(id: string | null) {
+    console.log(`Triggering fetch for source ${id}`);
+    // TODO: Call API
+  }
+
+  // Close panel
+  document.getElementById('panel-close')?.addEventListener('click', () => {
+    document.getElementById('detail-panel')?.classList.add('hidden');
+  });
+
+  // Initial render
+  renderSummary();
+  renderSourceTable();
+</script>

@@ -1,0 +1,378 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Merkliste - Familien-Lokal Karlsruhe">
+  <main class="merkliste-page">
+    <div class="container">
+      <header class="page-header">
+        <h1>Deine Merkliste</h1>
+        <p>Gespeicherte Events für später</p>
+      </header>
+
+      <!-- Not logged in state -->
+      <div class="auth-prompt" id="auth-prompt">
+        <div class="prompt-icon">❤️</div>
+        <h2>Melde dich an</h2>
+        <p>Um Events zu speichern und später wiederzufinden, musst du angemeldet sein.</p>
+        <div class="prompt-actions">
+          <a href="/login" class="btn btn-primary">Anmelden</a>
+          <a href="/registrieren" class="btn btn-secondary">Registrieren</a>
+        </div>
+        
+        <div class="local-storage-note">
+          <p>Du hast <span id="local-count">0</span> Events lokal gespeichert.</p>
+          <button class="btn btn-link" id="show-local">Lokal gespeicherte anzeigen</button>
+        </div>
+      </div>
+
+      <!-- Logged in state -->
+      <div class="saved-events hidden" id="saved-events">
+        <div class="events-header">
+          <span id="saved-count">0 gespeicherte Events</span>
+          <button class="btn btn-secondary" id="export-btn">
+            📅 Alle exportieren
+          </button>
+        </div>
+
+        <div class="events-list" id="events-list">
+          <!-- Events will be rendered here -->
+        </div>
+
+        <div class="empty-state hidden" id="empty-state">
+          <div class="empty-icon">📭</div>
+          <h2>Noch keine Events gespeichert</h2>
+          <p>Durchsuche Events und klicke auf ❤️ um sie hier zu speichern</p>
+          <a href="/suche" class="btn btn-primary">Events entdecken</a>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .merkliste-page {
+    padding: 2rem 1rem;
+    min-height: calc(100vh - 4rem);
+    background: var(--color-bg-secondary);
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-header h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  .page-header p {
+    color: var(--color-text-muted);
+  }
+
+  /* Auth Prompt */
+  .auth-prompt {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 3rem 2rem;
+    text-align: center;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .prompt-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .auth-prompt h2 {
+    margin-bottom: 0.5rem;
+  }
+
+  .auth-prompt > p {
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .prompt-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .local-storage-note {
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-link {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: 0.875rem;
+    padding: 0;
+  }
+
+  /* Saved Events */
+  .events-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .events-list {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .event-card {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.25rem;
+    display: grid;
+    grid-template-columns: 80px 1fr auto;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .event-image {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--border-radius);
+    background: var(--color-bg-secondary);
+    object-fit: cover;
+  }
+
+  .event-info h3 {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .event-info h3 a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .event-info h3 a:hover {
+    color: var(--color-primary);
+  }
+
+  .event-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .event-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .action-btn {
+    padding: 0.5rem;
+    background: var(--color-bg-secondary);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .action-btn:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .action-btn.remove:hover {
+    background: var(--color-error);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 3rem;
+    background: white;
+    border-radius: var(--border-radius-lg);
+  }
+
+  .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .empty-state h2 {
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-state p {
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  @media (max-width: 600px) {
+    .event-card {
+      grid-template-columns: 1fr;
+    }
+
+    .event-image {
+      width: 100%;
+      height: 150px;
+    }
+
+    .event-actions {
+      flex-direction: row;
+      justify-content: flex-end;
+    }
+  }
+</style>
+
+<script>
+  // Check auth status
+  const token = localStorage.getItem('auth_token');
+  const authPrompt = document.getElementById('auth-prompt');
+  const savedEvents = document.getElementById('saved-events');
+
+  // Check for locally saved events
+  function getLocalSavedEvents(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem('saved_events') || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  const localEvents = getLocalSavedEvents();
+  const localCountEl = document.getElementById('local-count');
+  if (localCountEl) {
+    localCountEl.textContent = String(localEvents.length);
+  }
+
+  if (token) {
+    // User is logged in
+    authPrompt?.classList.add('hidden');
+    savedEvents?.classList.remove('hidden');
+    loadSavedEvents();
+  } else {
+    // Show local events option
+    document.getElementById('show-local')?.addEventListener('click', () => {
+      authPrompt?.classList.add('hidden');
+      savedEvents?.classList.remove('hidden');
+      showLocalEvents(localEvents);
+    });
+  }
+
+  async function loadSavedEvents() {
+    try {
+      const response = await fetch('/api/user/saved-events', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.data.length > 0) {
+        renderEvents(data.data);
+      } else {
+        document.getElementById('empty-state')?.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error loading saved events:', error);
+    }
+  }
+
+  function showLocalEvents(eventIds: string[]) {
+    if (eventIds.length === 0) {
+      document.getElementById('empty-state')?.classList.remove('hidden');
+      return;
+    }
+
+    // Fetch event details
+    // For now, show placeholder
+    const list = document.getElementById('events-list');
+    if (list) {
+      list.innerHTML = `
+        <p style="text-align: center; padding: 2rem; color: var(--color-text-muted);">
+          ${eventIds.length} Events lokal gespeichert. 
+          <a href="/login">Melde dich an</a>, um sie dauerhaft zu speichern.
+        </p>
+      `;
+    }
+  }
+
+  function renderEvents(events: any[]) {
+    const list = document.getElementById('events-list');
+    const countEl = document.getElementById('saved-count');
+
+    if (countEl) {
+      countEl.textContent = `${events.length} gespeicherte Events`;
+    }
+
+    if (list) {
+      list.innerHTML = events.map(event => `
+        <div class="event-card" data-id="${event.id}">
+          <img 
+            src="${event.image_urls?.[0] || '/placeholder-event.jpg'}" 
+            alt="" 
+            class="event-image"
+          />
+          <div class="event-info">
+            <h3><a href="/event/${event.id}">${event.title}</a></h3>
+            <div class="event-meta">
+              <span>📅 ${formatDate(event.start_datetime)}</span>
+              <span>📍 ${event.location_district || 'Karlsruhe'}</span>
+            </div>
+          </div>
+          <div class="event-actions">
+            <button class="action-btn" title="Zum Plan hinzufügen">📋</button>
+            <button class="action-btn remove" title="Entfernen" data-id="${event.id}">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+
+      // Add remove handlers
+      list.querySelectorAll('.action-btn.remove').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const eventId = (btn as HTMLElement).getAttribute('data-id');
+          await removeEvent(eventId);
+        });
+      });
+    }
+  }
+
+  function formatDate(dateStr: string): string {
+    return new Date(dateStr).toLocaleDateString('de-DE', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short'
+    });
+  }
+
+  async function removeEvent(eventId: string | null) {
+    if (!eventId) return;
+
+    try {
+      await fetch(`/api/user/saved-events/${eventId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      // Remove from UI
+      document.querySelector(`.event-card[data-id="${eventId}"]`)?.remove();
+    } catch (error) {
+      console.error('Error removing event:', error);
+    }
+  }
+</script>

@@ -1,0 +1,257 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Admin Dashboard - Familien-Lokal">
+  <main class="admin-page">
+    <div class="container">
+      <header class="admin-header">
+        <h1>Admin Dashboard</h1>
+        <p>Verwaltung von Events, Quellen und Datenqualität</p>
+      </header>
+
+      <!-- Dashboard Cards -->
+      <div class="dashboard-grid">
+        <!-- Review Queue -->
+        <a href="/admin/review" class="dashboard-card">
+          <div class="card-icon">📋</div>
+          <div class="card-content">
+            <h2>Review Queue</h2>
+            <p>Events zur manuellen Prüfung</p>
+            <div class="card-stat" id="review-count">
+              <span class="stat-value">--</span>
+              <span class="stat-label">ausstehend</span>
+            </div>
+          </div>
+        </a>
+
+        <!-- Source Health -->
+        <a href="/admin/sources" class="dashboard-card">
+          <div class="card-icon">📡</div>
+          <div class="card-content">
+            <h2>Quellen-Status</h2>
+            <p>Gesundheit der Datenquellen</p>
+            <div class="card-stat" id="source-health">
+              <span class="stat-value">--</span>
+              <span class="stat-label">aktive Quellen</span>
+            </div>
+          </div>
+        </a>
+
+        <!-- Merge Conflicts -->
+        <a href="/admin/conflicts" class="dashboard-card">
+          <div class="card-icon">⚠️</div>
+          <div class="card-content">
+            <h2>Merge-Konflikte</h2>
+            <p>Duplikate zur Zusammenführung</p>
+            <div class="card-stat" id="conflict-count">
+              <span class="stat-value">--</span>
+              <span class="stat-label">Konflikte</span>
+            </div>
+          </div>
+        </a>
+
+        <!-- AI Costs -->
+        <a href="/admin/ai-costs" class="dashboard-card">
+          <div class="card-icon">🤖</div>
+          <div class="card-content">
+            <h2>AI-Kosten</h2>
+            <p>Budget und Nutzung</p>
+            <div class="card-stat" id="ai-budget">
+              <span class="stat-value">--</span>
+              <span class="stat-label">heute</span>
+            </div>
+          </div>
+        </a>
+      </div>
+
+      <!-- Quick Stats -->
+      <section class="quick-stats">
+        <h2>Übersicht</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-number" id="total-events">--</span>
+            <span class="stat-title">Events gesamt</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="published-events">--</span>
+            <span class="stat-title">Veröffentlicht</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="pending-events">--</span>
+            <span class="stat-title">Ausstehend</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number" id="today-imports">--</span>
+            <span class="stat-title">Heute importiert</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recent Activity -->
+      <section class="recent-activity">
+        <h2>Letzte Aktivität</h2>
+        <div class="activity-list" id="activity-list">
+          <p class="loading">Lade Aktivität...</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .admin-page {
+    padding: 2rem 1rem;
+    background: var(--color-bg-secondary);
+    min-height: calc(100vh - 4rem);
+  }
+
+  .admin-header {
+    margin-bottom: 2rem;
+  }
+
+  .admin-header h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  .admin-header p {
+    color: var(--color-text-muted);
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .dashboard-card {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    text-decoration: none;
+    color: var(--color-text);
+    display: flex;
+    gap: 1rem;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+  }
+
+  .card-icon {
+    font-size: 2.5rem;
+  }
+
+  .card-content h2 {
+    font-size: 1.125rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .card-content p {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .card-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--color-primary);
+  }
+
+  .stat-label {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .quick-stats {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .quick-stats h2 {
+    font-size: 1.125rem;
+    margin-bottom: 1rem;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+
+  .stat-card {
+    text-align: center;
+    padding: 1rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+  }
+
+  .stat-number {
+    display: block;
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--color-primary);
+  }
+
+  .stat-title {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .recent-activity {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+  }
+
+  .recent-activity h2 {
+    font-size: 1.125rem;
+    margin-bottom: 1rem;
+  }
+
+  .activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .activity-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+  }
+
+  .activity-icon {
+    font-size: 1.25rem;
+  }
+
+  .activity-text {
+    flex: 1;
+  }
+
+  .activity-time {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .loading {
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+</style>

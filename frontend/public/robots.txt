@@ -1,0 +1,18 @@
+# Familien-Lokal Robots.txt
+# https://familien-lokal.de
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://familien-lokal.de/sitemap.xml
+
+# Disallow admin and private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /profil/
+
+# Allow search engines to crawl event pages
+Allow: /event/
+Allow: /suche
+Allow: /plan

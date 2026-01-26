@@ -1,0 +1,709 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Tagesplan erstellen - Familien-Lokal Karlsruhe">
+  <main class="plan-page">
+    <div class="container">
+      <div class="plan-header">
+        <h1>Erstelle deinen perfekten Familientag</h1>
+        <p>In unter 20 Sekunden zum stressfreien Plan mit Route und Plan B</p>
+      </div>
+
+      <!-- Plan Generator Form -->
+      <div class="plan-generator" id="plan-generator">
+        <!-- Step 1: Children -->
+        <div class="plan-step" data-step="1">
+          <div class="step-header">
+            <span class="step-number">1</span>
+            <h2>Wie alt sind deine Kinder?</h2>
+          </div>
+          <div class="children-list" id="children-list">
+            <div class="child-input">
+              <label>Kind 1</label>
+              <input type="number" min="0" max="18" placeholder="Alter" class="child-age" />
+              <button class="remove-child" aria-label="Kind entfernen">×</button>
+            </div>
+          </div>
+          <button class="add-child-btn" id="add-child">
+            + Kind hinzufügen
+          </button>
+        </div>
+
+        <!-- Step 2: Date -->
+        <div class="plan-step" data-step="2">
+          <div class="step-header">
+            <span class="step-number">2</span>
+            <h2>Wann soll es losgehen?</h2>
+          </div>
+          <div class="date-options">
+            <label class="date-option">
+              <input type="radio" name="plan-date" value="heute" checked />
+              <span class="option-card">
+                <strong>Heute</strong>
+                <small id="date-heute"></small>
+              </span>
+            </label>
+            <label class="date-option">
+              <input type="radio" name="plan-date" value="morgen" />
+              <span class="option-card">
+                <strong>Morgen</strong>
+                <small id="date-morgen"></small>
+              </span>
+            </label>
+            <label class="date-option">
+              <input type="radio" name="plan-date" value="wochenende" />
+              <span class="option-card">
+                <strong>Wochenende</strong>
+                <small id="date-wochenende"></small>
+              </span>
+            </label>
+            <label class="date-option">
+              <input type="radio" name="plan-date" value="custom" />
+              <span class="option-card">
+                <strong>Anderes Datum</strong>
+                <input type="date" id="custom-date" class="custom-date-input" />
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Step 3: Budget -->
+        <div class="plan-step" data-step="3">
+          <div class="step-header">
+            <span class="step-number">3</span>
+            <h2>Was ist dein Budget?</h2>
+          </div>
+          <div class="budget-slider-container">
+            <input 
+              type="range" 
+              id="budget-slider" 
+              min="0" 
+              max="100" 
+              value="30" 
+              class="budget-slider"
+            />
+            <div class="budget-labels">
+              <span>Kostenlos</span>
+              <span class="budget-value" id="budget-value">30€</span>
+              <span>100€+</span>
+            </div>
+          </div>
+          <div class="budget-presets">
+            <button class="budget-preset" data-value="0">Kostenlos</button>
+            <button class="budget-preset" data-value="20">~20€</button>
+            <button class="budget-preset active" data-value="30">~30€</button>
+            <button class="budget-preset" data-value="50">~50€</button>
+            <button class="budget-preset" data-value="100">Egal</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Preferences -->
+        <div class="plan-step" data-step="4">
+          <div class="step-header">
+            <span class="step-number">4</span>
+            <h2>Was gefällt euch?</h2>
+          </div>
+          
+          <div class="preference-group">
+            <h3>Drinnen oder Draußen?</h3>
+            <div class="preference-options">
+              <label class="preference-option">
+                <input type="checkbox" name="indoor-outdoor" value="indoor" checked />
+                <span>🏠 Indoor</span>
+              </label>
+              <label class="preference-option">
+                <input type="checkbox" name="indoor-outdoor" value="outdoor" checked />
+                <span>🌤️ Outdoor</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="preference-group">
+            <h3>Kategorien (optional)</h3>
+            <div class="category-chips">
+              <label class="category-chip">
+                <input type="checkbox" name="categories" value="museum" />
+                <span>🏛️ Museum</span>
+              </label>
+              <label class="category-chip">
+                <input type="checkbox" name="categories" value="sport" />
+                <span>⚽ Sport</span>
+              </label>
+              <label class="category-chip">
+                <input type="checkbox" name="categories" value="natur" />
+                <span>🌳 Natur</span>
+              </label>
+              <label class="category-chip">
+                <input type="checkbox" name="categories" value="spielplatz" />
+                <span>🎢 Spielplatz</span>
+              </label>
+              <label class="category-chip">
+                <input type="checkbox" name="categories" value="kreativ" />
+                <span>🎨 Kreativ</span>
+              </label>
+              <label class="category-chip">
+                <input type="checkbox" name="categories" value="tiere" />
+                <span>🐾 Tiere</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generate Button -->
+        <div class="generate-section">
+          <button class="btn btn-primary btn-large generate-btn" id="generate-plan">
+            ✨ Plan erstellen
+          </button>
+          <p class="generate-hint">Kostenlos · Keine Anmeldung nötig</p>
+        </div>
+      </div>
+
+      <!-- Plan Result (hidden initially) -->
+      <div class="plan-result hidden" id="plan-result">
+        <div class="result-header">
+          <h2>Dein Familientag</h2>
+          <div class="result-meta">
+            <span id="result-date"></span>
+            <span id="result-budget"></span>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="plan-timeline" id="plan-timeline">
+          <!-- Timeline items will be rendered here -->
+        </div>
+
+        <!-- Plan B Toggle -->
+        <div class="plan-b-section">
+          <button class="plan-b-toggle" id="plan-b-toggle">
+            🌧️ Plan B anzeigen (bei Regen)
+          </button>
+          <div class="plan-b-content hidden" id="plan-b-content">
+            <!-- Plan B timeline will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="result-actions">
+          <button class="btn btn-primary" id="save-plan">
+            💾 Plan speichern
+          </button>
+          <button class="btn btn-secondary" id="export-calendar">
+            📅 In Kalender exportieren
+          </button>
+          <button class="btn btn-secondary" id="share-plan">
+            📤 Teilen
+          </button>
+        </div>
+
+        <!-- New Plan -->
+        <button class="new-plan-btn" id="new-plan">
+          ← Neuen Plan erstellen
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div class="plan-loading hidden" id="plan-loading">
+        <div class="loading-spinner"></div>
+        <p>Dein perfekter Familientag wird erstellt...</p>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .plan-page {
+    padding: 2rem 1rem;
+    min-height: calc(100vh - 4rem);
+    background: var(--color-bg-secondary);
+  }
+
+  .plan-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .plan-header h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  .plan-header p {
+    color: var(--color-text-muted);
+  }
+
+  .plan-generator {
+    max-width: 700px;
+    margin: 0 auto;
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow);
+  }
+
+  .plan-step {
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .plan-step:last-of-type {
+    border-bottom: none;
+    margin-bottom: 1rem;
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .step-number {
+    width: 2rem;
+    height: 2rem;
+    background: var(--color-primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    flex-shrink: 0;
+  }
+
+  .step-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  /* Children Input */
+  .children-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .child-input {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .child-input label {
+    min-width: 60px;
+    font-weight: 500;
+  }
+
+  .child-age {
+    width: 100px;
+    padding: 0.5rem;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+  }
+
+  .remove-child {
+    width: 2rem;
+    height: 2rem;
+    background: var(--color-bg-secondary);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+  }
+
+  .remove-child:hover {
+    background: var(--color-error);
+    color: white;
+  }
+
+  .add-child-btn {
+    background: none;
+    border: 2px dashed var(--color-border);
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    color: var(--color-text-muted);
+    width: 100%;
+    transition: all 0.2s;
+  }
+
+  .add-child-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  /* Date Options */
+  .date-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .date-option {
+    cursor: pointer;
+  }
+
+  .date-option input {
+    display: none;
+  }
+
+  .option-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    transition: all 0.2s;
+  }
+
+  .date-option input:checked + .option-card {
+    border-color: var(--color-primary);
+    background: rgba(79, 70, 229, 0.05);
+  }
+
+  .option-card small {
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+  }
+
+  .custom-date-input {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    width: 100%;
+  }
+
+  /* Budget Slider */
+  .budget-slider-container {
+    margin-bottom: 1rem;
+  }
+
+  .budget-slider {
+    width: 100%;
+    height: 8px;
+    appearance: none;
+    background: linear-gradient(to right, var(--color-secondary), var(--color-primary), var(--color-accent));
+    border-radius: 4px;
+    outline: none;
+  }
+
+  .budget-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: white;
+    border: 3px solid var(--color-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+
+  .budget-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .budget-value {
+    font-weight: bold;
+    color: var(--color-primary);
+    font-size: 1.25rem;
+  }
+
+  .budget-presets {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .budget-preset {
+    padding: 0.5rem 1rem;
+    background: var(--color-bg-secondary);
+    border: none;
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .budget-preset.active,
+  .budget-preset:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  /* Preferences */
+  .preference-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .preference-group h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .preference-options {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .preference-option {
+    cursor: pointer;
+  }
+
+  .preference-option input {
+    display: none;
+  }
+
+  .preference-option span {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+    transition: all 0.2s;
+  }
+
+  .preference-option input:checked + span {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .category-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .category-chip {
+    cursor: pointer;
+  }
+
+  .category-chip input {
+    display: none;
+  }
+
+  .category-chip span {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: var(--color-bg-secondary);
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  .category-chip input:checked + span {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  /* Generate Section */
+  .generate-section {
+    text-align: center;
+    padding-top: 1rem;
+  }
+
+  .generate-btn {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .generate-hint {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Result Section */
+  .plan-result {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow);
+  }
+
+  .result-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .result-meta {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    color: var(--color-text-muted);
+  }
+
+  .plan-timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+
+  .plan-timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--color-border);
+  }
+
+  .result-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .plan-b-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .plan-b-toggle {
+    width: 100%;
+    padding: 1rem;
+    background: var(--color-bg-secondary);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  .new-plan-btn {
+    display: block;
+    margin: 2rem auto 0;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: 1rem;
+  }
+
+  /* Loading */
+  .plan-loading {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  @media (max-width: 600px) {
+    .date-options {
+      grid-template-columns: 1fr;
+    }
+    
+    .result-actions {
+      flex-direction: column;
+    }
+    
+    .result-actions .btn {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  // Set date labels
+  const heute = new Date();
+  const morgen = new Date(heute);
+  morgen.setDate(morgen.getDate() + 1);
+  
+  const formatDate = (date: Date) => date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  
+  const heuteEl = document.getElementById('date-heute');
+  const morgenEl = document.getElementById('date-morgen');
+  
+  if (heuteEl) heuteEl.textContent = formatDate(heute);
+  if (morgenEl) morgenEl.textContent = formatDate(morgen);
+
+  // Add child functionality
+  let childCount = 1;
+  const addChildBtn = document.getElementById('add-child');
+  const childrenList = document.getElementById('children-list');
+
+  addChildBtn?.addEventListener('click', () => {
+    childCount++;
+    const childDiv = document.createElement('div');
+    childDiv.className = 'child-input';
+    childDiv.innerHTML = `
+      <label>Kind ${childCount}</label>
+      <input type="number" min="0" max="18" placeholder="Alter" class="child-age" />
+      <button class="remove-child" aria-label="Kind entfernen">×</button>
+    `;
+    childrenList?.appendChild(childDiv);
+    
+    childDiv.querySelector('.remove-child')?.addEventListener('click', () => {
+      childDiv.remove();
+    });
+  });
+
+  // Budget slider
+  const budgetSlider = document.getElementById('budget-slider') as HTMLInputElement;
+  const budgetValue = document.getElementById('budget-value');
+  const budgetPresets = document.querySelectorAll('.budget-preset');
+
+  budgetSlider?.addEventListener('input', () => {
+    const value = parseInt(budgetSlider.value);
+    if (budgetValue) {
+      budgetValue.textContent = value === 0 ? 'Kostenlos' : value >= 100 ? '100€+' : `${value}€`;
+    }
+    budgetPresets.forEach(btn => btn.classList.remove('active'));
+  });
+
+  budgetPresets.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const value = btn.getAttribute('data-value');
+      if (budgetSlider && value) {
+        budgetSlider.value = value;
+        budgetSlider.dispatchEvent(new Event('input'));
+      }
+      budgetPresets.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Plan B toggle
+  const planBToggle = document.getElementById('plan-b-toggle');
+  const planBContent = document.getElementById('plan-b-content');
+
+  planBToggle?.addEventListener('click', () => {
+    planBContent?.classList.toggle('hidden');
+  });
+
+  // New plan button
+  const newPlanBtn = document.getElementById('new-plan');
+  const planGenerator = document.getElementById('plan-generator');
+  const planResult = document.getElementById('plan-result');
+
+  newPlanBtn?.addEventListener('click', () => {
+    planResult?.classList.add('hidden');
+    planGenerator?.classList.remove('hidden');
+  });
+</script>

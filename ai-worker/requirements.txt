@@ -1,0 +1,45 @@
+# AI Worker Dependencies
+
+# Core
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Web/API
+fastapi>=0.109.0
+uvicorn>=0.27.0
+httpx>=0.26.0
+aiohttp>=3.9.0
+
+# Database
+psycopg2-binary>=2.9.9
+sqlalchemy>=2.0.25
+asyncpg>=0.29.0
+
+# Redis/Queue
+redis>=5.0.1
+rq>=1.15.1
+
+# Crawling & Parsing
+feedparser>=6.0.10
+icalendar>=5.0.11
+beautifulsoup4>=4.12.3
+lxml>=5.1.0
+
+# Geocoding
+geopy>=2.4.1
+python-geohash>=0.8.5
+
+# AI/LLM
+openai>=1.10.0
+anthropic>=0.18.0
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2024.1
+tenacity>=8.2.3
+
+# Development
+pytest>=7.4.4
+pytest-asyncio>=0.23.0
+ruff>=0.1.14

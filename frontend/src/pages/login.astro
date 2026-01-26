@@ -1,0 +1,354 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Anmelden - Familien-Lokal Karlsruhe">
+  <main class="auth-page">
+    <div class="auth-container">
+      <div class="auth-card">
+        <div class="auth-header">
+          <h1>Willkommen zurück</h1>
+          <p>Melde dich an, um deine Merkliste und Pläne zu sehen</p>
+        </div>
+
+        <!-- Login Form -->
+        <form class="auth-form" id="login-form">
+          <div class="form-group">
+            <label for="email">E-Mail</label>
+            <input 
+              type="email" 
+              id="email" 
+              name="email" 
+              required 
+              placeholder="deine@email.de"
+              autocomplete="email"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="password">Passwort</label>
+            <input 
+              type="password" 
+              id="password" 
+              name="password" 
+              required 
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+          </div>
+
+          <div class="form-options">
+            <label class="checkbox">
+              <input type="checkbox" name="remember" />
+              <span>Angemeldet bleiben</span>
+            </label>
+            <a href="/passwort-vergessen" class="forgot-link">Passwort vergessen?</a>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-large btn-full">
+            Anmelden
+          </button>
+
+          <div class="form-error hidden" id="login-error">
+            <p>E-Mail oder Passwort falsch</p>
+          </div>
+        </form>
+
+        <div class="auth-divider">
+          <span>oder</span>
+        </div>
+
+        <!-- Social Login (placeholder) -->
+        <div class="social-login">
+          <button class="btn btn-social" disabled>
+            <span>G</span> Mit Google anmelden
+          </button>
+        </div>
+
+        <p class="auth-footer">
+          Noch kein Konto? <a href="/registrieren">Jetzt registrieren</a>
+        </p>
+      </div>
+
+      <!-- Benefits -->
+      <div class="auth-benefits">
+        <h2>Warum registrieren?</h2>
+        <ul>
+          <li>
+            <span class="benefit-icon">❤️</span>
+            <div>
+              <strong>Merkliste</strong>
+              <p>Speichere interessante Events für später</p>
+            </div>
+          </li>
+          <li>
+            <span class="benefit-icon">📋</span>
+            <div>
+              <strong>Gespeicherte Pläne</strong>
+              <p>Greife jederzeit auf deine Familienpläne zu</p>
+            </div>
+          </li>
+          <li>
+            <span class="benefit-icon">👨‍👩‍👧‍👦</span>
+            <div>
+              <strong>Familienprofil</strong>
+              <p>Personalisierte Empfehlungen für deine Kinder</p>
+            </div>
+          </li>
+          <li>
+            <span class="benefit-icon">📅</span>
+            <div>
+              <strong>Kalender-Sync</strong>
+              <p>Exportiere Events direkt in deinen Kalender</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .auth-page {
+    min-height: calc(100vh - 4rem);
+    background: var(--color-bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+  }
+
+  .auth-container {
+    display: grid;
+    gap: 2rem;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  @media (min-width: 768px) {
+    .auth-container {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+  }
+
+  .auth-card {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow);
+  }
+
+  .auth-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .auth-header h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  .auth-header p {
+    color: var(--color-text-muted);
+  }
+
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+
+  .form-group input {
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .forgot-link {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .btn-full {
+    width: 100%;
+  }
+
+  .form-error {
+    background: #fef2f2;
+    color: #dc2626;
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+    text-align: center;
+  }
+
+  .form-error.hidden {
+    display: none;
+  }
+
+  .auth-divider {
+    display: flex;
+    align-items: center;
+    margin: 1.5rem 0;
+  }
+
+  .auth-divider::before,
+  .auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  .auth-divider span {
+    padding: 0 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  .social-login {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .btn-social {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: white;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-social:hover:not(:disabled) {
+    background: var(--color-bg-secondary);
+  }
+
+  .btn-social:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .auth-footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+  }
+
+  .auth-footer a {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  /* Benefits */
+  .auth-benefits {
+    padding: 1rem;
+  }
+
+  .auth-benefits h2 {
+    margin-bottom: 1.5rem;
+  }
+
+  .auth-benefits ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .auth-benefits li {
+    display: flex;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .benefit-icon {
+    font-size: 1.5rem;
+  }
+
+  .auth-benefits strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .auth-benefits p {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+</style>
+
+<script>
+  const form = document.getElementById('login-form');
+  const errorEl = document.getElementById('login-error');
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(form as HTMLFormElement);
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Store token
+        localStorage.setItem('auth_token', data.data.token);
+        // Redirect to home or previous page
+        window.location.href = '/';
+      } else {
+        errorEl?.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      errorEl?.classList.remove('hidden');
+    }
+  });
+</script>

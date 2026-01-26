@@ -1,0 +1,432 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Review Queue - Admin - Familien-Lokal">
+  <main class="admin-page">
+    <div class="container">
+      <header class="page-header">
+        <a href="/admin" class="back-link">← Zurück zum Dashboard</a>
+        <h1>Review Queue</h1>
+        <p>Events mit niedriger Konfidenz zur manuellen Prüfung</p>
+      </header>
+
+      <!-- Filters -->
+      <div class="filters">
+        <select id="status-filter" class="filter-select">
+          <option value="pending_review">Ausstehend</option>
+          <option value="pending_ai">Warte auf AI</option>
+          <option value="incomplete">Unvollständig</option>
+          <option value="all">Alle</option>
+        </select>
+        <select id="source-filter" class="filter-select">
+          <option value="">Alle Quellen</option>
+        </select>
+        <button class="btn btn-secondary" id="refresh-btn">🔄 Aktualisieren</button>
+      </div>
+
+      <!-- Review List -->
+      <div class="review-list" id="review-list">
+        <p class="loading">Lade Events...</p>
+      </div>
+
+      <!-- Review Detail Modal -->
+      <div class="modal hidden" id="review-modal">
+        <div class="modal-content">
+          <button class="modal-close" id="modal-close">×</button>
+          
+          <div class="modal-header">
+            <h2 id="modal-title">Event Title</h2>
+            <div class="modal-badges" id="modal-badges"></div>
+          </div>
+
+          <div class="modal-body">
+            <!-- Event Details -->
+            <div class="detail-section">
+              <h3>Details</h3>
+              <div class="detail-grid" id="modal-details">
+                <!-- Details will be rendered here -->
+              </div>
+            </div>
+
+            <!-- AI Analysis -->
+            <div class="detail-section">
+              <h3>AI-Analyse</h3>
+              <div class="ai-analysis" id="modal-ai">
+                <p>Keine AI-Analyse verfügbar</p>
+              </div>
+            </div>
+
+            <!-- Source Info -->
+            <div class="detail-section">
+              <h3>Quelle</h3>
+              <div class="source-info" id="modal-source">
+                <p>Unbekannt</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn btn-primary" id="approve-btn">✓ Genehmigen</button>
+            <button class="btn btn-secondary" id="edit-btn">✏️ Bearbeiten</button>
+            <button class="btn btn-danger" id="reject-btn">✗ Ablehnen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .admin-page {
+    padding: 2rem 1rem;
+    background: var(--color-bg-secondary);
+    min-height: calc(100vh - 4rem);
+  }
+
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .page-header h1 {
+    margin-bottom: 0.25rem;
+  }
+
+  .page-header p {
+    color: var(--color-text-muted);
+  }
+
+  .filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .filter-select {
+    padding: 0.5rem 1rem;
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius);
+    background: white;
+    font-size: 0.875rem;
+  }
+
+  .review-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .review-item {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    padding: 1.25rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: start;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .review-item:hover {
+    box-shadow: var(--shadow);
+  }
+
+  .review-item-content h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .review-item-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .review-item-badges {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .badge.confidence-low {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+
+  .badge.confidence-medium {
+    background: #fef9c3;
+    color: #ca8a04;
+  }
+
+  .badge.incomplete {
+    background: #f3f4f6;
+    color: #4b5563;
+  }
+
+  .review-item-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .action-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  .action-btn.approve {
+    background: var(--color-success);
+    color: white;
+  }
+
+  .action-btn.reject {
+    background: var(--color-error);
+    color: white;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-content {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+  }
+
+  .modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .modal-header h2 {
+    margin-bottom: 0.5rem;
+  }
+
+  .modal-badges {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .detail-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .detail-section h3 {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .detail-item {
+    padding: 0.5rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+  }
+
+  .detail-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: block;
+  }
+
+  .detail-value {
+    font-weight: 500;
+  }
+
+  .ai-analysis {
+    padding: 1rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+  }
+
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .score-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+  }
+
+  .modal-actions {
+    padding: 1.5rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  .btn-danger {
+    background: var(--color-error);
+    color: white;
+    border: none;
+  }
+
+  .loading {
+    color: var(--color-text-muted);
+    font-style: italic;
+    text-align: center;
+    padding: 2rem;
+  }
+</style>
+
+<script>
+  // Mock data for now
+  const mockReviewItems = [
+    {
+      id: '1',
+      title: 'Kinderfest im Stadtpark',
+      source: 'karlsruhe.de',
+      date: '2026-02-15',
+      confidence: 0.45,
+      status: 'pending_review',
+      issues: ['Preis unklar', 'Altersgruppe nicht angegeben']
+    },
+    {
+      id: '2',
+      title: 'Workshop: Töpfern für Kids',
+      source: 'scraped',
+      date: '2026-02-20',
+      confidence: 0.62,
+      status: 'pending_review',
+      issues: ['Veranstaltungsort ungenau']
+    },
+  ];
+
+  function renderReviewList() {
+    const list = document.getElementById('review-list');
+    if (!list) return;
+
+    list.innerHTML = mockReviewItems.map(item => `
+      <div class="review-item" data-id="${item.id}">
+        <div class="review-item-content">
+          <h3>${item.title}</h3>
+          <div class="review-item-meta">
+            <span>📅 ${item.date}</span>
+            <span>📡 ${item.source}</span>
+          </div>
+          <div class="review-item-badges">
+            <span class="badge ${item.confidence < 0.5 ? 'confidence-low' : 'confidence-medium'}">
+              Konfidenz: ${Math.round(item.confidence * 100)}%
+            </span>
+            ${item.issues.map(i => `<span class="badge incomplete">${i}</span>`).join('')}
+          </div>
+        </div>
+        <div class="review-item-actions">
+          <button class="action-btn approve" data-action="approve" data-id="${item.id}">✓</button>
+          <button class="action-btn reject" data-action="reject" data-id="${item.id}">✗</button>
+        </div>
+      </div>
+    `).join('');
+
+    // Add click handlers
+    list.querySelectorAll('.review-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (!(e.target as HTMLElement).closest('.action-btn')) {
+          openModal(item.getAttribute('data-id'));
+        }
+      });
+    });
+
+    list.querySelectorAll('.action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = (btn as HTMLElement).getAttribute('data-action');
+        const id = (btn as HTMLElement).getAttribute('data-id');
+        handleAction(action, id);
+      });
+    });
+  }
+
+  function openModal(id: string | null) {
+    const modal = document.getElementById('review-modal');
+    modal?.classList.remove('hidden');
+    
+    const item = mockReviewItems.find(i => i.id === id);
+    if (item) {
+      document.getElementById('modal-title')!.textContent = item.title;
+    }
+  }
+
+  function handleAction(action: string | null, id: string | null) {
+    console.log(`Action: ${action} for event ${id}`);
+    // TODO: Call API
+  }
+
+  // Close modal
+  document.getElementById('modal-close')?.addEventListener('click', () => {
+    document.getElementById('review-modal')?.classList.add('hidden');
+  });
+
+  // Initial render
+  renderReviewList();
+</script>

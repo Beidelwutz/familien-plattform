@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # PostgreSQL mit PostGIS Extension
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: familien-lokal-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: familien
+      POSTGRES_PASSWORD: familien_dev_password
+      POSTGRES_DB: familien_lokal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U familien -d familien_lokal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis für Job Queue
+  redis:
+    image: redis:7-alpine
+    container_name: familien-lokal-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Meilisearch für Volltextsuche (optional, für später)
+  # meilisearch:
+  #   image: getmeili/meilisearch:v1.6
+  #   container_name: familien-lokal-search
+  #   restart: unless-stopped
+  #   environment:
+  #     MEILI_ENV: development
+  #     MEILI_MASTER_KEY: familien_search_dev_key
+  #   ports:
+  #     - "7700:7700"
+  #   volumes:
+  #     - meilisearch_data:/meili_data
+
+volumes:
+  postgres_data:
+  redis_data:
+  # meilisearch_data:

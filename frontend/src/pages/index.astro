@@ -1,0 +1,258 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Familien-Lokal Karlsruhe - Familienaktivitäten finden">
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-content">
+        <h1>Finde den perfekten Familientag in Karlsruhe</h1>
+        <p class="hero-subtitle">
+          Events, Kurse und Ferienangebote für Familien – in unter 20 Sekunden zum stressfreien Plan
+        </p>
+        <a href="/plan" class="btn btn-primary btn-large">
+          Plan erstellen
+        </a>
+      </div>
+    </section>
+
+    <!-- Quick Filters -->
+    <section class="quick-filters">
+      <div class="container">
+        <div class="filter-chips">
+          <a href="/suche?zeit=heute" class="chip">Heute</a>
+          <a href="/suche?zeit=wochenende" class="chip">Wochenende</a>
+          <a href="/suche?zeit=ferien" class="chip">Ferien</a>
+          <a href="/suche?preis=kostenlos" class="chip">Kostenlos</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Featured Events -->
+    <section class="featured">
+      <div class="container">
+        <h2>Beliebte Aktivitäten</h2>
+        <div class="event-grid" id="featured-events">
+          <!-- Events werden per API geladen -->
+          <p class="loading">Lade Events...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Categories -->
+    <section class="categories">
+      <div class="container">
+        <h2>Kategorien</h2>
+        <div class="category-grid">
+          <a href="/suche?kategorie=museum" class="category-card">
+            <span class="category-icon">🏛️</span>
+            <span class="category-name">Museen</span>
+          </a>
+          <a href="/suche?kategorie=sport" class="category-card">
+            <span class="category-icon">⚽</span>
+            <span class="category-name">Sport</span>
+          </a>
+          <a href="/suche?kategorie=natur" class="category-card">
+            <span class="category-icon">🌳</span>
+            <span class="category-name">Natur</span>
+          </a>
+          <a href="/suche?kategorie=musik" class="category-card">
+            <span class="category-icon">🎵</span>
+            <span class="category-name">Musik</span>
+          </a>
+          <a href="/suche?kategorie=theater" class="category-card">
+            <span class="category-icon">🎭</span>
+            <span class="category-name">Theater</span>
+          </a>
+          <a href="/suche?kategorie=workshop" class="category-card">
+            <span class="category-icon">🎨</span>
+            <span class="category-name">Workshops</span>
+          </a>
+          <a href="/suche?kategorie=indoor" class="category-card">
+            <span class="category-icon">🏠</span>
+            <span class="category-name">Indoor</span>
+          </a>
+          <a href="/suche?kategorie=ferienlager" class="category-card">
+            <span class="category-icon">⛺</span>
+            <span class="category-name">Ferienlager</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="how-it-works">
+      <div class="container">
+        <h2>So funktioniert's</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="step-number">1</div>
+            <h3>Alter eingeben</h3>
+            <p>Gib das Alter deiner Kinder ein und wähle deine Präferenzen</p>
+          </div>
+          <div class="step">
+            <div class="step-number">2</div>
+            <h3>Plan erhalten</h3>
+            <p>Unsere KI erstellt dir einen maßgeschneiderten Tagesplan</p>
+          </div>
+          <div class="step">
+            <div class="step-number">3</div>
+            <h3>Losgehen</h3>
+            <p>Mit Route, Zeitplan und Plan B bei schlechtem Wetter</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</BaseLayout>
+
+<style>
+  .hero {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: white;
+    padding: 4rem 1rem;
+    text-align: center;
+  }
+
+  .hero-content {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .hero h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+  }
+
+  .hero-subtitle {
+    font-size: 1.25rem;
+    opacity: 0.9;
+    margin-bottom: 2rem;
+  }
+
+  .quick-filters {
+    padding: 2rem 1rem;
+    background: var(--color-bg-secondary);
+  }
+
+  .filter-chips {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .chip {
+    padding: 0.5rem 1.25rem;
+    background: white;
+    border-radius: 2rem;
+    text-decoration: none;
+    color: var(--color-text);
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+  }
+
+  .chip:hover {
+    background: var(--color-primary);
+    color: white;
+    transform: translateY(-2px);
+  }
+
+  .featured, .categories, .how-it-works {
+    padding: 3rem 1rem;
+  }
+
+  .featured h2, .categories h2, .how-it-works h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .event-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+
+  .category-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 1rem;
+    text-decoration: none;
+    color: var(--color-text);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.2s ease;
+  }
+
+  .category-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  }
+
+  .category-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .category-name {
+    font-weight: 500;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .step {
+    text-align: center;
+    padding: 1.5rem;
+  }
+
+  .step-number {
+    width: 3rem;
+    height: 3rem;
+    background: var(--color-primary);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto 1rem;
+  }
+
+  .step h3 {
+    margin-bottom: 0.5rem;
+  }
+
+  .step p {
+    color: var(--color-text-muted);
+  }
+
+  .loading {
+    text-align: center;
+    color: var(--color-text-muted);
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 768px) {
+    .hero h1 {
+      font-size: 3.5rem;
+    }
+  }
+</style>

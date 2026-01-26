@@ -1,0 +1,577 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+// In Astro, we'll fetch the event data server-side
+// For static generation, this would need getStaticPaths
+// For now, we'll use client-side fetching
+---
+
+<BaseLayout title="Event Details - Familien-Lokal Karlsruhe">
+  <main class="event-page">
+    <div class="container">
+      <!-- Loading State -->
+      <div class="loading-state" id="loading">
+        <div class="loading-spinner"></div>
+        <p>Lade Event...</p>
+      </div>
+
+      <!-- Error State -->
+      <div class="error-state hidden" id="error">
+        <h2>Event nicht gefunden</h2>
+        <p>Das gesuchte Event existiert nicht oder wurde entfernt.</p>
+        <a href="/suche" class="btn btn-primary">Zur Suche</a>
+      </div>
+
+      <!-- Event Content -->
+      <article class="event-content hidden" id="event-content">
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb">
+          <a href="/">Start</a>
+          <span>/</span>
+          <a href="/suche">Events</a>
+          <span>/</span>
+          <span id="breadcrumb-title">Event</span>
+        </nav>
+
+        <!-- Hero Image -->
+        <div class="event-hero" id="event-hero">
+          <img src="/placeholder-event.jpg" alt="" id="hero-image" />
+        </div>
+
+        <!-- Event Header -->
+        <header class="event-header">
+          <div class="event-badges" id="event-badges">
+            <!-- Badges will be added here -->
+          </div>
+          <h1 id="event-title">Event Titel</h1>
+          
+          <!-- Quick Info -->
+          <div class="quick-info">
+            <div class="info-item">
+              <span class="icon">📅</span>
+              <span id="event-date">Datum</span>
+            </div>
+            <div class="info-item">
+              <span class="icon">⏰</span>
+              <span id="event-time">Uhrzeit</span>
+            </div>
+            <div class="info-item">
+              <span class="icon">📍</span>
+              <span id="event-location">Ort</span>
+            </div>
+            <div class="info-item">
+              <span class="icon">💰</span>
+              <span id="event-price">Preis</span>
+            </div>
+          </div>
+
+          <!-- Scores -->
+          <div class="scores-row" id="scores-row">
+            <div class="score" title="Familienfreundlichkeit">
+              <span class="score-icon">👨‍👩‍👧‍👦</span>
+              <span class="score-value" id="score-family">--</span>
+            </div>
+            <div class="score" title="Stressfrei-Score">
+              <span class="score-icon">😌</span>
+              <span class="score-value" id="score-stressfree">--</span>
+            </div>
+          </div>
+        </header>
+
+        <!-- CTA Buttons -->
+        <div class="cta-buttons">
+          <a href="#" class="btn btn-primary btn-large" id="booking-btn">
+            Jetzt buchen
+          </a>
+          <button class="btn btn-secondary" id="add-to-plan-btn">
+            📋 Zum Plan hinzufügen
+          </button>
+          <button class="btn btn-secondary" id="save-btn">
+            ❤️ Merken
+          </button>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="event-grid">
+          <!-- Left Column -->
+          <div class="event-main">
+            <!-- Description -->
+            <section class="content-section">
+              <h2>Beschreibung</h2>
+              <div class="description" id="event-description">
+                <p>Laden...</p>
+              </div>
+            </section>
+
+            <!-- Age Info -->
+            <section class="content-section">
+              <h2>Altersempfehlung</h2>
+              <div class="age-info" id="age-info">
+                <span class="age-badge">Für alle Altersgruppen</span>
+              </div>
+            </section>
+
+            <!-- Amenities -->
+            <section class="content-section">
+              <h2>Ausstattung</h2>
+              <div class="amenities-grid" id="amenities">
+                <p class="no-data">Keine Angaben verfügbar</p>
+              </div>
+            </section>
+          </div>
+
+          <!-- Right Column (Sidebar) -->
+          <aside class="event-sidebar">
+            <!-- Map -->
+            <div class="sidebar-card">
+              <h3>Anfahrt</h3>
+              <div class="map-container" id="event-map">
+                <p>Karte wird geladen...</p>
+              </div>
+              <p class="address" id="full-address"></p>
+              <a href="#" class="directions-link" id="directions-link" target="_blank">
+                🗺️ Route berechnen
+              </a>
+            </div>
+
+            <!-- Contact -->
+            <div class="sidebar-card">
+              <h3>Kontakt</h3>
+              <div id="contact-info">
+                <p class="no-data">Keine Kontaktdaten verfügbar</p>
+              </div>
+            </div>
+
+            <!-- Source Info -->
+            <div class="sidebar-card source-info">
+              <h3>Quelle</h3>
+              <p>
+                <a href="#" id="source-link" target="_blank">Originalquelle</a>
+              </p>
+              <p class="last-updated">
+                Stand: <span id="last-verified">Unbekannt</span>
+              </p>
+              <p class="data-quality" id="data-quality">
+                Datenqualität: Automatisch erfasst
+              </p>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Similar Events -->
+        <section class="similar-events">
+          <h2>Ähnliche Events</h2>
+          <div class="events-grid" id="similar-events">
+            <p>Lade ähnliche Events...</p>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+</BaseLayout>
+
+<style>
+  .event-page {
+    padding: 1.5rem 1rem;
+    background: var(--color-bg-secondary);
+    min-height: calc(100vh - 4rem);
+  }
+
+  .breadcrumb {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .breadcrumb a {
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .event-hero {
+    width: 100%;
+    height: 300px;
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    background: var(--color-bg);
+  }
+
+  .event-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .event-header {
+    background: white;
+    padding: 1.5rem;
+    border-radius: var(--border-radius-lg);
+    margin-bottom: 1rem;
+  }
+
+  .event-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .badge {
+    padding: 0.25rem 0.75rem;
+    background: var(--color-bg-secondary);
+    border-radius: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .badge.indoor { background: #e0f2fe; color: #0369a1; }
+  .badge.outdoor { background: #dcfce7; color: #166534; }
+  .badge.category { background: var(--color-primary-light); color: white; }
+
+  .event-header h1 {
+    margin-bottom: 1rem;
+  }
+
+  .quick-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    margin-bottom: 1rem;
+  }
+
+  .info-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .info-item .icon {
+    font-size: 1.25rem;
+  }
+
+  .scores-row {
+    display: flex;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .score {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .score-icon {
+    font-size: 1.5rem;
+  }
+
+  .score-value {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: var(--color-primary);
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .event-grid {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    .event-grid {
+      grid-template-columns: 1fr 350px;
+    }
+  }
+
+  .event-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .content-section {
+    background: white;
+    padding: 1.5rem;
+    border-radius: var(--border-radius-lg);
+  }
+
+  .content-section h2 {
+    font-size: 1.125rem;
+    margin-bottom: 1rem;
+  }
+
+  .description {
+    line-height: 1.7;
+  }
+
+  .age-badge {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+    font-weight: 500;
+  }
+
+  .amenities-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+  }
+
+  .amenity-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+  }
+
+  .event-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .sidebar-card {
+    background: white;
+    padding: 1.25rem;
+    border-radius: var(--border-radius-lg);
+  }
+
+  .sidebar-card h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .map-container {
+    height: 200px;
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .directions-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .source-info {
+    background: var(--color-bg-secondary);
+  }
+
+  .source-info p {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .last-updated, .data-quality {
+    color: var(--color-text-muted);
+  }
+
+  .similar-events {
+    margin-top: 2rem;
+  }
+
+  .similar-events h2 {
+    margin-bottom: 1rem;
+  }
+
+  .events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .loading-state, .error-state {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
+  .no-data {
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // Get event ID from URL
+  const path = window.location.pathname;
+  const eventId = path.split('/').pop();
+
+  // DOM elements
+  const loadingEl = document.getElementById('loading');
+  const errorEl = document.getElementById('error');
+  const contentEl = document.getElementById('event-content');
+
+  // Fetch event data
+  async function loadEvent() {
+    try {
+      const response = await fetch(`/api/events/${eventId}`);
+      
+      if (!response.ok) {
+        throw new Error('Event not found');
+      }
+      
+      const { data: event } = await response.json();
+      displayEvent(event);
+    } catch (error) {
+      console.error('Error loading event:', error);
+      loadingEl?.classList.add('hidden');
+      errorEl?.classList.remove('hidden');
+    }
+  }
+
+  function displayEvent(event: any) {
+    // Hide loading, show content
+    loadingEl?.classList.add('hidden');
+    contentEl?.classList.remove('hidden');
+
+    // Title
+    const titleEl = document.getElementById('event-title');
+    const breadcrumbTitle = document.getElementById('breadcrumb-title');
+    if (titleEl) titleEl.textContent = event.title;
+    if (breadcrumbTitle) breadcrumbTitle.textContent = event.title;
+
+    // Update page title
+    document.title = `${event.title} - Familien-Lokal Karlsruhe`;
+
+    // Date & Time
+    const dateEl = document.getElementById('event-date');
+    const timeEl = document.getElementById('event-time');
+    if (event.start_datetime) {
+      const date = new Date(event.start_datetime);
+      if (dateEl) dateEl.textContent = date.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      if (timeEl) timeEl.textContent = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    }
+
+    // Location
+    const locationEl = document.getElementById('event-location');
+    const fullAddress = document.getElementById('full-address');
+    if (locationEl) locationEl.textContent = event.location_district || event.location_address || 'Karlsruhe';
+    if (fullAddress) fullAddress.textContent = event.location_address || '';
+
+    // Price
+    const priceEl = document.getElementById('event-price');
+    if (priceEl) {
+      if (event.price_type === 'free') {
+        priceEl.textContent = 'Kostenlos';
+      } else if (event.price_min) {
+        priceEl.textContent = `ab ${event.price_min}€`;
+      } else {
+        priceEl.textContent = 'Preis auf Anfrage';
+      }
+    }
+
+    // Description
+    const descEl = document.getElementById('event-description');
+    if (descEl) {
+      descEl.innerHTML = event.description_long || event.description_short || '<p>Keine Beschreibung verfügbar.</p>';
+    }
+
+    // Badges
+    const badgesEl = document.getElementById('event-badges');
+    if (badgesEl) {
+      badgesEl.innerHTML = '';
+      if (event.is_indoor) {
+        badgesEl.innerHTML += '<span class="badge indoor">🏠 Indoor</span>';
+      }
+      if (event.is_outdoor) {
+        badgesEl.innerHTML += '<span class="badge outdoor">🌤️ Outdoor</span>';
+      }
+      event.categories?.forEach((cat: any) => {
+        const name = cat.category?.name_de || cat.category?.slug;
+        const icon = cat.category?.icon || '';
+        badgesEl.innerHTML += `<span class="badge category">${icon} ${name}</span>`;
+      });
+    }
+
+    // Scores
+    if (event.scores) {
+      const familyScore = document.getElementById('score-family');
+      const stressfreeScore = document.getElementById('score-stressfree');
+      if (familyScore && event.scores.family_fit_score) {
+        familyScore.textContent = `${event.scores.family_fit_score}%`;
+      }
+      if (stressfreeScore && event.scores.stressfree_score) {
+        stressfreeScore.textContent = `${event.scores.stressfree_score}%`;
+      }
+    }
+
+    // Age info
+    const ageInfo = document.getElementById('age-info');
+    if (ageInfo) {
+      if (event.age_min !== null && event.age_max !== null) {
+        ageInfo.innerHTML = `<span class="age-badge">${event.age_min} - ${event.age_max} Jahre</span>`;
+      } else if (event.age_min !== null) {
+        ageInfo.innerHTML = `<span class="age-badge">Ab ${event.age_min} Jahren</span>`;
+      }
+    }
+
+    // Booking button
+    const bookingBtn = document.getElementById('booking-btn') as HTMLAnchorElement;
+    if (bookingBtn && event.booking_url) {
+      bookingBtn.href = event.booking_url;
+    } else if (bookingBtn) {
+      bookingBtn.style.display = 'none';
+    }
+
+    // Source info
+    const sourceLink = document.getElementById('source-link') as HTMLAnchorElement;
+    const lastVerified = document.getElementById('last-verified');
+    const dataQuality = document.getElementById('data-quality');
+    
+    if (event.primary_source?.source_url) {
+      if (sourceLink) sourceLink.href = event.primary_source.source_url;
+    }
+    if (lastVerified && event.last_verified_at) {
+      lastVerified.textContent = new Date(event.last_verified_at).toLocaleDateString('de-DE');
+    }
+    if (dataQuality) {
+      dataQuality.textContent = event.is_verified 
+        ? 'Datenqualität: Verifiziert ✓' 
+        : 'Datenqualität: Automatisch erfasst';
+    }
+
+    // Directions link
+    const directionsLink = document.getElementById('directions-link') as HTMLAnchorElement;
+    if (directionsLink && event.location_lat && event.location_lng) {
+      directionsLink.href = `https://www.google.com/maps/dir/?api=1&destination=${event.location_lat},${event.location_lng}`;
+    }
+  }
+
+  // Load event on page load
+  loadEvent();
+</script>
