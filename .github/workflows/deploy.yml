@@ -1,0 +1,100 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ============================================
+  # DEPLOY FRONTEND TO VERCEL
+  # ============================================
+  deploy-frontend:
+    name: Deploy Frontend (Vercel)
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+      
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      
+      - name: Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+      
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  # ============================================
+  # DEPLOY BACKEND TO RAILWAY
+  # ============================================
+  deploy-backend:
+    name: Deploy Backend (Railway)
+    runs-on: ubuntu-latest
+    environment: production
+    needs: [deploy-frontend]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      - name: Deploy to Railway
+        run: railway up --service backend
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+
+  # ============================================
+  # POST-DEPLOY CHECKS
+  # ============================================
+  health-check:
+    name: Post-Deploy Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-frontend, deploy-backend]
+    steps:
+      - name: Wait for deployment
+        run: sleep 30
+      
+      - name: Check frontend health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://familien-lokal.de)
+          if [ "$STATUS" != "200" ]; then
+            echo "Frontend health check failed with status $STATUS"
+            exit 1
+          fi
+          echo "Frontend is healthy"
+        continue-on-error: true
+      
+      - name: Check backend health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.API_URL }}/api/health)
+          if [ "$STATUS" != "200" ]; then
+            echo "Backend health check failed with status $STATUS"
+            exit 1
+          fi
+          echo "Backend is healthy"
+        continue-on-error: true
+      
+      - name: Notify on failure
+        if: failure()
+        run: echo "Deployment health check failed!"
+        # Add notification (Slack, Discord, email) here
