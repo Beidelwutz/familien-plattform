@@ -1,0 +1,288 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+---
+
+<BaseLayout title="Datenschutzerklärung - familienlokal" description="Datenschutzerklärung und Informationen zur Datenverarbeitung">
+  <StickyHeader />
+  
+  <main class="min-h-screen bg-gray-50">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <!-- Header -->
+      <div class="mb-8">
+        <a href="/" class="text-primary-500 hover:text-primary-600 text-sm font-medium mb-4 inline-flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          Zurück zur Startseite
+        </a>
+        <h1 class="text-3xl font-bold text-gray-900 mt-4">Datenschutzerklärung</h1>
+        <p class="text-gray-500 mt-2">Informationen zur Verarbeitung Ihrer personenbezogenen Daten</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-card p-6 md:p-8 space-y-8">
+        
+        <!-- Inhaltsübersicht -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Inhaltsübersicht</h2>
+          <nav class="text-gray-700">
+            <ol class="list-decimal list-inside space-y-1">
+              <li><a href="#verantwortlicher" class="text-primary-500 hover:text-primary-600">Verantwortlicher</a></li>
+              <li><a href="#uebersicht" class="text-primary-500 hover:text-primary-600">Übersicht der Verarbeitungen</a></li>
+              <li><a href="#rechtsgrundlagen" class="text-primary-500 hover:text-primary-600">Rechtsgrundlagen</a></li>
+              <li><a href="#hosting" class="text-primary-500 hover:text-primary-600">Hosting und Server</a></li>
+              <li><a href="#cookies" class="text-primary-500 hover:text-primary-600">Cookies</a></li>
+              <li><a href="#registrierung" class="text-primary-500 hover:text-primary-600">Registrierung und Anmeldung</a></li>
+              <li><a href="#kontakt" class="text-primary-500 hover:text-primary-600">Kontaktaufnahme</a></li>
+              <li><a href="#rechte" class="text-primary-500 hover:text-primary-600">Ihre Rechte</a></li>
+            </ol>
+          </nav>
+        </section>
+
+        <!-- 1. Verantwortlicher -->
+        <section id="verantwortlicher">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">1. Verantwortlicher</h2>
+          <div class="text-gray-700 space-y-1">
+            <p class="font-semibold">[Firmenname / Vor- und Nachname]</p>
+            <p>[Straße und Hausnummer]</p>
+            <p>[PLZ] [Ort]</p>
+            <p>E-Mail: <a href="mailto:datenschutz@familien-lokal.de" class="text-primary-500 hover:text-primary-600">datenschutz@familien-lokal.de</a></p>
+          </div>
+          <p class="text-gray-700 mt-4">
+            Impressum: <a href="/impressum" class="text-primary-500 hover:text-primary-600">/impressum</a>
+          </p>
+        </section>
+
+        <!-- 2. Übersicht der Verarbeitungen -->
+        <section id="uebersicht">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">2. Übersicht der Verarbeitungen</h2>
+          <p class="text-gray-700 mb-4">
+            Wir verarbeiten personenbezogene Daten zu folgenden Zwecken:
+          </p>
+          <ul class="list-disc list-inside text-gray-700 space-y-2">
+            <li>Bereitstellung unserer Website und deren Inhalte</li>
+            <li>Benutzerkontenverwaltung und Authentifizierung</li>
+            <li>Speicherung von Merklisten und Präferenzen</li>
+            <li>Kontaktaufnahme und Kommunikation</li>
+            <li>Sicherheitsmaßnahmen</li>
+            <li>Reichweitenmessung und Analyse (sofern eingewilligt)</li>
+          </ul>
+
+          <h3 class="text-lg font-medium text-gray-900 mt-6 mb-3">Verarbeitete Datenarten</h3>
+          <ul class="list-disc list-inside text-gray-700 space-y-2">
+            <li>Bestandsdaten (z.B. Name, E-Mail-Adresse)</li>
+            <li>Nutzungsdaten (z.B. besuchte Seiten, Zugriffszeiten)</li>
+            <li>Meta-/Kommunikationsdaten (z.B. IP-Adressen, Browser-Informationen)</li>
+            <li>Standortdaten (nur bei Nutzung der Umkreissuche, mit Einwilligung)</li>
+          </ul>
+
+          <h3 class="text-lg font-medium text-gray-900 mt-6 mb-3">Betroffene Personen</h3>
+          <ul class="list-disc list-inside text-gray-700 space-y-2">
+            <li>Nutzer unserer Website</li>
+            <li>Registrierte Benutzer</li>
+            <li>Anbieter / Partner</li>
+          </ul>
+        </section>
+
+        <!-- 3. Rechtsgrundlagen -->
+        <section id="rechtsgrundlagen">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">3. Rechtsgrundlagen</h2>
+          <p class="text-gray-700 mb-4">
+            Wir verarbeiten Ihre Daten auf Grundlage der folgenden Rechtsgrundlagen der DSGVO:
+          </p>
+          <ul class="list-disc list-inside text-gray-700 space-y-2">
+            <li><strong>Einwilligung (Art. 6 Abs. 1 lit. a DSGVO)</strong> – Sie haben Ihre Einwilligung für einen bestimmten Zweck erteilt.</li>
+            <li><strong>Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO)</strong> – Die Verarbeitung ist zur Erfüllung eines Vertrags erforderlich (z.B. Nutzerkonto).</li>
+            <li><strong>Berechtigte Interessen (Art. 6 Abs. 1 lit. f DSGVO)</strong> – Die Verarbeitung dient der Wahrung unserer berechtigten Interessen, sofern nicht Ihre Grundrechte überwiegen.</li>
+          </ul>
+        </section>
+
+        <!-- 4. Hosting und Server -->
+        <section id="hosting">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">4. Hosting und Server</h2>
+          
+          <h3 class="text-lg font-medium text-gray-900 mt-4 mb-3">Vercel</h3>
+          <p class="text-gray-700">
+            Unsere Website wird bei Vercel Inc. gehostet. Beim Aufruf unserer Website werden automatisch Informationen in Server-Logfiles gespeichert:
+          </p>
+          <ul class="list-disc list-inside text-gray-700 mt-2 space-y-1">
+            <li>Browsertyp und -version</li>
+            <li>Betriebssystem</li>
+            <li>Referrer URL</li>
+            <li>IP-Adresse (anonymisiert)</li>
+            <li>Uhrzeit der Serveranfrage</li>
+          </ul>
+          <p class="text-gray-700 mt-3">
+            Anbieter: Vercel Inc., 340 S Lemon Ave #4133, Walnut, CA 91789, USA<br />
+            Datenschutzerklärung: <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" class="text-primary-500 hover:text-primary-600">vercel.com/legal/privacy-policy</a>
+          </p>
+
+          <h3 class="text-lg font-medium text-gray-900 mt-6 mb-3">Supabase (Datenbank)</h3>
+          <p class="text-gray-700">
+            Wir nutzen Supabase für unsere Datenbank. Ihre Daten werden in der EU (Frankfurt) gespeichert.<br />
+            Anbieter: Supabase Inc.<br />
+            Datenschutzerklärung: <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" class="text-primary-500 hover:text-primary-600">supabase.com/privacy</a>
+          </p>
+        </section>
+
+        <!-- 5. Cookies -->
+        <section id="cookies">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">5. Cookies</h2>
+          <p class="text-gray-700 mb-4">
+            Wir verwenden Cookies und ähnliche Technologien. Cookies sind kleine Textdateien, die auf Ihrem Endgerät gespeichert werden.
+          </p>
+
+          <h3 class="text-lg font-medium text-gray-900 mt-4 mb-3">Technisch notwendige Cookies</h3>
+          <p class="text-gray-700">
+            Diese Cookies sind für den Betrieb der Website erforderlich und können nicht deaktiviert werden:
+          </p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-sm text-left text-gray-700">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-3 py-2 font-medium">Name</th>
+                  <th class="px-3 py-2 font-medium">Zweck</th>
+                  <th class="px-3 py-2 font-medium">Dauer</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr>
+                  <td class="px-3 py-2 font-mono text-xs">cookie_consent</td>
+                  <td class="px-3 py-2">Speichert Ihre Cookie-Einstellungen</td>
+                  <td class="px-3 py-2">1 Jahr</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="text-lg font-medium text-gray-900 mt-6 mb-3">Funktionale Cookies</h3>
+          <p class="text-gray-700">
+            Diese Cookies ermöglichen erweiterte Funktionen (nur mit Ihrer Einwilligung):
+          </p>
+          <div class="overflow-x-auto mt-3">
+            <table class="w-full text-sm text-left text-gray-700">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-3 py-2 font-medium">Name</th>
+                  <th class="px-3 py-2 font-medium">Zweck</th>
+                  <th class="px-3 py-2 font-medium">Dauer</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr>
+                  <td class="px-3 py-2 font-mono text-xs">auth_token</td>
+                  <td class="px-3 py-2">Authentifizierung / Login</td>
+                  <td class="px-3 py-2">7 Tage</td>
+                </tr>
+                <tr>
+                  <td class="px-3 py-2 font-mono text-xs">saved_events</td>
+                  <td class="px-3 py-2">Merkliste (lokal)</td>
+                  <td class="px-3 py-2">Unbegrenzt</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="text-gray-700 mt-4">
+            Sie können Ihre Cookie-Einstellungen jederzeit über den Link im Footer ändern.
+          </p>
+        </section>
+
+        <!-- 6. Registrierung und Anmeldung -->
+        <section id="registrierung">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">6. Registrierung und Anmeldung</h2>
+          <p class="text-gray-700 mb-4">
+            Bei der Registrierung speichern wir folgende Daten:
+          </p>
+          <ul class="list-disc list-inside text-gray-700 space-y-2">
+            <li>E-Mail-Adresse (erforderlich)</li>
+            <li>Passwort (verschlüsselt gespeichert)</li>
+            <li>Familienprofilinformationen (optional): Alter der Kinder, bevorzugte Kategorien, Standort</li>
+          </ul>
+          <p class="text-gray-700 mt-4">
+            <strong>Rechtsgrundlage:</strong> Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO).<br />
+            <strong>Speicherdauer:</strong> Bis zur Löschung des Kontos.<br />
+            <strong>Löschung:</strong> Sie können Ihr Konto jederzeit in den Einstellungen löschen oder uns kontaktieren.
+          </p>
+        </section>
+
+        <!-- 7. Kontaktaufnahme -->
+        <section id="kontakt">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">7. Kontaktaufnahme</h2>
+          <p class="text-gray-700">
+            Wenn Sie uns per E-Mail kontaktieren, speichern wir Ihre Anfrage samt angegebener Kontaktdaten zur Bearbeitung und für Rückfragen. Diese Daten werden nicht ohne Ihre Einwilligung weitergegeben.
+          </p>
+          <p class="text-gray-700 mt-3">
+            <strong>Rechtsgrundlage:</strong> Berechtigtes Interesse (Art. 6 Abs. 1 lit. f DSGVO) oder Vertragserfüllung.<br />
+            <strong>Speicherdauer:</strong> Bis zur Erledigung der Anfrage, maximal 3 Jahre.
+          </p>
+        </section>
+
+        <!-- 8. Ihre Rechte -->
+        <section id="rechte">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">8. Ihre Rechte</h2>
+          <p class="text-gray-700 mb-4">
+            Sie haben folgende Rechte bezüglich Ihrer personenbezogenen Daten:
+          </p>
+          
+          <div class="space-y-4">
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Auskunftsrecht (Art. 15 DSGVO)</h3>
+              <p class="text-gray-700 text-sm">Sie können eine Bestätigung darüber verlangen, ob wir Ihre Daten verarbeiten.</p>
+            </div>
+            
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Berichtigungsrecht (Art. 16 DSGVO)</h3>
+              <p class="text-gray-700 text-sm">Sie können die Berichtigung unrichtiger Daten verlangen.</p>
+            </div>
+            
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Löschungsrecht (Art. 17 DSGVO)</h3>
+              <p class="text-gray-700 text-sm">Sie können die Löschung Ihrer Daten verlangen ("Recht auf Vergessenwerden").</p>
+            </div>
+            
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Einschränkung (Art. 18 DSGVO)</h3>
+              <p class="text-gray-700 text-sm">Sie können die Einschränkung der Verarbeitung verlangen.</p>
+            </div>
+            
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Datenübertragbarkeit (Art. 20 DSGVO)</h3>
+              <p class="text-gray-700 text-sm">Sie können Ihre Daten in einem strukturierten Format erhalten.</p>
+            </div>
+            
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Widerspruchsrecht (Art. 21 DSGVO)</h3>
+              <p class="text-gray-700 text-sm">Sie können der Verarbeitung aus berechtigtem Interesse widersprechen.</p>
+            </div>
+            
+            <div class="border-l-4 border-primary-500 pl-4">
+              <h3 class="font-medium text-gray-900">Widerruf der Einwilligung</h3>
+              <p class="text-gray-700 text-sm">Sie können eine erteilte Einwilligung jederzeit widerrufen.</p>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-4 mt-6">
+            <h3 class="font-medium text-gray-900 mb-2">Beschwerderecht</h3>
+            <p class="text-gray-700 text-sm">
+              Sie haben das Recht, sich bei einer Datenschutz-Aufsichtsbehörde über die Verarbeitung Ihrer Daten zu beschweren.
+            </p>
+          </div>
+        </section>
+
+        <!-- Änderungen -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Änderungen dieser Datenschutzerklärung</h2>
+          <p class="text-gray-700">
+            Wir behalten uns vor, diese Datenschutzerklärung anzupassen, um sie an geänderte Rechtslagen oder Änderungen unseres Dienstes anzupassen. Die aktuelle Version finden Sie stets auf dieser Seite.
+          </p>
+        </section>
+      </div>
+
+      <!-- Aktualisierungsdatum -->
+      <p class="text-center text-gray-500 text-sm mt-8">
+        Stand: Januar 2026
+      </p>
+    </div>
+  </main>
+</BaseLayout>

@@ -1,0 +1,92 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Registrieren - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 flex items-center justify-center py-8 px-4">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-card p-6 md:p-8">
+      <div class="text-center mb-8">
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Konto erstellen</h1>
+        <p class="text-gray-500">Registriere dich kostenlos für Merkliste, Pläne und mehr</p>
+      </div>
+
+      <form class="flex flex-col gap-5" id="register-form">
+        <div class="flex flex-col gap-2">
+          <label for="email" class="font-medium text-sm text-gray-700">E-Mail</label>
+          <input type="email" id="email" name="email" required placeholder="deine@email.de" autocomplete="email"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <label for="password" class="font-medium text-sm text-gray-700">Passwort (min. 8 Zeichen)</label>
+          <input type="password" id="password" name="password" required minlength="8" placeholder="••••••••" autocomplete="new-password"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+        </div>
+        <div class="flex flex-col gap-2">
+          <label for="password2" class="font-medium text-sm text-gray-700">Passwort wiederholen</label>
+          <input type="password" id="password2" name="password2" required minlength="8" placeholder="••••••••" autocomplete="new-password"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+        </div>
+        <button type="submit" class="btn-primary w-full py-3 mt-2">Registrieren</button>
+        <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="register-error"></div>
+        <div class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm text-center" id="register-success">Konto erstellt. Du wirst weitergeleitet …</div>
+      </form>
+
+      <p class="text-center text-sm text-gray-600 mt-6">
+        Bereits registriert? <a href="/login" class="text-primary-500 hover:text-primary-600 font-semibold">Zum Login</a>
+      </p>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_BASE }}>
+  const form = document.getElementById('register-form');
+  const errorEl = document.getElementById('register-error');
+  const successEl = document.getElementById('register-success');
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (errorEl) { errorEl.classList.add('hidden'); errorEl.textContent = ''; }
+    if (successEl) successEl.classList.add('hidden');
+
+    const formData = new FormData(form);
+    const email = String(formData.get('email') ?? '').trim();
+    const password = String(formData.get('password') ?? '');
+    const password2 = String(formData.get('password2') ?? '');
+
+    if (password !== password2) {
+      if (errorEl) { errorEl.textContent = 'Die Passwörter stimmen nicht überein.'; errorEl.classList.remove('hidden'); }
+      return;
+    }
+    if (password.length < 8) {
+      if (errorEl) { errorEl.textContent = 'Das Passwort muss mindestens 8 Zeichen haben.'; errorEl.classList.remove('hidden'); }
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+
+      if (data.success && data.data?.token) {
+        localStorage.setItem('auth_token', data.data.token);
+        if (successEl) successEl.classList.remove('hidden');
+        const redirect = new URLSearchParams(window.location.search).get('redirect') || '/';
+        setTimeout(() => { window.location.href = redirect; }, 800);
+      } else {
+        if (errorEl) {
+          errorEl.textContent = data?.message || data?.error || 'Registrierung fehlgeschlagen. E-Mail vielleicht schon vergeben?';
+          errorEl.classList.remove('hidden');
+        }
+      }
+    } catch (err) {
+      console.error('Register error:', err);
+      if (errorEl) { errorEl.textContent = 'Netzwerkfehler. Bitte später erneut versuchen.'; errorEl.classList.remove('hidden'); }
+    }
+  });
+</script>

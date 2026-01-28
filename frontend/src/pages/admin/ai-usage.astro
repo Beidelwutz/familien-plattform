@@ -1,0 +1,316 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="AI Usage Monitor - Admin - familienlokal">
+  <StickyHeader />
+  <AdminMobileNav currentPage="ai-usage" />
+  
+  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">AI Usage Monitor</h1>
+        <p class="text-gray-500 text-sm mt-1">Kosten und Nutzung von KI-Diensten überwachen</p>
+      </header>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Statistiken...</p>
+      </div>
+
+      <!-- Content -->
+      <div id="content" class="hidden space-y-6">
+        <!-- Cost Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <div class="text-sm text-gray-500 mb-1">Heute</div>
+            <div class="text-2xl font-bold text-gray-900" id="cost-today">$0.00</div>
+            <div class="text-xs text-gray-400" id="calls-today">0 Aufrufe</div>
+          </div>
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <div class="text-sm text-gray-500 mb-1">Dieser Monat</div>
+            <div class="text-2xl font-bold text-gray-900" id="cost-month">$0.00</div>
+            <div class="text-xs text-gray-400" id="calls-month">0 Aufrufe</div>
+          </div>
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <div class="text-sm text-gray-500 mb-1">Prognose Monatsende</div>
+            <div class="text-2xl font-bold text-gray-900" id="cost-projected">$0.00</div>
+            <div class="text-xs text-gray-400" id="days-remaining">0 Tage übrig</div>
+          </div>
+          <div class="bg-white rounded-2xl shadow-card p-6" id="budget-card">
+            <div class="text-sm text-gray-500 mb-1">Budget</div>
+            <div class="text-2xl font-bold text-gray-900" id="budget-status">Nicht konfiguriert</div>
+            <div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden hidden" id="budget-bar-container">
+              <div class="h-full bg-primary-500 rounded-full transition-all" id="budget-bar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            <div class="text-xl font-bold text-primary-500" id="total-calls">0</div>
+            <div class="text-xs text-gray-500">Aufrufe (30d)</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            <div class="text-xl font-bold text-primary-500" id="total-tokens">0</div>
+            <div class="text-xs text-gray-500">Tokens</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            <div class="text-xl font-bold text-primary-500" id="avg-response">0ms</div>
+            <div class="text-xs text-gray-500">Ø Response</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            <div class="text-xl font-bold text-green-500" id="cache-rate">0%</div>
+            <div class="text-xs text-gray-500">Cache Hit</div>
+          </div>
+          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            <div class="text-xl font-bold text-red-500" id="error-rate">0%</div>
+            <div class="text-xs text-gray-500">Fehlerrate</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Daily Costs Chart -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h3 class="font-semibold text-gray-900 mb-4">Kosten pro Tag (letzte 30 Tage)</h3>
+            <div class="h-64" id="cost-chart">
+              <canvas id="cost-canvas"></canvas>
+            </div>
+          </div>
+
+          <!-- By Model -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h3 class="font-semibold text-gray-900 mb-4">Nach Modell</h3>
+            <div id="by-model" class="space-y-3"></div>
+          </div>
+        </div>
+
+        <!-- By Operation -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h3 class="font-semibold text-gray-900 mb-4">Nach Operation</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200">
+                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Operation</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Aufrufe</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Input Tokens</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Output Tokens</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Kosten</th>
+                </tr>
+              </thead>
+              <tbody id="by-operation"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h3 class="font-semibold text-gray-900 mb-4">Letzte Aufrufe</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200">
+                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Zeit</th>
+                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Model</th>
+                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Operation</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Tokens</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Kosten</th>
+                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Zeit</th>
+                </tr>
+              </thead>
+              <tbody id="recent-logs"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+        <p class="text-red-500 text-lg mb-4">Fehler beim Laden der Statistiken</p>
+        <button onclick="loadData()" class="btn-primary">Erneut versuchen</button>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script define:vars={{ API_URL }}>
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    window.location.href = '/login?redirect=/admin/ai-usage';
+  }
+
+  let costChart = null;
+
+  async function loadData() {
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('content').classList.add('hidden');
+    document.getElementById('error-state').classList.add('hidden');
+
+    try {
+      const [statsRes, costsRes, logsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/ai-usage/stats?days=30`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/ai-usage/costs`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/ai-usage/logs?limit=20`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+      ]);
+
+      if (!statsRes.ok || !costsRes.ok) throw new Error('Failed to load');
+
+      const stats = await statsRes.json();
+      const costs = await costsRes.json();
+      const logs = logsRes.ok ? await logsRes.json() : { data: [] };
+
+      renderStats(stats.data, costs.data, logs.data);
+      
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('content').classList.remove('hidden');
+    } catch (e) {
+      console.error(e);
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('error-state').classList.remove('hidden');
+    }
+  }
+
+  function formatCurrency(value) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value || 0);
+  }
+
+  function formatNumber(value) {
+    return new Intl.NumberFormat('de-DE').format(value || 0);
+  }
+
+  function renderStats(stats, costs, logs) {
+    // Cost cards
+    document.getElementById('cost-today').textContent = formatCurrency(costs.today?.cost);
+    document.getElementById('calls-today').textContent = `${formatNumber(costs.today?.calls)} Aufrufe`;
+    document.getElementById('cost-month').textContent = formatCurrency(costs.currentMonth?.cost);
+    document.getElementById('calls-month').textContent = `${formatNumber(costs.currentMonth?.calls)} Aufrufe`;
+    document.getElementById('cost-projected').textContent = formatCurrency(costs.currentMonth?.projected);
+    document.getElementById('days-remaining').textContent = `${costs.currentMonth?.daysRemaining} Tage übrig`;
+
+    // Budget
+    if (costs.budget) {
+      document.getElementById('budget-status').textContent = `${Math.round(costs.budget.percentUsed)}% genutzt`;
+      document.getElementById('budget-bar-container').classList.remove('hidden');
+      const bar = document.getElementById('budget-bar');
+      bar.style.width = `${Math.min(costs.budget.percentUsed, 100)}%`;
+      bar.classList.toggle('bg-red-500', costs.budget.percentUsed > 80);
+      bar.classList.toggle('bg-yellow-500', costs.budget.percentUsed > 60 && costs.budget.percentUsed <= 80);
+      bar.classList.toggle('bg-primary-500', costs.budget.percentUsed <= 60);
+    }
+
+    // Stats overview
+    document.getElementById('total-calls').textContent = formatNumber(stats.totals.calls);
+    document.getElementById('total-tokens').textContent = formatNumber(stats.totals.inputTokens + stats.totals.outputTokens);
+    document.getElementById('avg-response').textContent = `${stats.totals.avgResponseMs}ms`;
+    document.getElementById('cache-rate').textContent = `${(stats.totals.cacheHitRate * 100).toFixed(1)}%`;
+    document.getElementById('error-rate').textContent = `${(stats.totals.errorRate * 100).toFixed(1)}%`;
+
+    // By Model
+    const byModelHtml = stats.byModel.map(m => `
+      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+        <div>
+          <div class="font-medium text-gray-900">${m.model}</div>
+          <div class="text-xs text-gray-500">${formatNumber(m.calls)} Aufrufe</div>
+        </div>
+        <div class="text-right">
+          <div class="font-medium text-gray-900">${formatCurrency(m.costUsd)}</div>
+          <div class="text-xs text-gray-500">${formatNumber(m.inputTokens + m.outputTokens)} Tokens</div>
+        </div>
+      </div>
+    `).join('');
+    document.getElementById('by-model').innerHTML = byModelHtml || '<p class="text-gray-500 text-center py-4">Keine Daten</p>';
+
+    // By Operation
+    const byOpHtml = stats.byOperation.map(o => `
+      <tr class="border-b border-gray-100">
+        <td class="py-2 px-4 font-medium">${o.operation}</td>
+        <td class="py-2 px-4 text-right">${formatNumber(o.calls)}</td>
+        <td class="py-2 px-4 text-right">${formatNumber(o.inputTokens)}</td>
+        <td class="py-2 px-4 text-right">${formatNumber(o.outputTokens)}</td>
+        <td class="py-2 px-4 text-right font-medium">${formatCurrency(o.costUsd)}</td>
+      </tr>
+    `).join('');
+    document.getElementById('by-operation').innerHTML = byOpHtml || '<tr><td colspan="5" class="text-center py-4 text-gray-500">Keine Daten</td></tr>';
+
+    // Recent logs
+    const logsHtml = logs.map(log => `
+      <tr class="border-b border-gray-100">
+        <td class="py-2 px-4 text-gray-500">${new Date(log.timestamp).toLocaleString('de-DE')}</td>
+        <td class="py-2 px-4">${log.model}</td>
+        <td class="py-2 px-4">${log.operation}</td>
+        <td class="py-2 px-4 text-right">${formatNumber((log.input_tokens || 0) + (log.output_tokens || 0))}</td>
+        <td class="py-2 px-4 text-right">${formatCurrency(log.estimated_cost_usd)}</td>
+        <td class="py-2 px-4 text-right ${log.error_code ? 'text-red-500' : ''}">${log.error_code || (log.response_time_ms ? `${log.response_time_ms}ms` : '-')}</td>
+      </tr>
+    `).join('');
+    document.getElementById('recent-logs').innerHTML = logsHtml || '<tr><td colspan="6" class="text-center py-4 text-gray-500">Keine Logs</td></tr>';
+
+    // Daily costs chart
+    renderCostChart(stats.dailyCosts);
+  }
+
+  function renderCostChart(dailyCosts) {
+    const ctx = document.getElementById('cost-canvas').getContext('2d');
+    
+    if (costChart) {
+      costChart.destroy();
+    }
+
+    const labels = dailyCosts.map(d => {
+      const date = new Date(d.date);
+      return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    });
+    const data = dailyCosts.map(d => d.cost);
+
+    costChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Kosten ($)',
+          data,
+          backgroundColor: 'rgba(79, 70, 229, 0.8)',
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `$${ctx.raw.toFixed(4)}`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (value) => `$${value.toFixed(2)}`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  loadData();
+</script>

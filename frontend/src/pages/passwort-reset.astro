@@ -1,0 +1,214 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Neues Passwort setzen - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 flex items-center justify-center py-8 px-4">
+    <div class="w-full max-w-md">
+      <div class="bg-white rounded-2xl shadow-card p-6 md:p-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+          <div class="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+          </div>
+          <h1 class="text-2xl font-bold text-gray-900 mb-2">Neues Passwort setzen</h1>
+          <p class="text-gray-500">Wähle ein sicheres Passwort mit mindestens 8 Zeichen.</p>
+        </div>
+
+        <!-- Invalid Token Message (shown when no token) -->
+        <div class="hidden" id="invalid-token-message">
+          <div class="text-center">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+              </svg>
+            </div>
+            <h2 class="text-xl font-bold text-gray-900 mb-2">Ungültiger Link</h2>
+            <p class="text-gray-500 mb-6">
+              Dieser Link ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.
+            </p>
+            <a href="/passwort-vergessen" class="btn-primary inline-flex items-center gap-2 px-6 py-3">
+              Neuen Link anfordern
+            </a>
+          </div>
+        </div>
+
+        <!-- Reset Form -->
+        <form class="flex flex-col gap-5" id="reset-form">
+          <div class="flex flex-col gap-2">
+            <label for="password" class="font-medium text-sm text-gray-700">Neues Passwort</label>
+            <input 
+              type="password" 
+              id="password" 
+              name="password" 
+              required 
+              minlength="8"
+              placeholder="Mindestens 8 Zeichen" 
+              autocomplete="new-password"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
+            />
+          </div>
+          
+          <div class="flex flex-col gap-2">
+            <label for="password-confirm" class="font-medium text-sm text-gray-700">Passwort bestätigen</label>
+            <input 
+              type="password" 
+              id="password-confirm" 
+              name="password-confirm" 
+              required 
+              minlength="8"
+              placeholder="Passwort wiederholen" 
+              autocomplete="new-password"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
+            />
+          </div>
+
+          <!-- Password Requirements -->
+          <div class="text-sm text-gray-500 space-y-1">
+            <p class="flex items-center gap-2">
+              <span id="req-length" class="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-xs">·</span>
+              Mindestens 8 Zeichen
+            </p>
+            <p class="flex items-center gap-2">
+              <span id="req-match" class="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-xs">·</span>
+              Passwörter stimmen überein
+            </p>
+          </div>
+          
+          <button type="submit" class="btn-primary w-full py-3" id="submit-btn" disabled>
+            Passwort ändern
+          </button>
+          
+          <!-- Error Message -->
+          <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="error-message">
+            Ein Fehler ist aufgetreten
+          </div>
+        </form>
+
+        <!-- Success Message (initially hidden) -->
+        <div class="hidden" id="success-message">
+          <div class="text-center">
+            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+            </div>
+            <h2 class="text-xl font-bold text-gray-900 mb-2">Passwort geändert!</h2>
+            <p class="text-gray-500 mb-6">
+              Dein Passwort wurde erfolgreich geändert. Du kannst dich jetzt mit deinem neuen Passwort anmelden.
+            </p>
+            <a href="/login" class="btn-primary inline-flex items-center gap-2 px-6 py-3">
+              Zur Anmeldung
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_BASE }}>
+  const form = document.getElementById('reset-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const errorMessage = document.getElementById('error-message');
+  const successMessage = document.getElementById('success-message');
+  const invalidTokenMessage = document.getElementById('invalid-token-message');
+  const passwordInput = document.getElementById('password');
+  const passwordConfirmInput = document.getElementById('password-confirm');
+  const reqLength = document.getElementById('req-length');
+  const reqMatch = document.getElementById('req-match');
+
+  // Get token from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+
+  // Check if token exists
+  if (!token) {
+    if (form) form.classList.add('hidden');
+    if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
+  }
+
+  // Password validation
+  function validatePassword() {
+    const password = passwordInput?.value || '';
+    const passwordConfirm = passwordConfirmInput?.value || '';
+    
+    const lengthValid = password.length >= 8;
+    const matchValid = password === passwordConfirm && password.length > 0;
+
+    // Update UI
+    if (reqLength) {
+      reqLength.classList.toggle('bg-green-500', lengthValid);
+      reqLength.classList.toggle('text-white', lengthValid);
+      reqLength.classList.toggle('bg-gray-200', !lengthValid);
+      reqLength.textContent = lengthValid ? '✓' : '·';
+    }
+
+    if (reqMatch) {
+      reqMatch.classList.toggle('bg-green-500', matchValid);
+      reqMatch.classList.toggle('text-white', matchValid);
+      reqMatch.classList.toggle('bg-gray-200', !matchValid);
+      reqMatch.textContent = matchValid ? '✓' : '·';
+    }
+
+    // Enable/disable submit
+    if (submitBtn) {
+      submitBtn.disabled = !(lengthValid && matchValid);
+    }
+
+    return lengthValid && matchValid;
+  }
+
+  passwordInput?.addEventListener('input', validatePassword);
+  passwordConfirmInput?.addEventListener('input', validatePassword);
+
+  if (form && submitBtn && errorMessage && successMessage && token) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!validatePassword()) return;
+
+      const password = passwordInput?.value;
+      
+      // Reset states
+      errorMessage.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Wird gespeichert...';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, password }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          form.classList.add('hidden');
+          successMessage.classList.remove('hidden');
+        } else {
+          if (data.error?.code === 'INVALID_TOKEN') {
+            form.classList.add('hidden');
+            if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
+          } else {
+            errorMessage.textContent = data.error?.message || 'Ein Fehler ist aufgetreten';
+            errorMessage.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Passwort ändern';
+          }
+        }
+      } catch (error) {
+        errorMessage.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+        errorMessage.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Passwort ändern';
+      }
+    });
+  }
+</script>

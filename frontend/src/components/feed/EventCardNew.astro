@@ -1,0 +1,271 @@
+---
+// EventCardNew.astro - Redesigned event card with all required info
+interface Props {
+  id: string;
+  title: string;
+  imageUrl?: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: string;
+  distance?: string;
+  priceType: 'free' | 'paid' | 'range' | 'unknown';
+  priceMin?: number;
+  priceMax?: number;
+  stressfreeScore?: number;
+  familyFitScore?: number;
+  ageMin?: number;
+  ageMax?: number;
+  isIndoor?: boolean;
+  isOutdoor?: boolean;
+  hasChangingTable?: boolean;
+  hasToilet?: boolean;
+  hasPublicTransport?: boolean;
+  hasParking?: boolean;
+  lastVerified?: string;
+  availableSpots?: number;
+  isNew?: boolean;
+}
+
+const {
+  id,
+  title,
+  imageUrl,
+  startTime,
+  endTime,
+  duration,
+  distance,
+  priceType,
+  priceMin,
+  priceMax,
+  stressfreeScore,
+  familyFitScore,
+  ageMin,
+  ageMax,
+  isIndoor = false,
+  isOutdoor = false,
+  hasChangingTable = false,
+  hasToilet = false,
+  hasPublicTransport = false,
+  hasParking = false,
+  lastVerified,
+  availableSpots,
+  isNew = false,
+} = Astro.props;
+
+// Format price display
+const getPriceDisplay = () => {
+  if (priceType === 'free') return 'Kostenlos';
+  if (priceType === 'paid' && priceMin) return `ab ${priceMin}€`;
+  if (priceType === 'range' && priceMin && priceMax) return `${priceMin}-${priceMax}€`;
+  return '';
+};
+
+// Format time display
+const getTimeDisplay = () => {
+  if (startTime && endTime) return `${startTime}-${endTime}`;
+  if (startTime) return startTime;
+  if (duration) return duration;
+  return '';
+};
+
+// Format age display
+const getAgeDisplay = () => {
+  if (ageMin !== undefined && ageMax !== undefined) {
+    if (ageMin === ageMax) return `${ageMin} J.`;
+    return `${ageMin}-${ageMax} J.`;
+  }
+  if (ageMin !== undefined) return `ab ${ageMin} J.`;
+  if (ageMax !== undefined) return `bis ${ageMax} J.`;
+  return '';
+};
+
+const priceDisplay = getPriceDisplay();
+const timeDisplay = getTimeDisplay();
+const ageDisplay = getAgeDisplay();
+const score = stressfreeScore || familyFitScore;
+---
+
+<article class="card group relative" data-event-id={id}>
+  <!-- Image -->
+  <a href={`/event/${id}`} class="block relative aspect-[4/3] overflow-hidden bg-gray-100">
+    {imageUrl ? (
+      <img 
+        src={imageUrl} 
+        alt={title}
+        loading="lazy"
+        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+      />
+    ) : (
+      <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-50">
+        <span class="text-4xl">🎈</span>
+      </div>
+    )}
+    
+    <!-- Top Badges -->
+    <div class="absolute top-2 left-2 flex flex-wrap gap-1.5">
+      {isNew && (
+        <span class="badge bg-accent-500 text-white">Neu</span>
+      )}
+      {availableSpots !== undefined && availableSpots > 0 && (
+        <span class="badge bg-secondary-500 text-white">
+          Noch {availableSpots} frei
+        </span>
+      )}
+      {priceType === 'free' && (
+        <span class="badge badge-free">Kostenlos</span>
+      )}
+    </div>
+
+    <!-- Save Button -->
+    <button 
+      class="absolute top-2 right-2 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-white transition-all shadow-sm opacity-0 group-hover:opacity-100"
+      data-save-btn
+      aria-label="Merken"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+      </svg>
+    </button>
+  </a>
+
+  <!-- Content -->
+  <div class="p-3 sm:p-4">
+    <!-- Title -->
+    <a href={`/event/${id}`}>
+      <h3 class="font-semibold text-gray-900 line-clamp-2 mb-2 group-hover:text-primary-600 transition-colors">
+        {title}
+      </h3>
+    </a>
+
+    <!-- Time & Distance -->
+    <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+      {timeDisplay && (
+        <span class="flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          {timeDisplay}
+        </span>
+      )}
+      {timeDisplay && distance && <span>·</span>}
+      {distance && (
+        <span class="flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+          </svg>
+          {distance}
+        </span>
+      )}
+    </div>
+
+    <!-- Price & Score -->
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center gap-3">
+        {priceDisplay && priceType !== 'free' && (
+          <span class="text-sm font-medium text-gray-700">{priceDisplay}</span>
+        )}
+        {ageDisplay && (
+          <span class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{ageDisplay}</span>
+        )}
+      </div>
+      {score && score >= 70 && (
+        <div class="flex items-center gap-1 text-sm" title="Stressfrei-Score">
+          <span class="text-accent-500">⭐</span>
+          <span class="font-medium text-gray-700">{score}</span>
+        </div>
+      )}
+    </div>
+
+    <!-- Amenity Badges -->
+    <div class="flex flex-wrap gap-1.5">
+      {isIndoor && (
+        <span class="badge badge-indoor" title="Indoor">
+          🏠 Indoor
+        </span>
+      )}
+      {isOutdoor && (
+        <span class="badge badge-outdoor" title="Outdoor">
+          🌳 Outdoor
+        </span>
+      )}
+      {hasChangingTable && (
+        <span class="badge bg-purple-100 text-purple-700" title="Wickeltisch">
+          🚼
+        </span>
+      )}
+      {hasToilet && (
+        <span class="badge bg-blue-100 text-blue-700" title="WC">
+          🚻
+        </span>
+      )}
+      {hasPublicTransport && (
+        <span class="badge bg-orange-100 text-orange-700" title="ÖPNV">
+          🚇
+        </span>
+      )}
+      {hasParking && (
+        <span class="badge bg-gray-200 text-gray-700" title="Parkplatz">
+          🅿️
+        </span>
+      )}
+    </div>
+
+    <!-- Last Verified (Trust Signal) -->
+    {lastVerified && (
+      <div class="mt-2 pt-2 border-t border-gray-100">
+        <span class="text-xs text-gray-400 flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          Geprüft {lastVerified}
+        </span>
+      </div>
+    )}
+  </div>
+
+  <!-- Hover: Similar Events Link -->
+  <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-8 pb-3 px-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
+    <a 
+      href={`/event/${id}#similar`} 
+      class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+    >
+      <span>Ähnliche Alternativen</span>
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+      </svg>
+    </a>
+  </div>
+</article>
+
+<script>
+  // Save button functionality
+  document.querySelectorAll('[data-save-btn]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const card = (btn as HTMLElement).closest('[data-event-id]');
+      const eventId = card?.getAttribute('data-event-id');
+      
+      // Toggle saved state
+      const svg = btn.querySelector('svg');
+      const isSaved = svg?.getAttribute('fill') === 'currentColor';
+      
+      if (isSaved) {
+        svg?.setAttribute('fill', 'none');
+        btn.classList.remove('text-red-500');
+        btn.classList.add('text-gray-400');
+      } else {
+        svg?.setAttribute('fill', 'currentColor');
+        btn.classList.remove('text-gray-400');
+        btn.classList.add('text-red-500');
+      }
+      
+      // Dispatch event for persistence
+      const event = new CustomEvent('eventSaved', {
+        detail: { eventId, saved: !isSaved }
+      });
+      window.dispatchEvent(event);
+    });
+  });
+</script>

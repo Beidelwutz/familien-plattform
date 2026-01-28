@@ -1,0 +1,198 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Anbieter-Dashboard - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50">
+    <!-- Loading State -->
+    <div id="loading-state" class="flex items-center justify-center min-h-[60vh]">
+      <div class="text-center">
+        <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p class="text-gray-500">Dashboard wird geladen...</p>
+      </div>
+    </div>
+
+    <!-- Auth Required Message -->
+    <div id="auth-required" class="hidden max-w-md mx-auto px-4 py-16 text-center">
+      <div class="bg-white rounded-2xl shadow-card p-8">
+        <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">Anmeldung erforderlich</h1>
+        <p class="text-gray-500 mb-6">Bitte melde dich an, um auf das Anbieter-Dashboard zuzugreifen.</p>
+        <a href="/anbieter/login" class="btn-primary inline-block px-6 py-3">Zur Anmeldung</a>
+      </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div id="dashboard-content" class="hidden">
+      <!-- Header -->
+      <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 class="text-2xl font-bold text-gray-900">Anbieter-Dashboard</h1>
+              <p class="text-gray-500 mt-1" id="provider-name">Willkommen zurück!</p>
+            </div>
+            <a href="/anbieter/events/neu" class="btn-primary inline-flex items-center gap-2 px-6 py-3">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+              Neues Event
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div class="bg-white rounded-xl p-5 shadow-card">
+            <div class="text-sm text-gray-500 mb-1">Aktive Events</div>
+            <div class="text-2xl font-bold text-gray-900" id="stat-events">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-5 shadow-card">
+            <div class="text-sm text-gray-500 mb-1">Aufrufe (30 Tage)</div>
+            <div class="text-2xl font-bold text-gray-900" id="stat-views">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-5 shadow-card">
+            <div class="text-sm text-gray-500 mb-1">Gemerkt</div>
+            <div class="text-2xl font-bold text-gray-900" id="stat-saves">0</div>
+          </div>
+          <div class="bg-white rounded-xl p-5 shadow-card">
+            <div class="text-sm text-gray-500 mb-1">Buchungsklicks</div>
+            <div class="text-2xl font-bold text-gray-900" id="stat-clicks">0</div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-8">
+          <!-- Events List -->
+          <div class="lg:col-span-2">
+            <div class="bg-white rounded-xl shadow-card overflow-hidden">
+              <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="font-semibold text-gray-900">Deine Events</h2>
+                <a href="/anbieter/events" class="text-primary-500 hover:text-primary-600 text-sm font-medium">Alle anzeigen</a>
+              </div>
+              <div id="events-list" class="divide-y divide-gray-100">
+                <!-- Events will be loaded here -->
+                <div class="px-6 py-8 text-center text-gray-500">
+                  <p class="mb-4">Du hast noch keine Events erstellt.</p>
+                  <a href="/anbieter/events/neu" class="text-primary-500 hover:text-primary-600 font-medium">Jetzt erstes Event erstellen</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sidebar -->
+          <div class="space-y-6">
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-xl shadow-card p-6">
+              <h3 class="font-semibold text-gray-900 mb-4">Schnellzugriff</h3>
+              <div class="space-y-2">
+                <a href="/anbieter/events/neu" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors">
+                  <span class="w-8 h-8 bg-primary-100 text-primary-600 rounded-lg flex items-center justify-center">+</span>
+                  <span class="text-gray-700">Event erstellen</span>
+                </a>
+                <a href="/anbieter/profil" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors">
+                  <span class="w-8 h-8 bg-gray-100 text-gray-600 rounded-lg flex items-center justify-center">⚙️</span>
+                  <span class="text-gray-700">Profil bearbeiten</span>
+                </a>
+                <a href="/anbieter/statistiken" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors">
+                  <span class="w-8 h-8 bg-gray-100 text-gray-600 rounded-lg flex items-center justify-center">📊</span>
+                  <span class="text-gray-700">Statistiken</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6">
+              <h3 class="font-semibold text-primary-900 mb-2">💡 Tipp</h3>
+              <p class="text-sm text-primary-800">
+                Events mit vollständigen Informationen (Bilder, genaue Zeiten, Altersangaben) erscheinen 
+                häufiger in Empfehlungen und im AI-Planer.
+              </p>
+            </div>
+
+            <!-- Support -->
+            <div class="bg-white rounded-xl shadow-card p-6">
+              <h3 class="font-semibold text-gray-900 mb-2">Hilfe & Support</h3>
+              <p class="text-sm text-gray-500 mb-4">Fragen zu deinem Anbieter-Konto?</p>
+              <a href="mailto:anbieter@familien-lokal.de" class="text-primary-500 hover:text-primary-600 text-sm font-medium">
+                anbieter@familien-lokal.de
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_BASE }}>
+  async function initDashboard() {
+    const loadingState = document.getElementById('loading-state');
+    const authRequired = document.getElementById('auth-required');
+    const dashboardContent = document.getElementById('dashboard-content');
+
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      loadingState?.classList.add('hidden');
+      authRequired?.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      // Verify token and get user info
+      const userResponse = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!userResponse.ok) {
+        localStorage.removeItem('token');
+        loadingState?.classList.add('hidden');
+        authRequired?.classList.remove('hidden');
+        return;
+      }
+
+      const userData = await userResponse.json();
+
+      // Get provider profile
+      const providerResponse = await fetch(`${API_BASE}/api/providers/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      // Show dashboard
+      loadingState?.classList.add('hidden');
+      dashboardContent?.classList.remove('hidden');
+
+      if (providerResponse.ok) {
+        const providerData = await providerResponse.json();
+        const providerName = document.getElementById('provider-name');
+        if (providerName && providerData.data?.name) {
+          providerName.textContent = providerData.data.name;
+        }
+      }
+
+      // Load provider's events
+      // Note: This would require a provider-specific events endpoint
+      // For now, just show the empty state
+
+    } catch (error) {
+      console.error('Dashboard init error:', error);
+      loadingState?.classList.add('hidden');
+      authRequired?.classList.remove('hidden');
+    }
+  }
+
+  // Initialize on load
+  document.addEventListener('DOMContentLoaded', initDashboard);
+  if (document.readyState !== 'loading') {
+    initDashboard();
+  }
+</script>

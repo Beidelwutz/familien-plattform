@@ -1,0 +1,174 @@
+---
+/**
+ * Mobile-optimized navigation for Admin pages
+ * Provides a hamburger menu that opens a slide-out drawer on mobile
+ */
+interface Props {
+  currentPage?: string;
+}
+
+const { currentPage } = Astro.props;
+
+const navItems = [
+  { href: '/admin', icon: '📊', label: 'Dashboard', id: 'dashboard' },
+  { href: '/admin/review', icon: '📋', label: 'Review Queue', id: 'review' },
+  { href: '/admin/sources', icon: '📡', label: 'Quellen', id: 'sources' },
+  { href: '/admin/categories', icon: '🏷️', label: 'Kategorien', id: 'categories' },
+  { href: '/admin/amenities', icon: '🎯', label: 'Ausstattung', id: 'amenities' },
+  { href: '/admin/dedup', icon: '⚠️', label: 'Duplikate', id: 'dedup' },
+  { href: '/admin/runs', icon: '🔄', label: 'Ingest-Runs', id: 'runs' },
+  { href: '/admin/trends', icon: '🔥', label: 'Trends', id: 'trends' },
+  { href: '/admin/ai-usage', icon: '🤖', label: 'AI Monitor', id: 'ai-usage' },
+];
+---
+
+<!-- Mobile Navigation Toggle (shown on mobile) -->
+<div class="lg:hidden fixed bottom-4 right-4 z-40">
+  <button 
+    id="mobile-nav-toggle"
+    class="w-14 h-14 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors"
+    aria-label="Navigation öffnen"
+  >
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+    </svg>
+  </button>
+</div>
+
+<!-- Mobile Navigation Drawer -->
+<div 
+  id="mobile-nav-drawer" 
+  class="fixed inset-0 z-50 hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="mobile-nav-title"
+>
+  <!-- Backdrop -->
+  <div id="mobile-nav-backdrop" class="absolute inset-0 bg-black/50 opacity-0 transition-opacity"></div>
+  
+  <!-- Drawer -->
+  <div 
+    id="mobile-nav-content"
+    class="absolute right-0 top-0 h-full w-64 bg-white shadow-xl transform translate-x-full transition-transform"
+  >
+    <!-- Header -->
+    <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 id="mobile-nav-title" class="font-semibold text-gray-900">Admin Navigation</h2>
+      <button 
+        id="mobile-nav-close"
+        class="p-2 -mr-2 text-gray-500 hover:text-gray-700"
+        aria-label="Navigation schließen"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+    
+    <!-- Navigation Items -->
+    <nav class="p-4">
+      <ul class="space-y-2">
+        {navItems.map(item => (
+          <li>
+            <a 
+              href={item.href}
+              class={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                currentPage === item.id 
+                  ? 'bg-primary-100 text-primary-700 font-medium' 
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <span class="text-xl">{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    <!-- Logout -->
+    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
+      <button 
+        id="mobile-logout-btn"
+        class="w-full flex items-center justify-center gap-2 px-4 py-3 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+        </svg>
+        Abmelden
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Desktop Sidebar (shown on larger screens) -->
+<aside class="hidden lg:block fixed left-0 top-16 bottom-0 w-56 bg-white border-r border-gray-200 overflow-y-auto">
+  <nav class="p-4">
+    <ul class="space-y-1">
+      {navItems.map(item => (
+        <li>
+          <a 
+            href={item.href}
+            class={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              currentPage === item.id 
+                ? 'bg-primary-100 text-primary-700 font-medium' 
+                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+            }`}
+          >
+            <span>{item.icon}</span>
+            <span>{item.label}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</aside>
+
+<script>
+  const toggle = document.getElementById('mobile-nav-toggle');
+  const drawer = document.getElementById('mobile-nav-drawer');
+  const backdrop = document.getElementById('mobile-nav-backdrop');
+  const content = document.getElementById('mobile-nav-content');
+  const closeBtn = document.getElementById('mobile-nav-close');
+  const logoutBtn = document.getElementById('mobile-logout-btn');
+
+  function openDrawer() {
+    drawer?.classList.remove('hidden');
+    // Trigger reflow for animation
+    drawer?.offsetHeight;
+    backdrop?.classList.remove('opacity-0');
+    backdrop?.classList.add('opacity-100');
+    content?.classList.remove('translate-x-full');
+    content?.classList.add('translate-x-0');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDrawer() {
+    backdrop?.classList.remove('opacity-100');
+    backdrop?.classList.add('opacity-0');
+    content?.classList.remove('translate-x-0');
+    content?.classList.add('translate-x-full');
+    document.body.style.overflow = '';
+    
+    setTimeout(() => {
+      drawer?.classList.add('hidden');
+    }, 300);
+  }
+
+  toggle?.addEventListener('click', openDrawer);
+  closeBtn?.addEventListener('click', closeDrawer);
+  backdrop?.addEventListener('click', closeDrawer);
+  
+  // Close on escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !drawer?.classList.contains('hidden')) {
+      closeDrawer();
+    }
+  });
+
+  // Logout
+  logoutBtn?.addEventListener('click', () => {
+    localStorage.removeItem('auth_token');
+    window.location.href = '/login';
+  });
+</script>

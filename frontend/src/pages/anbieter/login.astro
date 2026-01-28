@@ -1,0 +1,158 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Anbieter-Login - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 flex items-center justify-center py-8 px-4">
+    <div class="w-full max-w-[900px] grid gap-8 md:grid-cols-2 md:items-start">
+      <!-- Login Form -->
+      <div class="bg-white rounded-2xl shadow-card p-6 md:p-8">
+        <div class="text-center mb-8">
+          <div class="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span class="text-3xl">🏢</span>
+          </div>
+          <h1 class="text-2xl font-bold text-gray-900 mb-2">Anbieter-Login</h1>
+          <p class="text-gray-500">Melde dich an, um deine Events zu verwalten</p>
+        </div>
+
+        <form class="flex flex-col gap-5" id="login-form">
+          <div class="flex flex-col gap-2">
+            <label for="email" class="font-medium text-sm text-gray-700">E-Mail</label>
+            <input 
+              type="email" 
+              id="email" 
+              name="email" 
+              required 
+              placeholder="kontakt@mein-unternehmen.de" 
+              autocomplete="email"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
+            />
+          </div>
+          
+          <div class="flex flex-col gap-2">
+            <label for="password" class="font-medium text-sm text-gray-700">Passwort</label>
+            <input 
+              type="password" 
+              id="password" 
+              name="password" 
+              required 
+              placeholder="••••••••" 
+              autocomplete="current-password"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
+            />
+          </div>
+          
+          <div class="flex justify-between items-center text-sm">
+            <label class="flex items-center gap-2 cursor-pointer text-gray-600">
+              <input type="checkbox" name="remember" class="accent-primary-500 rounded" />
+              <span>Angemeldet bleiben</span>
+            </label>
+            <a href="/passwort-vergessen" class="text-primary-500 hover:text-primary-600 font-medium">Passwort vergessen?</a>
+          </div>
+          
+          <button type="submit" class="btn-primary w-full py-3" id="submit-btn">Anmelden</button>
+          
+          <!-- Error Message -->
+          <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="login-error">
+            E-Mail oder Passwort falsch
+          </div>
+        </form>
+
+        <div class="text-center mt-6 pt-6 border-t border-gray-100">
+          <p class="text-gray-600 text-sm">
+            Noch kein Konto? 
+            <a href="/anbieter/registrieren" class="text-primary-500 hover:text-primary-600 font-semibold">Jetzt registrieren</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Info Panel -->
+      <div class="space-y-6">
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h2 class="font-semibold text-gray-900 mb-4">Als Anbieter kannst du:</h2>
+          <ul class="space-y-3">
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm">✓</span>
+              <span class="text-gray-700">Events, Kurse und Angebote veröffentlichen</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm">✓</span>
+              <span class="text-gray-700">Statistiken und Reichweite einsehen</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm">✓</span>
+              <span class="text-gray-700">Direkten Kontakt zu interessierten Familien</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm">✓</span>
+              <span class="text-gray-700">In AI-Empfehlungen und Tagesplänen erscheinen</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl p-6 text-white">
+          <h3 class="font-semibold mb-2">Neu bei familienlokal?</h3>
+          <p class="text-sm text-primary-100 mb-4">
+            Registriere dich kostenlos und erreiche tausende Familien in Karlsruhe.
+          </p>
+          <a href="/anbieter/registrieren" class="inline-block bg-white text-primary-600 px-6 py-2 rounded-xl font-medium hover:bg-primary-50 transition-colors">
+            Kostenlos starten
+          </a>
+        </div>
+
+        <p class="text-sm text-gray-500 text-center">
+          Du bist eine Familie und suchst nach Events?<br />
+          <a href="/login" class="text-primary-500 hover:text-primary-600">Zum Familien-Login</a>
+        </p>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_BASE }}>
+  const form = document.getElementById('login-form');
+  const submitBtn = document.getElementById('submit-btn');
+  const errorMessage = document.getElementById('login-error');
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const email = document.getElementById('email')?.value;
+    const password = document.getElementById('password')?.value;
+
+    errorMessage?.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Wird angemeldet...';
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Check if user has provider role or provider profile
+        localStorage.setItem('token', data.data.token);
+        
+        // Redirect to provider dashboard
+        window.location.href = '/anbieter/dashboard';
+      } else {
+        errorMessage.textContent = data.error?.message || 'E-Mail oder Passwort falsch';
+        errorMessage?.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Anmelden';
+      }
+    } catch (error) {
+      errorMessage.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+      errorMessage?.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Anmelden';
+    }
+  });
+</script>

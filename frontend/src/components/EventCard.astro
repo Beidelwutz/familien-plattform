@@ -12,7 +12,6 @@ interface Props {
   isIndoor?: boolean;
   isOutdoor?: boolean;
   imageUrl?: string;
-  categories?: Array<{ name: string; icon?: string }>;
   familyFitScore?: number;
 }
 
@@ -29,7 +28,6 @@ const {
   isIndoor,
   isOutdoor,
   imageUrl,
-  categories = [],
   familyFitScore
 } = Astro.props;
 

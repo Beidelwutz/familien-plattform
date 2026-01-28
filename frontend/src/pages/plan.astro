@@ -1,647 +1,321 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+// Date helpers
+const today = new Date();
+const tomorrow = new Date(today);
+tomorrow.setDate(tomorrow.getDate() + 1);
+
+const formatDateShort = (date: Date) => date.toLocaleDateString('de-DE', { 
+  weekday: 'short', 
+  day: 'numeric', 
+  month: 'short' 
+});
+
+// Find next weekend
+const getNextWeekend = () => {
+  const date = new Date();
+  const day = date.getDay();
+  const daysUntilSaturday = day === 0 ? 6 : 6 - day;
+  date.setDate(date.getDate() + daysUntilSaturday);
+  return date;
+};
+
+const weekend = getNextWeekend();
+
+// Categories
+const categories = [
+  { id: 'museum', icon: '🏛️', label: 'Museum' },
+  { id: 'sport', icon: '⚽', label: 'Sport' },
+  { id: 'natur', icon: '🌳', label: 'Natur' },
+  { id: 'spielplatz', icon: '🎢', label: 'Spielplatz' },
+  { id: 'kreativ', icon: '🎨', label: 'Kreativ' },
+  { id: 'tiere', icon: '🐾', label: 'Tiere' },
+];
 ---
 
-<BaseLayout title="Tagesplan erstellen - Familien-Lokal Karlsruhe">
-  <main class="plan-page">
-    <div class="container">
-      <div class="plan-header">
-        <h1>Erstelle deinen perfekten Familientag</h1>
-        <p>In unter 20 Sekunden zum stressfreien Plan mit Route und Plan B</p>
-      </div>
+<BaseLayout title="Tagesplan erstellen - familienlokal Karlsruhe">
+  <StickyHeader />
+  
+  <main class="min-h-screen bg-gradient-to-b from-primary-50 to-white py-8 md:py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <header class="text-center mb-10">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+          Erstelle deinen perfekten Familientag
+        </h1>
+        <p class="text-lg text-gray-600">
+          In unter 20 Sekunden zum stressfreien Plan mit Route und Plan B
+        </p>
+      </header>
 
-      <!-- Plan Generator Form -->
-      <div class="plan-generator" id="plan-generator">
+      <!-- Plan Generator -->
+      <div id="plan-generator" class="bg-white rounded-3xl shadow-lg p-6 md:p-8">
+        
         <!-- Step 1: Children -->
-        <div class="plan-step" data-step="1">
-          <div class="step-header">
-            <span class="step-number">1</span>
-            <h2>Wie alt sind deine Kinder?</h2>
+        <section class="pb-8 mb-8 border-b border-gray-100">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">1</div>
+            <h2 class="text-xl font-semibold text-gray-900">Wie alt sind deine Kinder?</h2>
           </div>
-          <div class="children-list" id="children-list">
-            <div class="child-input">
-              <label>Kind 1</label>
-              <input type="number" min="0" max="18" placeholder="Alter" class="child-age" />
-              <button class="remove-child" aria-label="Kind entfernen">×</button>
+          
+          <div id="children-list" class="space-y-3 mb-4">
+            <div class="flex items-center gap-3 child-input">
+              <label class="text-sm font-medium text-gray-600 w-16">Kind 1</label>
+              <input 
+                type="number" 
+                min="0" 
+                max="18" 
+                placeholder="Alter"
+                class="w-24 px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:outline-none text-center font-medium"
+              />
+              <span class="text-gray-400">Jahre</span>
             </div>
           </div>
-          <button class="add-child-btn" id="add-child">
-            + Kind hinzufügen
+          
+          <button id="add-child" class="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 hover:border-primary-500 hover:text-primary-600 transition-colors flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            Kind hinzufügen
           </button>
-        </div>
+        </section>
 
         <!-- Step 2: Date -->
-        <div class="plan-step" data-step="2">
-          <div class="step-header">
-            <span class="step-number">2</span>
-            <h2>Wann soll es losgehen?</h2>
+        <section class="pb-8 mb-8 border-b border-gray-100">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">2</div>
+            <h2 class="text-xl font-semibold text-gray-900">Wann soll es losgehen?</h2>
           </div>
-          <div class="date-options">
-            <label class="date-option">
-              <input type="radio" name="plan-date" value="heute" checked />
-              <span class="option-card">
-                <strong>Heute</strong>
-                <small id="date-heute"></small>
-              </span>
+          
+          <div class="grid grid-cols-2 gap-3">
+            <label class="cursor-pointer">
+              <input type="radio" name="plan-date" value="heute" class="hidden peer" checked />
+              <div class="p-4 border-2 border-gray-200 rounded-xl peer-checked:border-primary-500 peer-checked:bg-primary-50 transition-all">
+                <span class="font-semibold text-gray-900 block">Heute</span>
+                <span class="text-sm text-gray-500">{formatDateShort(today)}</span>
+              </div>
             </label>
-            <label class="date-option">
-              <input type="radio" name="plan-date" value="morgen" />
-              <span class="option-card">
-                <strong>Morgen</strong>
-                <small id="date-morgen"></small>
-              </span>
+            
+            <label class="cursor-pointer">
+              <input type="radio" name="plan-date" value="morgen" class="hidden peer" />
+              <div class="p-4 border-2 border-gray-200 rounded-xl peer-checked:border-primary-500 peer-checked:bg-primary-50 transition-all">
+                <span class="font-semibold text-gray-900 block">Morgen</span>
+                <span class="text-sm text-gray-500">{formatDateShort(tomorrow)}</span>
+              </div>
             </label>
-            <label class="date-option">
-              <input type="radio" name="plan-date" value="wochenende" />
-              <span class="option-card">
-                <strong>Wochenende</strong>
-                <small id="date-wochenende"></small>
-              </span>
+            
+            <label class="cursor-pointer">
+              <input type="radio" name="plan-date" value="wochenende" class="hidden peer" />
+              <div class="p-4 border-2 border-gray-200 rounded-xl peer-checked:border-primary-500 peer-checked:bg-primary-50 transition-all">
+                <span class="font-semibold text-gray-900 block">Wochenende</span>
+                <span class="text-sm text-gray-500">{formatDateShort(weekend)}</span>
+              </div>
             </label>
-            <label class="date-option">
-              <input type="radio" name="plan-date" value="custom" />
-              <span class="option-card">
-                <strong>Anderes Datum</strong>
-                <input type="date" id="custom-date" class="custom-date-input" />
-              </span>
+            
+            <label class="cursor-pointer">
+              <input type="radio" name="plan-date" value="custom" class="hidden peer" />
+              <div class="p-4 border-2 border-gray-200 rounded-xl peer-checked:border-primary-500 peer-checked:bg-primary-50 transition-all">
+                <span class="font-semibold text-gray-900 block">Anderes Datum</span>
+                <input 
+                  type="date" 
+                  id="custom-date" 
+                  class="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1"
+                />
+              </div>
             </label>
           </div>
-        </div>
+        </section>
 
         <!-- Step 3: Budget -->
-        <div class="plan-step" data-step="3">
-          <div class="step-header">
-            <span class="step-number">3</span>
-            <h2>Was ist dein Budget?</h2>
+        <section class="pb-8 mb-8 border-b border-gray-100">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">3</div>
+            <h2 class="text-xl font-semibold text-gray-900">Was ist dein Budget?</h2>
           </div>
-          <div class="budget-slider-container">
+          
+          <div class="mb-4">
             <input 
               type="range" 
               id="budget-slider" 
               min="0" 
               max="100" 
-              value="30" 
-              class="budget-slider"
+              value="30"
+              class="w-full h-2 bg-gradient-to-r from-secondary-400 via-primary-400 to-accent-400 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-primary-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:cursor-pointer"
             />
-            <div class="budget-labels">
+            <div class="flex justify-between mt-2 text-sm text-gray-500">
               <span>Kostenlos</span>
-              <span class="budget-value" id="budget-value">30€</span>
+              <span id="budget-value" class="text-lg font-bold text-primary-600">30€</span>
               <span>100€+</span>
             </div>
           </div>
-          <div class="budget-presets">
-            <button class="budget-preset" data-value="0">Kostenlos</button>
-            <button class="budget-preset" data-value="20">~20€</button>
-            <button class="budget-preset active" data-value="30">~30€</button>
-            <button class="budget-preset" data-value="50">~50€</button>
-            <button class="budget-preset" data-value="100">Egal</button>
+          
+          <div class="flex flex-wrap gap-2">
+            <button class="chip" data-budget="0">Kostenlos</button>
+            <button class="chip" data-budget="20">~20€</button>
+            <button class="chip chip-active" data-budget="30">~30€</button>
+            <button class="chip" data-budget="50">~50€</button>
+            <button class="chip" data-budget="100">Egal</button>
           </div>
-        </div>
+        </section>
 
         <!-- Step 4: Preferences -->
-        <div class="plan-step" data-step="4">
-          <div class="step-header">
-            <span class="step-number">4</span>
-            <h2>Was gefällt euch?</h2>
+        <section class="pb-8 mb-8 border-b border-gray-100">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">4</div>
+            <h2 class="text-xl font-semibold text-gray-900">Was gefällt euch?</h2>
           </div>
           
-          <div class="preference-group">
-            <h3>Drinnen oder Draußen?</h3>
-            <div class="preference-options">
-              <label class="preference-option">
-                <input type="checkbox" name="indoor-outdoor" value="indoor" checked />
-                <span>🏠 Indoor</span>
+          <!-- Indoor/Outdoor -->
+          <div class="mb-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Drinnen oder Draußen?</h3>
+            <div class="flex gap-3">
+              <label class="cursor-pointer flex-1">
+                <input type="checkbox" name="location-type" value="indoor" class="hidden peer" checked />
+                <div class="py-3 px-4 border-2 border-gray-200 rounded-xl text-center peer-checked:border-primary-500 peer-checked:bg-primary-50 transition-all">
+                  <span class="text-xl block mb-1">🏠</span>
+                  <span class="font-medium">Indoor</span>
+                </div>
               </label>
-              <label class="preference-option">
-                <input type="checkbox" name="indoor-outdoor" value="outdoor" checked />
-                <span>🌤️ Outdoor</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="preference-group">
-            <h3>Kategorien (optional)</h3>
-            <div class="category-chips">
-              <label class="category-chip">
-                <input type="checkbox" name="categories" value="museum" />
-                <span>🏛️ Museum</span>
-              </label>
-              <label class="category-chip">
-                <input type="checkbox" name="categories" value="sport" />
-                <span>⚽ Sport</span>
-              </label>
-              <label class="category-chip">
-                <input type="checkbox" name="categories" value="natur" />
-                <span>🌳 Natur</span>
-              </label>
-              <label class="category-chip">
-                <input type="checkbox" name="categories" value="spielplatz" />
-                <span>🎢 Spielplatz</span>
-              </label>
-              <label class="category-chip">
-                <input type="checkbox" name="categories" value="kreativ" />
-                <span>🎨 Kreativ</span>
-              </label>
-              <label class="category-chip">
-                <input type="checkbox" name="categories" value="tiere" />
-                <span>🐾 Tiere</span>
+              <label class="cursor-pointer flex-1">
+                <input type="checkbox" name="location-type" value="outdoor" class="hidden peer" checked />
+                <div class="py-3 px-4 border-2 border-gray-200 rounded-xl text-center peer-checked:border-primary-500 peer-checked:bg-primary-50 transition-all">
+                  <span class="text-xl block mb-1">🌤️</span>
+                  <span class="font-medium">Outdoor</span>
+                </div>
               </label>
             </div>
           </div>
-        </div>
+          
+          <!-- Categories -->
+          <div>
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Kategorien (optional)</h3>
+            <div class="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <label class="cursor-pointer">
+                  <input type="checkbox" name="categories" value={cat.id} class="hidden peer" />
+                  <span class="chip peer-checked:chip-active">{cat.icon} {cat.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </section>
 
         <!-- Generate Button -->
-        <div class="generate-section">
-          <button class="btn btn-primary btn-large generate-btn" id="generate-plan">
-            ✨ Plan erstellen
+        <div class="text-center">
+          <button id="generate-plan" class="btn-primary text-lg px-10 py-4 w-full sm:w-auto">
+            <span class="mr-2">✨</span>
+            Plan erstellen
           </button>
-          <p class="generate-hint">Kostenlos · Keine Anmeldung nötig</p>
+          <p class="text-sm text-gray-500 mt-3">Kostenlos · Keine Anmeldung nötig</p>
         </div>
       </div>
 
       <!-- Plan Result (hidden initially) -->
-      <div class="plan-result hidden" id="plan-result">
-        <div class="result-header">
-          <h2>Dein Familientag</h2>
-          <div class="result-meta">
-            <span id="result-date"></span>
-            <span id="result-budget"></span>
+      <div id="plan-result" class="hidden bg-white rounded-3xl shadow-lg p-6 md:p-8">
+        <!-- Result Header -->
+        <div class="text-center mb-8">
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">Dein Familientag</h2>
+          <div class="flex items-center justify-center gap-4 text-gray-500">
+            <span id="result-date">Heute, 15. Jan</span>
+            <span>•</span>
+            <span id="result-budget">Budget: ~30€</span>
           </div>
         </div>
 
-        <!-- Timeline -->
-        <div class="plan-timeline" id="plan-timeline">
-          <!-- Timeline items will be rendered here -->
+        <!-- Timeline (filled by script from API) -->
+        <div id="plan-timeline" class="relative pl-8 mb-8">
+          <div class="absolute left-3 top-2 bottom-2 w-0.5 bg-gray-200"></div>
+          <div id="plan-timeline-slots"></div>
+        </div>
+
+        <!-- Summary (filled by script) -->
+        <div class="bg-primary-50 rounded-xl p-4 mb-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-sm text-primary-700">Gesamtkosten</span>
+              <span id="result-cost" class="text-2xl font-bold text-primary-600 ml-2">–</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tips (filled by script) -->
+        <div id="plan-tips" class="hidden mb-6 p-4 bg-amber-50 rounded-xl">
+          <h4 class="font-semibold text-amber-800 mb-2">💡 Tipps</h4>
+          <ul id="plan-tips-list" class="text-sm text-amber-700 list-disc list-inside space-y-1"></ul>
         </div>
 
         <!-- Plan B Toggle -->
-        <div class="plan-b-section">
-          <button class="plan-b-toggle" id="plan-b-toggle">
-            🌧️ Plan B anzeigen (bei Regen)
+        <div class="mb-8">
+          <button id="plan-b-toggle" class="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium text-gray-700 transition-colors flex items-center justify-center gap-2">
+            <span>🌧️</span>
+            Plan B anzeigen (bei Regen)
           </button>
-          <div class="plan-b-content hidden" id="plan-b-content">
-            <!-- Plan B timeline will be rendered here -->
+          <div id="plan-b-content" class="hidden mt-4 p-4 bg-blue-50 rounded-xl">
+            <p id="plan-b-reason" class="text-sm text-blue-700 mb-2"></p>
+            <div id="plan-b-slots" class="space-y-2 text-sm text-blue-800"></div>
           </div>
         </div>
 
         <!-- Actions -->
-        <div class="result-actions">
-          <button class="btn btn-primary" id="save-plan">
-            💾 Plan speichern
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button id="save-plan" class="btn-primary flex-1 flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+            </svg>
+            Plan speichern
           </button>
-          <button class="btn btn-secondary" id="export-calendar">
-            📅 In Kalender exportieren
+          <button id="export-calendar" class="btn-secondary flex-1 flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Kalender
           </button>
-          <button class="btn btn-secondary" id="share-plan">
-            📤 Teilen
+          <button id="share-plan" class="btn-secondary flex-1 flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
+            </svg>
+            Teilen
           </button>
         </div>
 
         <!-- New Plan -->
-        <button class="new-plan-btn" id="new-plan">
-          ← Neuen Plan erstellen
+        <button id="new-plan" class="w-full mt-6 text-primary-600 hover:text-primary-700 font-medium flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          Neuen Plan erstellen
         </button>
       </div>
 
       <!-- Loading State -->
-      <div class="plan-loading hidden" id="plan-loading">
-        <div class="loading-spinner"></div>
-        <p>Dein perfekter Familientag wird erstellt...</p>
+      <div id="plan-loading" class="hidden bg-white rounded-3xl shadow-lg p-12 text-center">
+        <div class="w-16 h-16 border-4 border-gray-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-6"></div>
+        <p class="text-lg text-gray-600">Dein perfekter Familientag wird erstellt...</p>
+        <p class="text-sm text-gray-400 mt-2">Das dauert nur wenige Sekunden</p>
       </div>
     </div>
   </main>
 </BaseLayout>
 
-<style>
-  .plan-page {
-    padding: 2rem 1rem;
-    min-height: calc(100vh - 4rem);
-    background: var(--color-bg-secondary);
-  }
+<script define:vars={{ API_BASE }}>
+  // Store current plan data for save/share
+  let currentPlanData = null;
 
-  .plan-header {
-    text-align: center;
-    margin-bottom: 2rem;
+  function timeStr(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    } catch { return ''; }
   }
-
-  .plan-header h1 {
-    margin-bottom: 0.5rem;
+  function formatResultDate(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso + 'T12:00:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'short' });
+    } catch { return iso || ''; }
   }
-
-  .plan-header p {
-    color: var(--color-text-muted);
-  }
-
-  .plan-generator {
-    max-width: 700px;
-    margin: 0 auto;
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 2rem;
-    box-shadow: var(--shadow);
-  }
-
-  .plan-step {
-    margin-bottom: 2rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .plan-step:last-of-type {
-    border-bottom: none;
-    margin-bottom: 1rem;
-  }
-
-  .step-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .step-number {
-    width: 2rem;
-    height: 2rem;
-    background: var(--color-primary);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    flex-shrink: 0;
-  }
-
-  .step-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
-  }
-
-  /* Children Input */
-  .children-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .child-input {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .child-input label {
-    min-width: 60px;
-    font-weight: 500;
-  }
-
-  .child-age {
-    width: 100px;
-    padding: 0.5rem;
-    border: 2px solid var(--color-border);
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-  }
-
-  .remove-child {
-    width: 2rem;
-    height: 2rem;
-    background: var(--color-bg-secondary);
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 1.25rem;
-    color: var(--color-text-muted);
-  }
-
-  .remove-child:hover {
-    background: var(--color-error);
-    color: white;
-  }
-
-  .add-child-btn {
-    background: none;
-    border: 2px dashed var(--color-border);
-    padding: 0.75rem;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    color: var(--color-text-muted);
-    width: 100%;
-    transition: all 0.2s;
-  }
-
-  .add-child-btn:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-
-  /* Date Options */
-  .date-options {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-  }
-
-  .date-option {
-    cursor: pointer;
-  }
-
-  .date-option input {
-    display: none;
-  }
-
-  .option-card {
-    display: flex;
-    flex-direction: column;
-    padding: 1rem;
-    border: 2px solid var(--color-border);
-    border-radius: var(--border-radius);
-    transition: all 0.2s;
-  }
-
-  .date-option input:checked + .option-card {
-    border-color: var(--color-primary);
-    background: rgba(79, 70, 229, 0.05);
-  }
-
-  .option-card small {
-    color: var(--color-text-muted);
-    margin-top: 0.25rem;
-  }
-
-  .custom-date-input {
-    margin-top: 0.5rem;
-    padding: 0.5rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius);
-    width: 100%;
-  }
-
-  /* Budget Slider */
-  .budget-slider-container {
-    margin-bottom: 1rem;
-  }
-
-  .budget-slider {
-    width: 100%;
-    height: 8px;
-    appearance: none;
-    background: linear-gradient(to right, var(--color-secondary), var(--color-primary), var(--color-accent));
-    border-radius: 4px;
-    outline: none;
-  }
-
-  .budget-slider::-webkit-slider-thumb {
-    appearance: none;
-    width: 24px;
-    height: 24px;
-    background: white;
-    border: 3px solid var(--color-primary);
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: var(--shadow);
-  }
-
-  .budget-labels {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .budget-value {
-    font-weight: bold;
-    color: var(--color-primary);
-    font-size: 1.25rem;
-  }
-
-  .budget-presets {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .budget-preset {
-    padding: 0.5rem 1rem;
-    background: var(--color-bg-secondary);
-    border: none;
-    border-radius: 2rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .budget-preset.active,
-  .budget-preset:hover {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  /* Preferences */
-  .preference-group {
-    margin-bottom: 1.5rem;
-  }
-
-  .preference-group h3 {
-    font-size: 1rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .preference-options {
-    display: flex;
-    gap: 0.75rem;
-  }
-
-  .preference-option {
-    cursor: pointer;
-  }
-
-  .preference-option input {
-    display: none;
-  }
-
-  .preference-option span {
-    display: inline-block;
-    padding: 0.75rem 1.5rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-    transition: all 0.2s;
-  }
-
-  .preference-option input:checked + span {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .category-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .category-chip {
-    cursor: pointer;
-  }
-
-  .category-chip input {
-    display: none;
-  }
-
-  .category-chip span {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    background: var(--color-bg-secondary);
-    border-radius: 2rem;
-    font-size: 0.875rem;
-    transition: all 0.2s;
-  }
-
-  .category-chip input:checked + span {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  /* Generate Section */
-  .generate-section {
-    text-align: center;
-    padding-top: 1rem;
-  }
-
-  .generate-btn {
-    width: 100%;
-    max-width: 300px;
-  }
-
-  .generate-hint {
-    margin-top: 0.75rem;
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  /* Result Section */
-  .plan-result {
-    max-width: 800px;
-    margin: 0 auto;
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 2rem;
-    box-shadow: var(--shadow);
-  }
-
-  .result-header {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .result-meta {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    color: var(--color-text-muted);
-  }
-
-  .plan-timeline {
-    position: relative;
-    padding-left: 2rem;
-  }
-
-  .plan-timeline::before {
-    content: '';
-    position: absolute;
-    left: 0.5rem;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--color-border);
-  }
-
-  .result-actions {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: center;
-    margin-top: 2rem;
-    flex-wrap: wrap;
-  }
-
-  .plan-b-section {
-    margin-top: 2rem;
-    padding-top: 2rem;
-    border-top: 1px solid var(--color-border);
-  }
-
-  .plan-b-toggle {
-    width: 100%;
-    padding: 1rem;
-    background: var(--color-bg-secondary);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-size: 1rem;
-  }
-
-  .new-plan-btn {
-    display: block;
-    margin: 2rem auto 0;
-    background: none;
-    border: none;
-    color: var(--color-primary);
-    cursor: pointer;
-    font-size: 1rem;
-  }
-
-  /* Loading */
-  .plan-loading {
-    text-align: center;
-    padding: 4rem 2rem;
-  }
-
-  .loading-spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid var(--color-border);
-    border-top-color: var(--color-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .hidden {
-    display: none;
-  }
-
-  @media (max-width: 600px) {
-    .date-options {
-      grid-template-columns: 1fr;
-    }
-    
-    .result-actions {
-      flex-direction: column;
-    }
-    
-    .result-actions .btn {
-      width: 100%;
-    }
-  }
-</style>
-
-<script>
-  // Set date labels
-  const heute = new Date();
-  const morgen = new Date(heute);
-  morgen.setDate(morgen.getDate() + 1);
-  
-  const formatDate = (date: Date) => date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
-  
-  const heuteEl = document.getElementById('date-heute');
-  const morgenEl = document.getElementById('date-morgen');
-  
-  if (heuteEl) heuteEl.textContent = formatDate(heute);
-  if (morgenEl) morgenEl.textContent = formatDate(morgen);
 
   // Add child functionality
   let childCount = 1;
@@ -651,11 +325,22 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   addChildBtn?.addEventListener('click', () => {
     childCount++;
     const childDiv = document.createElement('div');
-    childDiv.className = 'child-input';
+    childDiv.className = 'flex items-center gap-3 child-input';
     childDiv.innerHTML = `
-      <label>Kind ${childCount}</label>
-      <input type="number" min="0" max="18" placeholder="Alter" class="child-age" />
-      <button class="remove-child" aria-label="Kind entfernen">×</button>
+      <label class="text-sm font-medium text-gray-600 w-16">Kind ${childCount}</label>
+      <input 
+        type="number" 
+        min="0" 
+        max="18" 
+        placeholder="Alter"
+        class="w-24 px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:outline-none text-center font-medium"
+      />
+      <span class="text-gray-400">Jahre</span>
+      <button class="remove-child p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
     `;
     childrenList?.appendChild(childDiv);
     
@@ -665,27 +350,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   });
 
   // Budget slider
-  const budgetSlider = document.getElementById('budget-slider') as HTMLInputElement;
+  const budgetSlider = document.getElementById('budget-slider');
   const budgetValue = document.getElementById('budget-value');
-  const budgetPresets = document.querySelectorAll('.budget-preset');
+  const budgetChips = document.querySelectorAll('[data-budget]');
 
   budgetSlider?.addEventListener('input', () => {
-    const value = parseInt(budgetSlider.value);
+    const value = parseInt(budgetSlider.value, 10);
     if (budgetValue) {
       budgetValue.textContent = value === 0 ? 'Kostenlos' : value >= 100 ? '100€+' : `${value}€`;
     }
-    budgetPresets.forEach(btn => btn.classList.remove('active'));
+    budgetChips.forEach(chip => chip.classList.remove('chip-active'));
   });
 
-  budgetPresets.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const value = btn.getAttribute('data-value');
+  budgetChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const value = chip.getAttribute('data-budget');
       if (budgetSlider && value) {
         budgetSlider.value = value;
         budgetSlider.dispatchEvent(new Event('input'));
       }
-      budgetPresets.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      budgetChips.forEach(c => c.classList.remove('chip-active'));
+      chip.classList.add('chip-active');
     });
   });
 
@@ -697,13 +382,314 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     planBContent?.classList.toggle('hidden');
   });
 
-  // New plan button
-  const newPlanBtn = document.getElementById('new-plan');
+  // Generate plan
+  const generateBtn = document.getElementById('generate-plan');
   const planGenerator = document.getElementById('plan-generator');
   const planResult = document.getElementById('plan-result');
+  const planLoading = document.getElementById('plan-loading');
+
+  generateBtn?.addEventListener('click', async () => {
+    const childInputs = document.querySelectorAll('.child-input input[type="number"]');
+    const childrenAges = Array.from(childInputs).map(el => parseInt(el.value, 10)).filter(n => !isNaN(n) && n >= 0 && n <= 18);
+    if (childrenAges.length === 0) {
+      alert('Bitte gib das Alter von mindestens einem Kind an.');
+      return;
+    }
+
+    const dateRadio = document.querySelector('input[name="plan-date"]:checked');
+    const dateVal = dateRadio?.value || 'heute';
+    let dateIso = '';
+    if (dateVal === 'heute') dateIso = new Date().toISOString().slice(0, 10);
+    else if (dateVal === 'morgen') { const d = new Date(); d.setDate(d.getDate() + 1); dateIso = d.toISOString().slice(0, 10); }
+    else if (dateVal === 'wochenende') {
+      const d = new Date();
+      const day = d.getDay();
+      const toSat = day === 0 ? 6 : 6 - day;
+      d.setDate(d.getDate() + toSat);
+      dateIso = d.toISOString().slice(0, 10);
+    } else {
+      const customInput = document.getElementById('custom-date');
+      dateIso = customInput?.value ? new Date(customInput.value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    }
+
+    const budgetEl = document.getElementById('budget-slider');
+    const budget = budgetEl ? parseInt(budgetEl.value, 10) || 50 : 50;
+
+    const indoor = document.querySelector('input[name="location-type"][value="indoor"]')?.checked;
+    const outdoor = document.querySelector('input[name="location-type"][value="outdoor"]')?.checked;
+    const catChecks = document.querySelectorAll('input[name="categories"]:checked');
+    const categories = Array.from(catChecks).map(c => c.value);
+
+    const preferences = {};
+    if (indoor && !outdoor) preferences.indoor = true;
+    if (outdoor && !indoor) preferences.outdoor = true;
+    if (categories.length) preferences.categories = categories;
+
+    planGenerator?.classList.add('hidden');
+    planLoading?.classList.remove('hidden');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/plan/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          children_ages: childrenAges,
+          date: dateIso,
+          budget,
+          preferences: Object.keys(preferences).length ? preferences : undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        planLoading?.classList.add('hidden');
+        planGenerator?.classList.remove('hidden');
+        alert(json?.message || 'Plan konnte nicht erstellt werden.');
+        return;
+      }
+      const plan = json.data;
+      
+      // Store plan data for save/share functionality
+      currentPlanData = plan;
+
+      const elDate = document.getElementById('result-date');
+      const elBudget = document.getElementById('result-budget');
+      const elCost = document.getElementById('result-cost');
+      if (elDate) elDate.textContent = formatResultDate(plan.date);
+      if (elBudget) elBudget.textContent = budget === 0 ? 'Nur kostenlose Aktivitäten' : `Budget: ~${plan.budget}€`;
+      if (elCost) elCost.textContent = (plan.estimated_cost ?? 0) === 0 ? 'Kostenlos' : `~${Math.round(plan.estimated_cost)}€`;
+
+      const slotsContainer = document.getElementById('plan-timeline-slots');
+      if (slotsContainer && plan.main_plan?.slots) {
+        slotsContainer.innerHTML = plan.main_plan.slots.map((slot, i) => {
+          const isLast = i === plan.main_plan.slots.length - 1;
+          if (slot.type === 'break') {
+            return `<div class="relative ${isLast ? '' : 'pb-8'}">
+              <div class="absolute left-[-1.625rem] w-4 h-4 bg-amber-400 rounded-full border-4 border-white"></div>
+              <div class="bg-amber-50 rounded-xl p-4">
+                <span class="text-sm text-amber-700 font-medium">${timeStr(slot.start_time)}</span>
+                <h4 class="font-semibold text-amber-900 mt-1">${(slot.title || 'Pause').replace(/</g,'&lt;')}</h4>
+                ${slot.suggestion ? `<p class="text-sm text-amber-600 mt-1">${String(slot.suggestion).replace(/</g,'&lt;')}</p>` : ''}
+              </div>
+            </div>`;
+          }
+          const e = slot.event || {};
+          const title = (e.title || 'Aktivität').replace(/</g,'&lt;');
+          const desc = (e.description_short || '').replace(/</g,'&lt;');
+          const badge = e.is_indoor ? 'badge-indoor">🏠 Indoor' : (e.is_outdoor ? 'badge-outdoor">🌳 Outdoor' : '');
+          const price = e.price_type === 'free' ? 'Kostenlos' : (e.price_min ? `ab ${e.price_min}€` : '');
+          return `<div class="relative ${isLast ? '' : 'pb-8'}">
+            <div class="absolute left-[-1.625rem] w-4 h-4 bg-primary-500 rounded-full border-4 border-white"></div>
+            <div class="bg-gray-50 rounded-xl p-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <span class="text-sm text-primary-600 font-medium">${timeStr(slot.start_time)}</span>
+                  <h4 class="font-semibold text-gray-900 mt-1">${e.id ? `<a href="/event/${e.id}" class="hover:text-primary-600">${title}</a>` : title}</h4>
+                  ${desc ? `<p class="text-sm text-gray-500 mt-1">${desc}</p>` : ''}
+                  <div class="flex gap-2 mt-2">
+                    ${badge ? `<span class="badge ${badge}</span>` : ''}
+                    <span class="text-xs text-gray-400">~${slot.duration_minutes || 90} Min.</span>
+                  </div>
+                </div>
+                <span class="text-sm font-medium text-gray-700">${price}</span>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+
+      const tipsEl = document.getElementById('plan-tips');
+      const tipsList = document.getElementById('plan-tips-list');
+      if (plan.tips && plan.tips.length && tipsList) {
+        tipsList.innerHTML = plan.tips.map((t) => `<li>${String(t).replace(/</g,'&lt;')}</li>`).join('');
+        tipsEl?.classList.remove('hidden');
+      } else {
+        tipsEl?.classList.add('hidden');
+      }
+
+      const planBReason = document.getElementById('plan-b-reason');
+      const planBSlots = document.getElementById('plan-b-slots');
+      if (planBReason && plan.plan_b) {
+        planBReason.textContent = plan.plan_b.reason || 'Bei Regen oder wenn ausgebucht';
+        if (planBSlots && plan.plan_b.slots?.length) {
+          planBSlots.innerHTML = plan.plan_b.slots.map(s => {
+            const e = s.event || {};
+            return `<div>${timeStr(s.start_time)} – ${(e.title || '').replace(/</g,'&lt;')}</div>`;
+          }).join('');
+        } else {
+          planBSlots.innerHTML = '';
+        }
+      }
+      document.getElementById('plan-b-content')?.classList.add('hidden');
+
+      planLoading?.classList.add('hidden');
+      planResult?.classList.remove('hidden');
+      planResult?.scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      console.error(err);
+      planLoading?.classList.add('hidden');
+      planGenerator?.classList.remove('hidden');
+      alert('Verbindungsfehler. Bitte später erneut versuchen.');
+    }
+  });
+
+  // New plan button
+  const newPlanBtn = document.getElementById('new-plan');
 
   newPlanBtn?.addEventListener('click', () => {
     planResult?.classList.add('hidden');
     planGenerator?.classList.remove('hidden');
+    planGenerator?.scrollIntoView({ behavior: 'smooth' });
   });
+
+  // Action buttons
+  document.getElementById('save-plan')?.addEventListener('click', async () => {
+    if (!currentPlanData) {
+      alert('Kein Plan zum Speichern vorhanden.');
+      return;
+    }
+
+    const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+    const saveBtn = document.getElementById('save-plan');
+    
+    try {
+      if (saveBtn) {
+        saveBtn.textContent = 'Speichern...';
+        saveBtn.disabled = true;
+      }
+
+      const response = await fetch(`${API_BASE}/api/plan/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          date: currentPlanData.date,
+          children_ages: currentPlanData.children_ages,
+          budget: currentPlanData.budget,
+          slots: currentPlanData.main_plan?.slots || [],
+          plan_b_slots: currentPlanData.plan_b?.slots || [],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update URL with plan ID for sharing
+        const planUrl = `${window.location.origin}/plan/${data.data.id}`;
+        history.replaceState(null, '', `/plan?saved=${data.data.id}`);
+        
+        alert(`Plan gespeichert! Du kannst ihn jetzt teilen:\n${planUrl}`);
+        
+        // Update share button to use saved plan URL
+        currentPlanData.savedId = data.data.id;
+      } else {
+        throw new Error(data.error?.message || 'Speichern fehlgeschlagen');
+      }
+    } catch (error) {
+      alert('Fehler beim Speichern: ' + error.message);
+    } finally {
+      if (saveBtn) {
+        saveBtn.textContent = '💾 Speichern';
+        saveBtn.disabled = false;
+      }
+    }
+  });
+
+  document.getElementById('export-calendar')?.addEventListener('click', async () => {
+    if (!currentPlanData?.main_plan?.slots) {
+      alert('Kein Plan zum Exportieren vorhanden.');
+      return;
+    }
+
+    // Generate iCal content for the plan
+    const slots = currentPlanData.main_plan.slots.filter(s => s.event);
+    
+    if (slots.length === 0) {
+      alert('Keine Events im Plan zum Exportieren.');
+      return;
+    }
+
+    const formatICalDate = (date) => {
+      return new Date(date).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    };
+
+    const escapeIcal = (str) => {
+      if (!str) return '';
+      return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+    };
+
+    let icalEvents = '';
+    for (const slot of slots) {
+      const e = slot.event;
+      icalEvents += `BEGIN:VEVENT
+UID:plan-${Date.now()}-${e.id}@familienlokal.de
+DTSTAMP:${formatICalDate(new Date())}
+DTSTART:${formatICalDate(slot.start_time)}
+DTEND:${formatICalDate(slot.end_time)}
+SUMMARY:${escapeIcal(e.title)}
+DESCRIPTION:${escapeIcal(e.description_short || '')}
+LOCATION:${escapeIcal(e.location_address || '')}
+END:VEVENT
+`;
+    }
+
+    const icalContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//FamilienLokal//Tagesplan//DE
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Familientag ${currentPlanData.date}
+X-WR-TIMEZONE:Europe/Berlin
+${icalEvents}END:VCALENDAR`;
+
+    // Download the iCal file
+    const blob = new Blob([icalContent], { type: 'text/calendar;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `familientag-${currentPlanData.date}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('share-plan')?.addEventListener('click', async () => {
+    let shareUrl = window.location.href;
+    let shareTitle = 'Mein Familientag';
+    
+    // If plan was saved, use the saved plan URL
+    if (currentPlanData?.savedId) {
+      shareUrl = `${window.location.origin}/plan/${currentPlanData.savedId}`;
+      shareTitle = `Familientag am ${new Date(currentPlanData.date).toLocaleDateString('de-DE')}`;
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: 'Schau dir meinen Familientag an!',
+          url: shareUrl,
+        });
+      } catch (err) {
+        // User cancelled or error
+        if (err.name !== 'AbortError') {
+          copyToClipboard(shareUrl);
+        }
+      }
+    } else {
+      copyToClipboard(shareUrl);
+    }
+  });
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Link kopiert!\n' + text);
+    }).catch(() => {
+      // Fallback
+      prompt('Link zum Teilen:', text);
+    });
+  }
+
 </script>

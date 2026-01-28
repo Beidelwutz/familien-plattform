@@ -1,0 +1,185 @@
+---
+// FeedSection.astro - Main feed container for TikTok-style vertical scroll
+import EventCardNew from './EventCardNew.astro';
+
+interface Event {
+  id: string;
+  title: string;
+  image_urls?: string[];
+  start_datetime?: string;
+  location_address?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  price_max?: number;
+  age_min?: number;
+  age_max?: number;
+  is_indoor?: boolean;
+  is_outdoor?: boolean;
+  scores?: {
+    stressfree_score?: number;
+    family_fit_score?: number;
+  };
+  last_verified_at?: string;
+  distance?: string;
+}
+
+interface Props {
+  events: Event[];
+  showLoadMore?: boolean;
+}
+
+const { events, showLoadMore = true } = Astro.props;
+
+const formatTime = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return undefined;
+  }
+};
+
+const formatLastVerified = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    const diff = Date.now() - new Date(datetime).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    if (hours < 1) return 'vor kurzem';
+    if (hours < 24) return `vor ${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `vor ${days}d`;
+  } catch {
+    return undefined;
+  }
+};
+---
+
+<section class="py-6 md:py-8">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Section Header -->
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="section-title flex items-center gap-2">
+        <span class="text-2xl">📍</span>
+        Weitere Vorschläge
+      </h2>
+    </div>
+
+    <!-- Feed Grid -->
+    <div id="feed-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+      {events.map((event) => (
+        <EventCardNew
+          id={event.id}
+          title={event.title}
+          imageUrl={event.image_urls?.[0]}
+          startTime={formatTime(event.start_datetime)}
+          distance={event.distance}
+          priceType={event.price_type}
+          priceMin={event.price_min}
+          priceMax={event.price_max}
+          ageMin={event.age_min}
+          ageMax={event.age_max}
+          isIndoor={event.is_indoor}
+          isOutdoor={event.is_outdoor}
+          stressfreeScore={event.scores?.stressfree_score}
+          familyFitScore={event.scores?.family_fit_score}
+          lastVerified={formatLastVerified(event.last_verified_at)}
+        />
+      ))}
+    </div>
+
+    <!-- Load More -->
+    {showLoadMore && (
+      <div id="load-more-container" class="mt-8 text-center">
+        <button 
+          id="load-more-btn"
+          class="btn-secondary inline-flex items-center gap-2"
+          data-page="1"
+        >
+          <span>Mehr laden</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div id="load-more-spinner" class="hidden">
+          <svg class="animate-spin h-6 w-6 text-primary-500 mx-auto" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+      </div>
+    )}
+  </div>
+</section>
+
+<script>
+  const loadMoreBtn = document.getElementById('load-more-btn');
+  const loadMoreSpinner = document.getElementById('load-more-spinner');
+  const feedGrid = document.getElementById('feed-grid');
+  
+  loadMoreBtn?.addEventListener('click', async () => {
+    const currentPage = parseInt(loadMoreBtn.dataset.page || '1');
+    const nextPage = currentPage + 1;
+    
+    // Show spinner
+    loadMoreBtn.classList.add('hidden');
+    loadMoreSpinner?.classList.remove('hidden');
+    
+    try {
+      // Get current URL params
+      const urlParams = new URLSearchParams(window.location.search);
+      urlParams.set('page', nextPage.toString());
+      
+      const response = await fetch(`/api/events?${urlParams.toString()}`);
+      const data = await response.json();
+      
+      if (data.success && data.data.length > 0) {
+        // Append new cards (simplified - in production would render proper components)
+        data.data.forEach((event: any) => {
+          const card = createEventCard(event);
+          feedGrid?.insertAdjacentHTML('beforeend', card);
+        });
+        
+        loadMoreBtn.dataset.page = nextPage.toString();
+        loadMoreBtn.classList.remove('hidden');
+        
+        // Hide if no more pages
+        if (data.pagination.page >= data.pagination.totalPages) {
+          loadMoreBtn.parentElement?.classList.add('hidden');
+        }
+      } else {
+        // No more events
+        loadMoreBtn.parentElement?.classList.add('hidden');
+      }
+    } catch (error) {
+      console.error('Error loading more events:', error);
+      loadMoreBtn.classList.remove('hidden');
+    }
+    
+    loadMoreSpinner?.classList.add('hidden');
+  });
+  
+  function createEventCard(event: any) {
+    const imageUrl = event.image_urls?.[0] || '';
+    
+    return `
+      <article class="card group relative" data-event-id="${event.id}">
+        <a href="/event/${event.id}" class="block relative aspect-[4/3] overflow-hidden bg-gray-100">
+          ${imageUrl ? `<img src="${imageUrl}" alt="${event.title}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />` : '<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-50"><span class="text-4xl">🎈</span></div>'}
+          ${event.price_type === 'free' ? '<div class="absolute top-2 left-2"><span class="badge badge-free">Kostenlos</span></div>' : ''}
+        </a>
+        <div class="p-3 sm:p-4">
+          <a href="/event/${event.id}">
+            <h3 class="font-semibold text-gray-900 line-clamp-2 mb-2 group-hover:text-primary-600 transition-colors">${event.title}</h3>
+          </a>
+          <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+            ${event.start_datetime ? `<span>${new Date(event.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            ${event.is_indoor ? '<span class="badge badge-indoor">🏠 Indoor</span>' : ''}
+            ${event.is_outdoor ? '<span class="badge badge-outdoor">🌳 Outdoor</span>' : ''}
+          </div>
+        </div>
+      </article>
+    `;
+  }
+</script>

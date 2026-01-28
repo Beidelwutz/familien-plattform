@@ -1,0 +1,189 @@
+---
+// PlannerBar.astro - Turbo-Fokus bar with age chips, radius, budget, and toggles
+---
+
+<section class="bg-white border-b border-gray-100 py-4 sticky top-16 md:top-20 z-40">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Row 1: Age Chips, Radius, Budget -->
+    <div class="flex flex-wrap items-center gap-3 mb-3">
+      <!-- Age Chips -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-gray-500 hidden sm:inline">Alter:</span>
+        <div class="flex gap-1.5" id="age-chips">
+          <button class="chip text-sm" data-age="0-2">0-2</button>
+          <button class="chip text-sm" data-age="3-5">3-5</button>
+          <button class="chip text-sm" data-age="6-9">6-9</button>
+          <button class="chip text-sm" data-age="10+">10+</button>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="hidden sm:block w-px h-8 bg-gray-200"></div>
+
+      <!-- Radius Dropdown -->
+      <div class="relative">
+        <button class="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm" id="radius-btn">
+          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+          </svg>
+          <span id="radius-value">10 km</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div id="radius-dropdown" class="hidden absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[120px] z-50">
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-radius="5">5 km</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 bg-primary-50 text-primary-600" data-radius="10">10 km</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-radius="20">20 km</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-radius="30">30 km</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-radius="50">50 km</button>
+        </div>
+      </div>
+
+      <!-- Budget Dropdown -->
+      <div class="relative">
+        <button class="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm" id="budget-btn">
+          <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span id="budget-value">Egal</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+          </svg>
+        </button>
+        <div id="budget-dropdown" class="hidden absolute top-full left-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[140px] z-50">
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-budget="0">Kostenlos</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-budget="10">bis 10€</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50" data-budget="20">bis 20€</button>
+          <button class="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 bg-primary-50 text-primary-600" data-budget="-1">Egal</button>
+        </div>
+      </div>
+
+      <!-- Spacer -->
+      <div class="flex-1"></div>
+
+      <!-- Plan Button (Desktop) -->
+      <a href="/plan" class="hidden sm:flex btn-primary text-sm py-2.5">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+        </svg>
+        Plan erstellen
+      </a>
+    </div>
+
+    <!-- Row 2: Toggles -->
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Toggle Buttons -->
+      <div class="flex gap-2" id="filter-toggles">
+        <button class="chip text-sm flex items-center gap-1.5" data-filter="indoor">
+          <span>🏠</span>
+          <span>Indoor</span>
+        </button>
+        <button class="chip text-sm flex items-center gap-1.5" data-filter="outdoor">
+          <span>🌳</span>
+          <span>Outdoor</span>
+        </button>
+        <button class="chip text-sm flex items-center gap-1.5" data-filter="free">
+          <span>✨</span>
+          <span>Kostenlos</span>
+        </button>
+      </div>
+
+      <!-- Mobile Plan Button -->
+      <a href="/plan" class="sm:hidden ml-auto btn-primary text-sm py-2">
+        Plan erstellen
+      </a>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Age Chips (Multi-select)
+  const ageChips = document.querySelectorAll('#age-chips button');
+  ageChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('chip-active');
+      updateFilters();
+    });
+  });
+
+  // Filter Toggles
+  const filterToggles = document.querySelectorAll('#filter-toggles button');
+  filterToggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('chip-active');
+      updateFilters();
+    });
+  });
+
+  // Radius Dropdown
+  const radiusBtn = document.getElementById('radius-btn');
+  const radiusDropdown = document.getElementById('radius-dropdown');
+  const radiusValue = document.getElementById('radius-value');
+
+  radiusBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    radiusDropdown?.classList.toggle('hidden');
+    budgetDropdown?.classList.add('hidden');
+  });
+
+  radiusDropdown?.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const radius = btn.dataset.radius;
+      if (radiusValue) radiusValue.textContent = `${radius} km`;
+      radiusDropdown?.querySelectorAll('button').forEach(b => {
+        b.classList.remove('bg-primary-50', 'text-primary-600');
+      });
+      btn.classList.add('bg-primary-50', 'text-primary-600');
+      radiusDropdown?.classList.add('hidden');
+      updateFilters();
+    });
+  });
+
+  // Budget Dropdown
+  const budgetBtn = document.getElementById('budget-btn');
+  const budgetDropdown = document.getElementById('budget-dropdown');
+  const budgetValue = document.getElementById('budget-value');
+
+  budgetBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    budgetDropdown?.classList.toggle('hidden');
+    radiusDropdown?.classList.add('hidden');
+  });
+
+  budgetDropdown?.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const budget = btn.dataset.budget;
+      if (budgetValue) {
+        budgetValue.textContent = budget === '-1' ? 'Egal' : budget === '0' ? 'Kostenlos' : `bis ${budget}€`;
+      }
+      budgetDropdown?.querySelectorAll('button').forEach(b => {
+        b.classList.remove('bg-primary-50', 'text-primary-600');
+      });
+      btn.classList.add('bg-primary-50', 'text-primary-600');
+      budgetDropdown?.classList.add('hidden');
+      updateFilters();
+    });
+  });
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', () => {
+    radiusDropdown?.classList.add('hidden');
+    budgetDropdown?.classList.add('hidden');
+  });
+
+  // Update filters - dispatch custom event
+  function updateFilters() {
+    const selectedAges = Array.from(document.querySelectorAll('#age-chips button.chip-active'))
+      .map(btn => (btn as HTMLButtonElement).dataset.age);
+    const selectedFilters = Array.from(document.querySelectorAll('#filter-toggles button.chip-active'))
+      .map(btn => (btn as HTMLButtonElement).dataset.filter);
+    const radius = radiusValue?.textContent?.replace(' km', '') || '10';
+    const budget = budgetValue?.textContent || 'Egal';
+
+    const event = new CustomEvent('filtersChanged', {
+      detail: { ages: selectedAges, filters: selectedFilters, radius, budget }
+    });
+    window.dispatchEvent(event);
+  }
+</script>

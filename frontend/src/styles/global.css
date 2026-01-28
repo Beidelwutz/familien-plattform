@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply antialiased text-gray-800 bg-gray-50;
+  }
+}
+
+/* Custom component classes */
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl 
+           hover:bg-primary-600 transition-colors duration-200 
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-primary-500 font-semibold rounded-xl 
+           border-2 border-primary-500 hover:bg-primary-50 
+           transition-colors duration-200;
+  }
+  
+  .btn-ghost {
+    @apply px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+           rounded-lg transition-colors duration-200;
+  }
+  
+  .chip {
+    @apply px-4 py-2 rounded-full text-sm font-medium 
+           bg-gray-100 text-gray-700 hover:bg-gray-200 
+           transition-colors duration-200 cursor-pointer;
+  }
+  
+  .chip-active {
+    @apply bg-primary-500 text-white hover:bg-primary-600;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-card overflow-hidden 
+           transition-shadow duration-200 hover:shadow-card-hover;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium;
+  }
+  
+  .badge-indoor {
+    @apply bg-blue-100 text-blue-700;
+  }
+  
+  .badge-outdoor {
+    @apply bg-green-100 text-green-700;
+  }
+  
+  .badge-free {
+    @apply bg-secondary-100 text-secondary-700;
+  }
+  
+  .section-title {
+    @apply text-xl md:text-2xl font-bold text-gray-900;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-200 rounded-xl 
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           placeholder:text-gray-400;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .text-balance {
+    text-wrap: balance;
+  }
+}

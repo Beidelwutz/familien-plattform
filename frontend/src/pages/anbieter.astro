@@ -1,102 +1,99 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
 ---
 
-<BaseLayout title="Für Anbieter - Familien-Lokal Karlsruhe">
-  <main class="provider-page">
-    <!-- Hero -->
-    <section class="hero">
-      <div class="container">
-        <h1>Erreiche Familien in Karlsruhe</h1>
-        <p class="hero-subtitle">
+<BaseLayout title="Für Anbieter - familienlokal">
+  <StickyHeader />
+
+  <main class="min-h-screen bg-gray-50">
+    <section class="bg-gradient-to-br from-primary-500 to-primary-600 text-white py-16 md:py-20 px-4 text-center">
+      <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold mb-4">Erreiche Familien in Karlsruhe</h1>
+        <p class="text-lg md:text-xl opacity-90 mb-8 max-w-2xl mx-auto">
           Präsentiere deine Events, Kurse und Angebote dort, wo Eltern suchen
         </p>
-        <a href="/anbieter/registrieren" class="btn btn-primary btn-large">
+        <a href="/anbieter/registrieren" class="btn-primary inline-flex items-center justify-center px-8 py-4 text-base bg-white text-primary-600 hover:bg-gray-100">
           Kostenlos starten
         </a>
       </div>
     </section>
 
-    <!-- Benefits -->
-    <section class="benefits">
-      <div class="container">
-        <h2>Warum Familien-Lokal?</h2>
-        <div class="benefits-grid">
-          <div class="benefit-card">
-            <span class="benefit-icon">👨‍👩‍👧‍👦</span>
-            <h3>Zielgruppe Familien</h3>
-            <p>Erreiche Eltern, die aktiv nach Aktivitäten für ihre Kinder suchen</p>
+    <section class="py-16 md:py-20 px-4 bg-gray-50">
+      <div class="max-w-6xl mx-auto">
+        <h2 class="text-2xl font-bold text-gray-900 text-center mb-10">Warum Familien-Lokal?</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="bg-white rounded-2xl p-6 text-center shadow-card">
+            <span class="text-4xl block mb-4">👨‍👩‍👧‍👦</span>
+            <h3 class="font-semibold text-gray-900 mb-2">Zielgruppe Familien</h3>
+            <p class="text-gray-500 text-sm">Erreiche Eltern, die aktiv nach Aktivitäten für ihre Kinder suchen</p>
           </div>
-          <div class="benefit-card">
-            <span class="benefit-icon">📊</span>
-            <h3>Mehr Sichtbarkeit</h3>
-            <p>Deine Angebote erscheinen in der Suche und im AI-Tagesplaner</p>
+          <div class="bg-white rounded-2xl p-6 text-center shadow-card">
+            <span class="text-4xl block mb-4">📊</span>
+            <h3 class="font-semibold text-gray-900 mb-2">Mehr Sichtbarkeit</h3>
+            <p class="text-gray-500 text-sm">Deine Angebote erscheinen in der Suche und im AI-Tagesplaner</p>
           </div>
-          <div class="benefit-card">
-            <span class="benefit-icon">⏱️</span>
-            <h3>Zeit sparen</h3>
-            <p>Automatische Veröffentlichung, Erinnerungen und Buchungsverwaltung</p>
+          <div class="bg-white rounded-2xl p-6 text-center shadow-card">
+            <span class="text-4xl block mb-4">⏱️</span>
+            <h3 class="font-semibold text-gray-900 mb-2">Zeit sparen</h3>
+            <p class="text-gray-500 text-sm">Automatische Veröffentlichung, Erinnerungen und Buchungsverwaltung</p>
           </div>
-          <div class="benefit-card">
-            <span class="benefit-icon">📈</span>
-            <h3>Analytics</h3>
-            <p>Verstehe, was Familien suchen und optimiere deine Angebote</p>
+          <div class="bg-white rounded-2xl p-6 text-center shadow-card">
+            <span class="text-4xl block mb-4">📈</span>
+            <h3 class="font-semibold text-gray-900 mb-2">Analytics</h3>
+            <p class="text-gray-500 text-sm">Verstehe, was Familien suchen und optimiere deine Angebote</p>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Pricing -->
-    <section class="pricing">
-      <div class="container">
-        <h2>Einfache Preise</h2>
-        <p class="pricing-intro">Starte kostenlos, erweitere wenn du wächst</p>
-        
-        <div class="pricing-grid">
-          <!-- Free -->
-          <div class="pricing-card">
-            <div class="pricing-header">
-              <h3>Free</h3>
-              <div class="price">0€<span>/Monat</span></div>
+    <section class="py-16 md:py-20 px-4 bg-white">
+      <div class="max-w-5xl mx-auto">
+        <h2 class="text-2xl font-bold text-gray-900 text-center mb-2">Einfache Preise</h2>
+        <p class="text-gray-500 text-center mb-10">Starte kostenlos, erweitere wenn du wächst</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 flex flex-col">
+            <div class="text-center pb-4 border-b border-gray-200 mb-4">
+              <h3 class="font-semibold text-gray-900 mb-2">Free</h3>
+              <div class="text-2xl font-bold text-primary-500">0€<span class="text-base font-normal text-gray-500">/Monat</span></div>
             </div>
-            <ul class="pricing-features">
+            <ul class="space-y-2 text-sm flex-1 mb-6">
               <li>✓ 1 Angebot listen</li>
               <li>✓ Basis-Statistiken</li>
               <li>✓ Buchungslink</li>
-              <li class="disabled">✗ Hervorhebung in Suche</li>
-              <li class="disabled">✗ Automatische Emails</li>
+              <li class="text-gray-400">✗ Hervorhebung in Suche</li>
+              <li class="text-gray-400">✗ Automatische Emails</li>
             </ul>
-            <a href="/anbieter/registrieren" class="btn btn-secondary btn-full">
+            <a href="/anbieter/registrieren" class="btn-secondary w-full py-3 text-center rounded-xl">
               Kostenlos starten
             </a>
           </div>
 
-          <!-- Basic -->
-          <div class="pricing-card featured">
-            <div class="featured-badge">Beliebt</div>
-            <div class="pricing-header">
-              <h3>Basic</h3>
-              <div class="price">49€<span>/Monat</span></div>
+          <div class="relative bg-white rounded-2xl p-6 border-2 border-primary-500 flex flex-col scale-105 shadow-lg">
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary-500 text-white px-4 py-1 rounded-full text-sm font-semibold">Beliebt</div>
+            <div class="text-center pb-4 border-b border-gray-200 mb-4">
+              <h3 class="font-semibold text-gray-900 mb-2">Basic</h3>
+              <div class="text-2xl font-bold text-primary-500">49€<span class="text-base font-normal text-gray-500">/Monat</span></div>
             </div>
-            <ul class="pricing-features">
+            <ul class="space-y-2 text-sm flex-1 mb-6">
               <li>✓ Bis zu 10 Angebote</li>
               <li>✓ Erweiterte Statistiken</li>
               <li>✓ Hervorhebung in Suche</li>
               <li>✓ Buchungs-Widget</li>
-              <li class="disabled">✗ Automatische Emails</li>
+              <li class="text-gray-400">✗ Automatische Emails</li>
             </ul>
-            <a href="/anbieter/registrieren?plan=basic" class="btn btn-primary btn-full">
+            <a href="/anbieter/registrieren?plan=basic" class="btn-primary w-full py-3 text-center rounded-xl">
               Jetzt starten
             </a>
           </div>
 
-          <!-- Pro -->
-          <div class="pricing-card">
-            <div class="pricing-header">
-              <h3>Pro</h3>
-              <div class="price">99€<span>/Monat</span></div>
+          <div class="bg-white rounded-2xl p-6 border-2 border-gray-200 flex flex-col">
+            <div class="text-center pb-4 border-b border-gray-200 mb-4">
+              <h3 class="font-semibold text-gray-900 mb-2">Pro</h3>
+              <div class="text-2xl font-bold text-primary-500">99€<span class="text-base font-normal text-gray-500">/Monat</span></div>
             </div>
-            <ul class="pricing-features">
+            <ul class="space-y-2 text-sm flex-1 mb-6">
               <li>✓ Unbegrenzte Angebote</li>
               <li>✓ Premium Analytics</li>
               <li>✓ Featured Placement</li>
@@ -104,7 +101,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               <li>✓ Wartelisten-Funktion</li>
               <li>✓ API-Zugang</li>
             </ul>
-            <a href="/anbieter/registrieren?plan=pro" class="btn btn-secondary btn-full">
+            <a href="/anbieter/registrieren?plan=pro" class="btn-secondary w-full py-3 text-center rounded-xl">
               Pro wählen
             </a>
           </div>
@@ -112,187 +109,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>
     </section>
 
-    <!-- CTA -->
-    <section class="cta">
-      <div class="container">
-        <h2>Bereit, Familien zu erreichen?</h2>
-        <p>Starte jetzt kostenlos und präsentiere dein erstes Angebot</p>
-        <a href="/anbieter/registrieren" class="btn btn-primary btn-large">
+    <section class="bg-gray-900 text-white py-16 px-4 text-center">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-2xl font-bold mb-2">Bereit, Familien zu erreichen?</h2>
+        <p class="opacity-80 mb-6">Starte jetzt kostenlos und präsentiere dein erstes Angebot</p>
+        <a href="/anbieter/registrieren" class="btn-primary inline-flex items-center justify-center px-8 py-4 bg-white text-gray-900 hover:bg-gray-100">
           Kostenlos registrieren
         </a>
       </div>
     </section>
   </main>
 </BaseLayout>
-
-<style>
-  .hero {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: white;
-    padding: 4rem 1rem;
-    text-align: center;
-  }
-
-  .hero h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .hero-subtitle {
-    font-size: 1.25rem;
-    opacity: 0.9;
-    margin-bottom: 2rem;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .benefits {
-    padding: 4rem 1rem;
-    background: var(--color-bg-secondary);
-  }
-
-  .benefits h2 {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .benefits-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .benefit-card {
-    background: white;
-    padding: 2rem;
-    border-radius: var(--border-radius-lg);
-    text-align: center;
-  }
-
-  .benefit-icon {
-    font-size: 2.5rem;
-    display: block;
-    margin-bottom: 1rem;
-  }
-
-  .benefit-card h3 {
-    margin-bottom: 0.5rem;
-  }
-
-  .benefit-card p {
-    color: var(--color-text-muted);
-  }
-
-  .pricing {
-    padding: 4rem 1rem;
-  }
-
-  .pricing h2 {
-    text-align: center;
-    margin-bottom: 0.5rem;
-  }
-
-  .pricing-intro {
-    text-align: center;
-    color: var(--color-text-muted);
-    margin-bottom: 2rem;
-  }
-
-  .pricing-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-    max-width: 1000px;
-    margin: 0 auto;
-  }
-
-  .pricing-card {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 2rem;
-    border: 2px solid var(--color-border);
-    position: relative;
-  }
-
-  .pricing-card.featured {
-    border-color: var(--color-primary);
-    transform: scale(1.05);
-  }
-
-  .featured-badge {
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--color-primary);
-    color: white;
-    padding: 0.25rem 1rem;
-    border-radius: 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-  }
-
-  .pricing-header {
-    text-align: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .pricing-header h3 {
-    margin-bottom: 0.5rem;
-  }
-
-  .price {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: var(--color-primary);
-  }
-
-  .price span {
-    font-size: 1rem;
-    font-weight: normal;
-    color: var(--color-text-muted);
-  }
-
-  .pricing-features {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1.5rem 0;
-  }
-
-  .pricing-features li {
-    padding: 0.5rem 0;
-  }
-
-  .pricing-features li.disabled {
-    color: var(--color-text-muted);
-  }
-
-  .btn-full {
-    width: 100%;
-  }
-
-  .cta {
-    background: var(--color-text);
-    color: white;
-    padding: 4rem 1rem;
-    text-align: center;
-  }
-
-  .cta h2 {
-    margin-bottom: 0.5rem;
-  }
-
-  .cta p {
-    opacity: 0.8;
-    margin-bottom: 1.5rem;
-  }
-
-  @media (min-width: 768px) {
-    .hero h1 {
-      font-size: 3rem;
-    }
-  }
-</style>

@@ -1,0 +1,343 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Kategorien verwalten - Admin - familienlokal">
+  <StickyHeader />
+  <AdminMobileNav currentPage="categories" />
+  
+  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">Kategorien</h1>
+            <p class="text-gray-500 text-sm mt-1">Kategorien für Events verwalten</p>
+          </div>
+          <button id="add-category-btn" class="btn-primary flex items-center gap-2">
+            <span class="text-lg">+</span> Neue Kategorie
+          </button>
+        </div>
+      </header>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Kategorien...</p>
+      </div>
+
+      <!-- Category List -->
+      <div id="category-list" class="hidden space-y-2"></div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+        <p class="text-gray-500 text-lg mb-4">Noch keine Kategorien vorhanden</p>
+        <button class="btn-primary" onclick="document.getElementById('add-category-btn').click()">
+          Erste Kategorie erstellen
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add/Edit Modal -->
+  <div id="category-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6">
+      <h3 id="modal-title" class="text-lg font-semibold mb-4">Neue Kategorie</h3>
+      <form id="category-form" class="space-y-4">
+        <input type="hidden" id="edit-id" value="">
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Name (DE)</label>
+          <input type="text" id="input-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="z.B. Spielplätze">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+          <input type="text" id="input-slug" required pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" placeholder="z.B. spielplaetze">
+          <p class="text-xs text-gray-500 mt-1">Nur Kleinbuchstaben, Zahlen und Bindestriche</p>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Icon (Emoji)</label>
+          <input type="text" id="input-icon" maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-2xl" placeholder="🎢">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Übergeordnete Kategorie</label>
+          <select id="input-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+            <option value="">Keine (Hauptkategorie)</option>
+          </select>
+        </div>
+        
+        <div class="flex gap-3 mt-6">
+          <button type="button" id="modal-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
+          <button type="submit" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6">
+      <h3 class="text-lg font-semibold mb-2">Kategorie löschen?</h3>
+      <p class="text-gray-600 mb-4">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+      <p id="delete-warning" class="text-red-600 text-sm mb-4 hidden"></p>
+      <div class="flex gap-3">
+        <button id="delete-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
+        <button id="delete-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Löschen</button>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script define:vars={{ API_URL }}>
+  let categories = [];
+  let deleteTargetId = null;
+
+  // Elements
+  const loadingState = document.getElementById('loading-state');
+  const categoryList = document.getElementById('category-list');
+  const emptyState = document.getElementById('empty-state');
+  const modal = document.getElementById('category-modal');
+  const modalTitle = document.getElementById('modal-title');
+  const form = document.getElementById('category-form');
+  const deleteModal = document.getElementById('delete-modal');
+
+  // Auth check
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    window.location.href = '/login?redirect=/admin/categories';
+  }
+
+  // Load categories
+  async function loadCategories() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/categories?flat=true`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Failed to load');
+      
+      const data = await res.json();
+      categories = data.data;
+      renderCategories();
+    } catch (e) {
+      console.error(e);
+      categoryList.innerHTML = '<p class="text-red-500 text-center py-8">Fehler beim Laden</p>';
+    } finally {
+      loadingState.classList.add('hidden');
+    }
+  }
+
+  function renderCategories() {
+    if (categories.length === 0) {
+      emptyState.classList.remove('hidden');
+      categoryList.classList.add('hidden');
+      return;
+    }
+
+    emptyState.classList.add('hidden');
+    categoryList.classList.remove('hidden');
+
+    // Build tree structure
+    const roots = categories.filter(c => !c.parent_id);
+    const getChildren = (parentId) => categories.filter(c => c.parent_id === parentId);
+
+    const renderItem = (cat, level = 0) => {
+      const children = getChildren(cat.id);
+      const indent = level * 24;
+      
+      return `
+        <div class="bg-white rounded-xl shadow-card p-4 flex items-center gap-4" style="margin-left: ${indent}px">
+          <span class="text-2xl">${cat.icon || '📁'}</span>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-gray-900">${cat.name_de}</div>
+            <div class="text-xs text-gray-500 font-mono">${cat.slug}</div>
+          </div>
+          <div class="text-sm text-gray-500">${cat._count?.events || 0} Events</div>
+          <div class="flex items-center gap-2">
+            <button onclick="editCategory('${cat.id}')" class="p-2 text-gray-400 hover:text-primary-500 rounded-lg hover:bg-gray-100">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+              </svg>
+            </button>
+            <button onclick="confirmDelete('${cat.id}', ${cat._count?.events || 0}, ${children.length})" class="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        ${children.map(child => renderItem(child, level + 1)).join('')}
+      `;
+    };
+
+    categoryList.innerHTML = roots
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(cat => renderItem(cat))
+      .join('');
+
+    // Update parent select
+    const parentSelect = document.getElementById('input-parent');
+    parentSelect.innerHTML = '<option value="">Keine (Hauptkategorie)</option>' +
+      categories.map(c => `<option value="${c.id}">${c.icon || ''} ${c.name_de}</option>`).join('');
+  }
+
+  // Open modal for new category
+  document.getElementById('add-category-btn').addEventListener('click', () => {
+    modalTitle.textContent = 'Neue Kategorie';
+    form.reset();
+    document.getElementById('edit-id').value = '';
+    document.getElementById('input-slug').disabled = false;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  });
+
+  // Edit category
+  window.editCategory = function(id) {
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return;
+
+    modalTitle.textContent = 'Kategorie bearbeiten';
+    document.getElementById('edit-id').value = id;
+    document.getElementById('input-name').value = cat.name_de;
+    document.getElementById('input-slug').value = cat.slug;
+    document.getElementById('input-slug').disabled = true; // Slug immutable
+    document.getElementById('input-icon').value = cat.icon || '';
+    document.getElementById('input-parent').value = cat.parent_id || '';
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  };
+
+  // Close modal
+  document.getElementById('modal-cancel').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+
+  // Save category
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const editId = document.getElementById('edit-id').value;
+    const data = {
+      name_de: document.getElementById('input-name').value,
+      icon: document.getElementById('input-icon').value || null,
+      parent_id: document.getElementById('input-parent').value || null,
+    };
+
+    if (!editId) {
+      data.slug = document.getElementById('input-slug').value;
+    }
+
+    try {
+      const res = await fetch(
+        editId 
+          ? `${API_URL}/api/admin/categories/${editId}` 
+          : `${API_URL}/api/admin/categories`,
+        {
+          method: editId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(data),
+        }
+      );
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        alert(result.error?.message || 'Fehler beim Speichern');
+        return;
+      }
+
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      loadCategories();
+    } catch (e) {
+      alert('Fehler beim Speichern');
+    }
+  });
+
+  // Confirm delete
+  window.confirmDelete = function(id, eventCount, childCount) {
+    deleteTargetId = id;
+    const warning = document.getElementById('delete-warning');
+    
+    if (eventCount > 0 || childCount > 0) {
+      warning.textContent = eventCount > 0 
+        ? `Diese Kategorie hat ${eventCount} Events und kann nicht gelöscht werden.`
+        : `Diese Kategorie hat ${childCount} Unterkategorien und kann nicht gelöscht werden.`;
+      warning.classList.remove('hidden');
+      document.getElementById('delete-confirm').disabled = true;
+      document.getElementById('delete-confirm').classList.add('opacity-50');
+    } else {
+      warning.classList.add('hidden');
+      document.getElementById('delete-confirm').disabled = false;
+      document.getElementById('delete-confirm').classList.remove('opacity-50');
+    }
+
+    deleteModal.classList.remove('hidden');
+    deleteModal.classList.add('flex');
+  };
+
+  document.getElementById('delete-cancel').addEventListener('click', () => {
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+    deleteTargetId = null;
+  });
+
+  document.getElementById('delete-confirm').addEventListener('click', async () => {
+    if (!deleteTargetId) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/categories/${deleteTargetId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const result = await res.json();
+        alert(result.error?.message || 'Fehler beim Löschen');
+        return;
+      }
+
+      deleteModal.classList.add('hidden');
+      deleteModal.classList.remove('flex');
+      deleteTargetId = null;
+      loadCategories();
+    } catch (e) {
+      alert('Fehler beim Löschen');
+    }
+  });
+
+  // Auto-generate slug from name
+  document.getElementById('input-name').addEventListener('input', (e) => {
+    const slugInput = document.getElementById('input-slug');
+    if (!slugInput.disabled && !slugInput.dataset.manual) {
+      slugInput.value = e.target.value
+        .toLowerCase()
+        .replace(/[äÄ]/g, 'ae')
+        .replace(/[öÖ]/g, 'oe')
+        .replace(/[üÜ]/g, 'ue')
+        .replace(/ß/g, 'ss')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+    }
+  });
+
+  document.getElementById('input-slug').addEventListener('input', () => {
+    document.getElementById('input-slug').dataset.manual = 'true';
+  });
+
+  // Initial load
+  loadCategories();
+</script>

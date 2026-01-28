@@ -1,0 +1,225 @@
+---
+interface Props {
+  placeholder?: string;
+  inputId?: string;
+}
+
+const { placeholder = 'Was wollt ihr machen?', inputId = 'search-input' } = Astro.props;
+---
+
+<div class="relative flex-1" data-search-autocomplete>
+  <input 
+    type="text" 
+    id={inputId}
+    placeholder={placeholder}
+    class="w-full pl-5 pr-4 py-3 bg-transparent rounded-l-full focus:outline-none text-gray-700 placeholder:text-gray-400"
+    autocomplete="off"
+    data-search-input
+  />
+  
+  <!-- Dropdown -->
+  <div 
+    class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 hidden z-50"
+    data-search-dropdown
+  >
+    <!-- Suggestions -->
+    <div data-suggestions-container class="border-b border-gray-100">
+      <div class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+        Vorschläge
+      </div>
+      <div data-suggestions-list></div>
+    </div>
+
+    <!-- Trending -->
+    <div data-trending-container>
+      <div class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+        Trending
+      </div>
+      <div data-trending-list></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  const DEBOUNCE_MS = 200;
+
+  class SearchAutocomplete {
+    private input: HTMLInputElement;
+    private dropdown: HTMLElement;
+    private suggestionsContainer: HTMLElement;
+    private suggestionsList: HTMLElement;
+    private trendingContainer: HTMLElement;
+    private trendingList: HTMLElement;
+    private debounceTimer: number | null = null;
+
+    constructor(container: HTMLElement) {
+      this.input = container.querySelector('[data-search-input]')!;
+      this.dropdown = container.querySelector('[data-search-dropdown]')!;
+      this.suggestionsContainer = container.querySelector('[data-suggestions-container]')!;
+      this.suggestionsList = container.querySelector('[data-suggestions-list]')!;
+      this.trendingContainer = container.querySelector('[data-trending-container]')!;
+      this.trendingList = container.querySelector('[data-trending-list]')!;
+
+      this.attachListeners();
+    }
+
+    private attachListeners() {
+      this.input.addEventListener('input', () => this.handleInput());
+      this.input.addEventListener('focus', () => this.handleInput());
+      this.input.addEventListener('keydown', (e) => this.handleKeydown(e));
+      
+      // Close on outside click
+      document.addEventListener('click', (e) => {
+        if (!this.dropdown.contains(e.target as Node) && e.target !== this.input) {
+          this.hide();
+        }
+      });
+    }
+
+    private handleInput() {
+      if (this.debounceTimer) {
+        clearTimeout(this.debounceTimer);
+      }
+
+      this.debounceTimer = window.setTimeout(() => {
+        this.fetchSuggestions();
+      }, DEBOUNCE_MS);
+    }
+
+    private async fetchSuggestions() {
+      const query = this.input.value.trim();
+      
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/search/suggestions?q=${encodeURIComponent(query)}`
+        );
+        
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        this.render(data.suggestions, data.trending);
+        this.show();
+      } catch (error) {
+        console.error('Failed to fetch suggestions:', error);
+      }
+    }
+
+    private render(suggestions: any[], trending: any[]) {
+      // Render suggestions
+      this.suggestionsList.innerHTML = suggestions.map((s, idx) => `
+        <button 
+          class="w-full px-4 py-3 hover:bg-gray-50 text-left flex items-center gap-3 transition-colors"
+          data-suggestion="${this.escapeHtml(s.text)}"
+          data-index="${idx}"
+        >
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <span class="text-gray-700">${this.escapeHtml(s.text)}</span>
+          <span class="ml-auto text-xs text-gray-400">${s.type === 'query' ? 'Suche' : 'Kategorie'}</span>
+        </button>
+      `).join('');
+
+      // Render trending
+      this.trendingList.innerHTML = trending.map((t, idx) => `
+        <button 
+          class="w-full px-4 py-3 hover:bg-gray-50 text-left flex items-center gap-3 transition-colors"
+          data-trending="${this.escapeHtml(t.text)}"
+          data-index="${idx}"
+        >
+          <span class="text-xl">${t.badge || '🔥'}</span>
+          <span class="text-gray-700 font-medium">${this.escapeHtml(t.text)}</span>
+        </button>
+      `).join('');
+
+      // Hide sections if empty
+      this.suggestionsContainer.classList.toggle('hidden', suggestions.length === 0);
+      this.trendingContainer.classList.toggle('hidden', trending.length === 0);
+
+      // Attach click handlers
+      this.attachItemListeners();
+    }
+
+    private escapeHtml(text: string): string {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    private attachItemListeners() {
+      this.suggestionsList.querySelectorAll('[data-suggestion]').forEach(el => {
+        el.addEventListener('click', () => {
+          const text = el.getAttribute('data-suggestion')!;
+          this.selectItem(text);
+        });
+      });
+
+      this.trendingList.querySelectorAll('[data-trending]').forEach(el => {
+        el.addEventListener('click', () => {
+          const text = el.getAttribute('data-trending')!;
+          this.selectItem(text);
+        });
+      });
+    }
+
+    private selectItem(text: string) {
+      this.input.value = text;
+      this.hide();
+      this.logSearch(text);
+      this.submitSearch();
+    }
+
+    private handleKeydown(e: KeyboardEvent) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const query = this.input.value.trim();
+        if (query) {
+          this.logSearch(query);
+          this.submitSearch();
+        }
+      } else if (e.key === 'Escape') {
+        this.hide();
+      }
+    }
+
+    private async logSearch(query: string) {
+      try {
+        await fetch(`${API_BASE}/api/search/log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, city: 'karlsruhe' })
+        });
+      } catch (error) {
+        console.error('Failed to log search:', error);
+      }
+    }
+
+    private submitSearch() {
+      const query = this.input.value.trim();
+      if (query) {
+        window.location.href = `/suche?q=${encodeURIComponent(query)}`;
+      }
+    }
+
+    private show() {
+      this.dropdown.classList.remove('hidden');
+    }
+
+    private hide() {
+      this.dropdown.classList.add('hidden');
+    }
+  }
+
+  // Initialize all autocomplete instances
+  document.querySelectorAll('[data-search-autocomplete]').forEach(el => {
+    new SearchAutocomplete(el as HTMLElement);
+  });
+</script>
+
+<style>
+  [data-search-dropdown] {
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+</style>

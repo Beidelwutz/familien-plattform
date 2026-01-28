@@ -1,0 +1,77 @@
+---
+// LazyImage.astro - Optimized image component with lazy loading and blur-up
+interface Props {
+  src?: string;
+  alt: string;
+  class?: string;
+  width?: number;
+  height?: number;
+  eager?: boolean;
+  fallbackIcon?: string;
+}
+
+const {
+  src,
+  alt,
+  class: className = '',
+  width,
+  height,
+  eager = false,
+  fallbackIcon = '🎈',
+} = Astro.props;
+
+// Generate placeholder color based on alt text (consistent color per item)
+const hashCode = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return hash;
+};
+
+const hue = Math.abs(hashCode(alt)) % 360;
+const placeholderBg = `hsl(${hue}, 70%, 95%)`;
+const placeholderAccent = `hsl(${hue}, 70%, 85%)`;
+---
+
+<div 
+  class={`lazy-image-container relative overflow-hidden bg-gray-100 ${className}`}
+  style={src ? '' : `background: linear-gradient(135deg, ${placeholderBg}, ${placeholderAccent})`}
+>
+  {src ? (
+    <>
+      <!-- Blur placeholder -->
+      <div 
+        class="lazy-image-placeholder absolute inset-0 transition-opacity duration-300"
+        style={`background: linear-gradient(135deg, ${placeholderBg}, ${placeholderAccent})`}
+      ></div>
+      
+      <!-- Actual image -->
+      <img
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        loading={eager ? 'eager' : 'lazy'}
+        decoding={eager ? 'sync' : 'async'}
+        class="lazy-image w-full h-full object-cover transition-opacity duration-300"
+        onload="this.classList.add('loaded'); this.previousElementSibling.classList.add('hidden')"
+      />
+    </>
+  ) : (
+    <!-- Fallback with icon -->
+    <div class="w-full h-full flex items-center justify-center">
+      <span class="text-4xl">{fallbackIcon}</span>
+    </div>
+  )}
+</div>
+
+<style>
+  .lazy-image {
+    opacity: 0;
+  }
+  
+  .lazy-image.loaded {
+    opacity: 1;
+  }
+</style>

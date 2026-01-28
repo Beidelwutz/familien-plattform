@@ -1,0 +1,76 @@
+---
+// AvailableNow.astro - "Heute noch Plätze frei" section
+import EventCardNew from '../feed/EventCardNew.astro';
+
+interface Event {
+  id: string;
+  title: string;
+  image_urls?: string[];
+  start_datetime?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  age_min?: number;
+  age_max?: number;
+  is_indoor?: boolean;
+  is_outdoor?: boolean;
+  available_spots?: number;
+  scores?: {
+    stressfree_score?: number;
+    family_fit_score?: number;
+  };
+}
+
+interface Props {
+  events: Event[];
+}
+
+const { events } = Astro.props;
+
+const formatTime = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return undefined;
+  }
+};
+---
+
+{events.length > 0 && (
+  <section class="py-6 md:py-8 bg-secondary-50/50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Section Header -->
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="section-title flex items-center gap-2">
+            <span class="text-2xl">🎫</span>
+            Heute noch Plätze frei
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Jetzt schnell anmelden</p>
+        </div>
+      </div>
+
+      <!-- Horizontal Scroll -->
+      <div class="flex gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2">
+        {events.map((event) => (
+          <div class="flex-shrink-0 w-64 md:w-72">
+            <EventCardNew
+              id={event.id}
+              title={event.title}
+              imageUrl={event.image_urls?.[0]}
+              startTime={formatTime(event.start_datetime)}
+              priceType={event.price_type}
+              priceMin={event.price_min}
+              ageMin={event.age_min}
+              ageMax={event.age_max}
+              isIndoor={event.is_indoor}
+              isOutdoor={event.is_outdoor}
+              availableSpots={event.available_spots}
+              stressfreeScore={event.scores?.stressfree_score}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+)}

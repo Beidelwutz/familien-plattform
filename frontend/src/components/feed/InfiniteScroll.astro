@@ -1,0 +1,186 @@
+---
+// InfiniteScroll.astro - Wrapper for infinite scroll functionality
+interface Props {
+  apiEndpoint?: string;
+  initialPage?: number;
+  pageSize?: number;
+}
+
+const { 
+  apiEndpoint = '/api/events',
+  initialPage = 1,
+  pageSize = 20 
+} = Astro.props;
+---
+
+<div 
+  id="infinite-scroll-container" 
+  class="relative"
+  data-endpoint={apiEndpoint}
+  data-page={initialPage}
+  data-page-size={pageSize}
+>
+  <!-- Initial Content (SSR) -->
+  <div id="infinite-scroll-content">
+    <slot />
+  </div>
+  
+  <!-- Loading Indicator -->
+  <div id="infinite-scroll-loader" class="hidden py-8 text-center">
+    <div class="inline-flex items-center gap-3 text-gray-500">
+      <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span>Lädt weitere Vorschläge...</span>
+    </div>
+  </div>
+  
+  <!-- End Message -->
+  <div id="infinite-scroll-end" class="hidden py-8 text-center">
+    <p class="text-gray-500">Das waren alle Vorschläge für dich!</p>
+    <a href="/suche" class="text-primary-600 hover:text-primary-700 font-medium mt-2 inline-block">
+      Erweiterte Suche öffnen
+    </a>
+  </div>
+  
+  <!-- Intersection Observer Target -->
+  <div id="infinite-scroll-trigger" class="h-20"></div>
+</div>
+
+<script>
+  class InfiniteScroller {
+    private container: HTMLElement;
+    private content: HTMLElement;
+    private loader: HTMLElement;
+    private endMessage: HTMLElement;
+    private trigger: HTMLElement;
+    private observer: IntersectionObserver;
+    private isLoading = false;
+    private hasMore = true;
+    private page: number;
+    private endpoint: string;
+    private pageSize: number;
+
+    constructor() {
+      this.container = document.getElementById('infinite-scroll-container')!;
+      this.content = document.getElementById('infinite-scroll-content')!;
+      this.loader = document.getElementById('infinite-scroll-loader')!;
+      this.endMessage = document.getElementById('infinite-scroll-end')!;
+      this.trigger = document.getElementById('infinite-scroll-trigger')!;
+      
+      this.page = parseInt(this.container.dataset.page || '1');
+      this.endpoint = this.container.dataset.endpoint || '/api/events';
+      this.pageSize = parseInt(this.container.dataset.pageSize || '20');
+      
+      this.observer = new IntersectionObserver(
+        (entries) => this.handleIntersect(entries),
+        { rootMargin: '200px' }
+      );
+      
+      this.observer.observe(this.trigger);
+      
+      // Listen for filter changes
+      window.addEventListener('filtersChanged', () => this.resetAndReload());
+      window.addEventListener('tabChanged', () => this.resetAndReload());
+    }
+
+    private async handleIntersect(entries: IntersectionObserverEntry[]) {
+      const entry = entries[0];
+      if (entry.isIntersecting && !this.isLoading && this.hasMore) {
+        await this.loadMore();
+      }
+    }
+
+    private async loadMore() {
+      this.isLoading = true;
+      this.loader.classList.remove('hidden');
+      
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('page', (this.page + 1).toString());
+        urlParams.set('limit', this.pageSize.toString());
+        
+        const response = await fetch(`${this.endpoint}?${urlParams.toString()}`);
+        const data = await response.json();
+        
+        if (data.success && data.data.length > 0) {
+          this.appendEvents(data.data);
+          this.page++;
+          
+          if (this.page >= data.pagination.totalPages) {
+            this.hasMore = false;
+            this.endMessage.classList.remove('hidden');
+          }
+        } else {
+          this.hasMore = false;
+          this.endMessage.classList.remove('hidden');
+        }
+      } catch (error) {
+        console.error('Error loading more events:', error);
+      }
+      
+      this.loader.classList.add('hidden');
+      this.isLoading = false;
+    }
+
+    private appendEvents(events: any[]) {
+      const feedGrid = this.content.querySelector('#feed-grid');
+      if (!feedGrid) return;
+      
+      events.forEach(event => {
+        const card = this.createEventCard(event);
+        feedGrid.insertAdjacentHTML('beforeend', card);
+      });
+    }
+
+    private createEventCard(event: any): string {
+      const imageUrl = event.image_urls?.[0] || '';
+      const time = event.start_datetime 
+        ? new Date(event.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      
+      return `
+        <article class="card group relative" data-event-id="${event.id}">
+          <a href="/event/${event.id}" class="block relative aspect-[4/3] overflow-hidden bg-gray-100">
+            ${imageUrl 
+              ? `<img src="${imageUrl}" alt="${event.title}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />`
+              : '<div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-50"><span class="text-4xl">🎈</span></div>'
+            }
+            ${event.price_type === 'free' ? '<div class="absolute top-2 left-2"><span class="badge badge-free">Kostenlos</span></div>' : ''}
+          </a>
+          <div class="p-3 sm:p-4">
+            <a href="/event/${event.id}">
+              <h3 class="font-semibold text-gray-900 line-clamp-2 mb-2 group-hover:text-primary-600 transition-colors">${event.title}</h3>
+            </a>
+            <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+              ${time ? `<span>${time}</span>` : ''}
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              ${event.is_indoor ? '<span class="badge badge-indoor">🏠 Indoor</span>' : ''}
+              ${event.is_outdoor ? '<span class="badge badge-outdoor">🌳 Outdoor</span>' : ''}
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    private resetAndReload() {
+      this.page = 0;
+      this.hasMore = true;
+      this.endMessage.classList.add('hidden');
+      
+      const feedGrid = this.content.querySelector('#feed-grid');
+      if (feedGrid) {
+        feedGrid.innerHTML = '';
+      }
+      
+      this.loadMore();
+    }
+  }
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    new InfiniteScroller();
+  });
+</script>

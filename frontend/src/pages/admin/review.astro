@@ -1,75 +1,155 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Review Queue - Admin - Familien-Lokal">
-  <main class="admin-page">
-    <div class="container">
-      <header class="page-header">
-        <a href="/admin" class="back-link">← Zurück zum Dashboard</a>
-        <h1>Review Queue</h1>
-        <p>Events mit niedriger Konfidenz zur manuellen Prüfung</p>
+<BaseLayout title="Review Queue - Admin - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">Review Queue</h1>
+        <p class="text-gray-500">Events mit niedriger Konfidenz zur manuellen Prüfung</p>
       </header>
 
       <!-- Filters -->
-      <div class="filters">
-        <select id="status-filter" class="filter-select">
+      <div class="flex flex-wrap gap-3 mb-6">
+        <select id="status-filter" class="px-4 py-2 border-2 border-gray-200 rounded-lg bg-white text-sm">
           <option value="pending_review">Ausstehend</option>
           <option value="pending_ai">Warte auf AI</option>
           <option value="incomplete">Unvollständig</option>
           <option value="all">Alle</option>
         </select>
-        <select id="source-filter" class="filter-select">
-          <option value="">Alle Quellen</option>
-        </select>
-        <button class="btn btn-secondary" id="refresh-btn">🔄 Aktualisieren</button>
+        <button class="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-sm hover:bg-gray-50" id="refresh-btn">
+          🔄 Aktualisieren
+        </button>
+        <span id="event-count" class="ml-auto text-sm text-gray-500 self-center"></span>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Events...</p>
       </div>
 
       <!-- Review List -->
-      <div class="review-list" id="review-list">
-        <p class="loading">Lade Events...</p>
+      <div class="hidden space-y-4" id="review-list"></div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden text-center py-12">
+        <p class="text-gray-500 text-lg">Keine Events zur Prüfung</p>
       </div>
 
-      <!-- Review Detail Modal -->
-      <div class="modal hidden" id="review-modal">
-        <div class="modal-content">
-          <button class="modal-close" id="modal-close">×</button>
-          
-          <div class="modal-header">
-            <h2 id="modal-title">Event Title</h2>
-            <div class="modal-badges" id="modal-badges"></div>
-          </div>
-
-          <div class="modal-body">
-            <!-- Event Details -->
-            <div class="detail-section">
-              <h3>Details</h3>
-              <div class="detail-grid" id="modal-details">
-                <!-- Details will be rendered here -->
-              </div>
+      <!-- Reject Modal -->
+      <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="reject-modal">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6">
+          <h3 class="text-lg font-semibold mb-4">Event ablehnen</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Grund</label>
+              <select id="reject-reason-code" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                <option value="">-- Bitte wählen --</option>
+                <option value="spam">Spam / Werbung</option>
+                <option value="incomplete">Unvollständig</option>
+                <option value="wrong_date">Falsches Datum</option>
+                <option value="duplicate">Duplikat</option>
+                <option value="not_relevant">Nicht relevant</option>
+                <option value="other">Sonstiges</option>
+              </select>
             </div>
-
-            <!-- AI Analysis -->
-            <div class="detail-section">
-              <h3>AI-Analyse</h3>
-              <div class="ai-analysis" id="modal-ai">
-                <p>Keine AI-Analyse verfügbar</p>
-              </div>
-            </div>
-
-            <!-- Source Info -->
-            <div class="detail-section">
-              <h3>Quelle</h3>
-              <div class="source-info" id="modal-source">
-                <p>Unbekannt</p>
-              </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Kommentar (optional)</label>
+              <textarea id="reject-reason-text" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Zusätzliche Details..."></textarea>
             </div>
           </div>
+          <div class="flex gap-3 mt-6">
+            <button id="reject-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
+            <button id="reject-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Ablehnen</button>
+          </div>
+        </div>
+      </div>
 
-          <div class="modal-actions">
-            <button class="btn btn-primary" id="approve-btn">✓ Genehmigen</button>
-            <button class="btn btn-secondary" id="edit-btn">✏️ Bearbeiten</button>
-            <button class="btn btn-danger" id="reject-btn">✗ Ablehnen</button>
+      <!-- Quick Edit Modal -->
+      <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="edit-modal">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+          <h3 class="text-lg font-semibold mb-4">Event bearbeiten & genehmigen</h3>
+          <div class="space-y-4">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-sm font-medium text-gray-700">Titel</label>
+                <label class="flex items-center gap-1 text-xs text-gray-500">
+                  <input type="checkbox" id="lock-title" class="lock-checkbox"> Sperren
+                </label>
+              </div>
+              <input type="text" id="edit-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-sm font-medium text-gray-700">Startdatum</label>
+                <label class="flex items-center gap-1 text-xs text-gray-500">
+                  <input type="checkbox" id="lock-start" class="lock-checkbox"> Sperren
+                </label>
+              </div>
+              <input type="datetime-local" id="edit-start" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-sm font-medium text-gray-700">Enddatum</label>
+                <label class="flex items-center gap-1 text-xs text-gray-500">
+                  <input type="checkbox" id="lock-end" class="lock-checkbox"> Sperren
+                </label>
+              </div>
+              <input type="datetime-local" id="edit-end" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-sm font-medium text-gray-700">Adresse</label>
+                <label class="flex items-center gap-1 text-xs text-gray-500">
+                  <input type="checkbox" id="lock-address" class="lock-checkbox"> Sperren
+                </label>
+              </div>
+              <input type="text" id="edit-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-4">Gesperrte Felder werden nicht durch automatische Updates überschrieben.</p>
+          <div class="flex gap-3 mt-6">
+            <button id="edit-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
+            <button id="edit-confirm" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Speichern & Genehmigen</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail Modal -->
+      <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="detail-modal">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div class="p-6 border-b border-gray-200">
+            <div class="flex items-start justify-between">
+              <h2 id="detail-title" class="text-xl font-semibold pr-8">Event Details</h2>
+              <button id="detail-close" class="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div id="detail-badges" class="flex flex-wrap gap-2 mt-2"></div>
+          </div>
+          <div class="p-6 space-y-6">
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Details</h3>
+              <div id="detail-info" class="grid grid-cols-2 gap-3"></div>
+            </div>
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">AI-Scores</h3>
+              <div id="detail-scores" class="bg-gray-50 rounded-lg p-4"></div>
+            </div>
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Quelle</h3>
+              <div id="detail-source" class="bg-gray-50 rounded-lg p-4"></div>
+            </div>
+          </div>
+          <div class="p-6 border-t border-gray-200 flex gap-3 justify-end">
+            <button id="detail-approve" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">✓ Genehmigen</button>
+            <button id="detail-edit" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">✏️ Bearbeiten</button>
+            <button id="detail-reject" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">✗ Ablehnen</button>
           </div>
         </div>
       </div>
@@ -77,322 +157,104 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   </main>
 </BaseLayout>
 
-<style>
-  .admin-page {
-    padding: 2rem 1rem;
-    background: var(--color-bg-secondary);
-    min-height: calc(100vh - 4rem);
+<script define:vars={{ API_URL }}>
+  let events = [];
+  let currentEventId = null;
+  const token = localStorage.getItem('auth_token');
+
+  // Auth check
+  if (!token) {
+    window.location.href = '/login?redirect=/admin/review';
   }
 
-  .page-header {
-    margin-bottom: 1.5rem;
+  // Fetch helper
+  async function apiFetch(endpoint, options = {}) {
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login?redirect=/admin/review';
+      throw new Error('Unauthorized');
+    }
+    return res.json();
   }
 
-  .back-link {
-    color: var(--color-primary);
-    text-decoration: none;
-    font-size: 0.875rem;
-    display: inline-block;
-    margin-bottom: 0.5rem;
+  // Load events
+  async function loadEvents() {
+    const status = document.getElementById('status-filter').value;
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('review-list').classList.add('hidden');
+    document.getElementById('empty-state').classList.add('hidden');
+
+    try {
+      const data = await apiFetch(`/api/admin/review-queue?status=${status}&limit=50`);
+      events = data.data || [];
+      
+      document.getElementById('event-count').textContent = `${events.length} Events`;
+      
+      if (events.length === 0) {
+        document.getElementById('empty-state').classList.remove('hidden');
+      } else {
+        renderEvents();
+        document.getElementById('review-list').classList.remove('hidden');
+      }
+    } catch (e) {
+      console.error('Load error:', e);
+      document.getElementById('empty-state').classList.remove('hidden');
+      document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Fehler beim Laden</p>';
+    } finally {
+      document.getElementById('loading-state').classList.add('hidden');
+    }
   }
 
-  .page-header h1 {
-    margin-bottom: 0.25rem;
-  }
-
-  .page-header p {
-    color: var(--color-text-muted);
-  }
-
-  .filters {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-  }
-
-  .filter-select {
-    padding: 0.5rem 1rem;
-    border: 2px solid var(--color-border);
-    border-radius: var(--border-radius);
-    background: white;
-    font-size: 0.875rem;
-  }
-
-  .review-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .review-item {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.25rem;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem;
-    align-items: start;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .review-item:hover {
-    box-shadow: var(--shadow);
-  }
-
-  .review-item-content h3 {
-    font-size: 1rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .review-item-meta {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .review-item-badges {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-
-  .badge {
-    padding: 0.25rem 0.5rem;
-    border-radius: 1rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-  }
-
-  .badge.confidence-low {
-    background: #fef2f2;
-    color: #dc2626;
-  }
-
-  .badge.confidence-medium {
-    background: #fef9c3;
-    color: #ca8a04;
-  }
-
-  .badge.incomplete {
-    background: #f3f4f6;
-    color: #4b5563;
-  }
-
-  .review-item-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .action-btn {
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-size: 0.875rem;
-    transition: all 0.2s;
-  }
-
-  .action-btn.approve {
-    background: var(--color-success);
-    color: white;
-  }
-
-  .action-btn.reject {
-    background: var(--color-error);
-    color: white;
-  }
-
-  /* Modal */
-  .modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
-  .modal.hidden {
-    display: none;
-  }
-
-  .modal-content {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    max-width: 700px;
-    width: 100%;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-  }
-
-  .modal-close {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: var(--color-text-muted);
-  }
-
-  .modal-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .modal-header h2 {
-    margin-bottom: 0.5rem;
-  }
-
-  .modal-badges {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .modal-body {
-    padding: 1.5rem;
-  }
-
-  .detail-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .detail-section h3 {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-muted);
-    margin-bottom: 0.75rem;
-  }
-
-  .detail-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-  }
-
-  .detail-item {
-    padding: 0.5rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-  }
-
-  .detail-label {
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
-    display: block;
-  }
-
-  .detail-value {
-    font-weight: 500;
-  }
-
-  .ai-analysis {
-    padding: 1rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-  }
-
-  .score-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-
-  .score-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.25rem 0;
-  }
-
-  .modal-actions {
-    padding: 1.5rem;
-    border-top: 1px solid var(--color-border);
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-  }
-
-  .btn-danger {
-    background: var(--color-error);
-    color: white;
-    border: none;
-  }
-
-  .loading {
-    color: var(--color-text-muted);
-    font-style: italic;
-    text-align: center;
-    padding: 2rem;
-  }
-</style>
-
-<script>
-  // Mock data for now
-  const mockReviewItems = [
-    {
-      id: '1',
-      title: 'Kinderfest im Stadtpark',
-      source: 'karlsruhe.de',
-      date: '2026-02-15',
-      confidence: 0.45,
-      status: 'pending_review',
-      issues: ['Preis unklar', 'Altersgruppe nicht angegeben']
-    },
-    {
-      id: '2',
-      title: 'Workshop: Töpfern für Kids',
-      source: 'scraped',
-      date: '2026-02-20',
-      confidence: 0.62,
-      status: 'pending_review',
-      issues: ['Veranstaltungsort ungenau']
-    },
-  ];
-
-  function renderReviewList() {
+  // Render event list
+  function renderEvents() {
     const list = document.getElementById('review-list');
-    if (!list) return;
-
-    list.innerHTML = mockReviewItems.map(item => `
-      <div class="review-item" data-id="${item.id}">
-        <div class="review-item-content">
-          <h3>${item.title}</h3>
-          <div class="review-item-meta">
-            <span>📅 ${item.date}</span>
-            <span>📡 ${item.source}</span>
-          </div>
-          <div class="review-item-badges">
-            <span class="badge ${item.confidence < 0.5 ? 'confidence-low' : 'confidence-medium'}">
-              Konfidenz: ${Math.round(item.confidence * 100)}%
-            </span>
-            ${item.issues.map(i => `<span class="badge incomplete">${i}</span>`).join('')}
+    list.innerHTML = events.map(event => {
+      const date = new Date(event.start_datetime).toLocaleDateString('de-DE', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+      });
+      const sourceName = event.primary_source?.source?.name || 'Unbekannt';
+      const score = event.completeness_score || 0;
+      
+      return `
+        <div class="bg-white rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" data-id="${event.id}">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold text-gray-900 truncate">${event.title}</h3>
+              <div class="flex flex-wrap gap-3 text-sm text-gray-500 mt-1">
+                <span>📅 ${date}</span>
+                <span>📡 ${sourceName}</span>
+                ${event.location_address ? `<span class="truncate max-w-[200px]">📍 ${event.location_address}</span>` : ''}
+              </div>
+              <div class="flex flex-wrap gap-2 mt-2">
+                <span class="px-2 py-0.5 text-xs rounded-full ${score < 50 ? 'bg-red-100 text-red-700' : score < 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
+                  Vollständigkeit: ${score}%
+                </span>
+                <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">${event.status}</span>
+              </div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button class="action-btn w-10 h-10 rounded-lg bg-green-100 text-green-600 hover:bg-green-200" data-action="approve" data-id="${event.id}" title="Genehmigen">✓</button>
+              <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200" data-action="edit" data-id="${event.id}" title="Bearbeiten">✏️</button>
+              <button class="action-btn w-10 h-10 rounded-lg bg-red-100 text-red-600 hover:bg-red-200" data-action="reject" data-id="${event.id}" title="Ablehnen">✗</button>
+            </div>
           </div>
         </div>
-        <div class="review-item-actions">
-          <button class="action-btn approve" data-action="approve" data-id="${item.id}">✓</button>
-          <button class="action-btn reject" data-action="reject" data-id="${item.id}">✗</button>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
-    // Add click handlers
-    list.querySelectorAll('.review-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        if (!(e.target as HTMLElement).closest('.action-btn')) {
-          openModal(item.getAttribute('data-id'));
+    // Event handlers
+    list.querySelectorAll('[data-id]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        if (!e.target.closest('.action-btn')) {
+          openDetailModal(el.dataset.id);
         }
       });
     });
@@ -400,33 +262,220 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     list.querySelectorAll('.action-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const action = (btn as HTMLElement).getAttribute('data-action');
-        const id = (btn as HTMLElement).getAttribute('data-id');
-        handleAction(action, id);
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        if (action === 'approve') handleApprove(id, btn);
+        else if (action === 'edit') openEditModal(id);
+        else if (action === 'reject') openRejectModal(id);
       });
     });
   }
 
-  function openModal(id: string | null) {
-    const modal = document.getElementById('review-modal');
-    modal?.classList.remove('hidden');
+  // Detail Modal
+  function openDetailModal(id) {
+    currentEventId = id;
+    const event = events.find(e => e.id === id);
+    if (!event) return;
+
+    document.getElementById('detail-title').textContent = event.title;
     
-    const item = mockReviewItems.find(i => i.id === id);
-    if (item) {
-      document.getElementById('modal-title')!.textContent = item.title;
+    document.getElementById('detail-badges').innerHTML = `
+      <span class="px-2 py-1 text-xs rounded-full bg-gray-100">${event.status}</span>
+      ${event.completeness_score ? `<span class="px-2 py-1 text-xs rounded-full ${event.completeness_score < 50 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">Vollständigkeit: ${event.completeness_score}%</span>` : ''}
+    `;
+
+    const formatDate = (d) => d ? new Date(d).toLocaleString('de-DE') : '-';
+    document.getElementById('detail-info').innerHTML = `
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Start</span><span class="font-medium">${formatDate(event.start_datetime)}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Ende</span><span class="font-medium">${formatDate(event.end_datetime)}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg col-span-2"><span class="text-xs text-gray-500 block">Adresse</span><span class="font-medium">${event.location_address || '-'}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Preis</span><span class="font-medium">${event.price_type || '-'}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Alter</span><span class="font-medium">${event.age_min || '?'} - ${event.age_max || '?'} Jahre</span></div>
+    `;
+
+    const scores = event.scores;
+    document.getElementById('detail-scores').innerHTML = scores ? `
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        <div>Relevanz: <strong>${scores.relevance_score || '-'}</strong></div>
+        <div>Qualität: <strong>${scores.quality_score || '-'}</strong></div>
+        <div>Family Fit: <strong>${scores.family_fit_score || '-'}</strong></div>
+        <div>Stressfrei: <strong>${scores.stressfree_score || '-'}</strong></div>
+      </div>
+    ` : '<p class="text-sm text-gray-500">Keine Scores verfügbar</p>';
+
+    document.getElementById('detail-source').innerHTML = event.primary_source?.source ? `
+      <p><strong>${event.primary_source.source.name}</strong> (${event.primary_source.source.type})</p>
+      ${event.primary_source.source_url ? `<a href="${event.primary_source.source_url}" target="_blank" class="text-primary-500 text-sm">Quelle öffnen →</a>` : ''}
+    ` : '<p class="text-sm text-gray-500">Keine Quellinformation</p>';
+
+    document.getElementById('detail-modal').classList.remove('hidden');
+    document.getElementById('detail-modal').classList.add('flex');
+  }
+
+  // Edit Modal
+  function openEditModal(id) {
+    currentEventId = id;
+    const event = events.find(e => e.id === id);
+    if (!event) return;
+
+    document.getElementById('edit-title').value = event.title || '';
+    document.getElementById('edit-address').value = event.location_address || '';
+    
+    if (event.start_datetime) {
+      document.getElementById('edit-start').value = new Date(event.start_datetime).toISOString().slice(0, 16);
+    }
+    if (event.end_datetime) {
+      document.getElementById('edit-end').value = new Date(event.end_datetime).toISOString().slice(0, 16);
+    }
+
+    // Reset lock checkboxes
+    const lockedFields = event.locked_fields || [];
+    document.getElementById('lock-title').checked = lockedFields.includes('title');
+    document.getElementById('lock-start').checked = lockedFields.includes('start_datetime');
+    document.getElementById('lock-end').checked = lockedFields.includes('end_datetime');
+    document.getElementById('lock-address').checked = lockedFields.includes('location_address');
+
+    closeDetailModal();
+    document.getElementById('edit-modal').classList.remove('hidden');
+    document.getElementById('edit-modal').classList.add('flex');
+  }
+
+  // Reject Modal
+  function openRejectModal(id) {
+    currentEventId = id;
+    document.getElementById('reject-reason-code').value = '';
+    document.getElementById('reject-reason-text').value = '';
+    closeDetailModal();
+    document.getElementById('reject-modal').classList.remove('hidden');
+    document.getElementById('reject-modal').classList.add('flex');
+  }
+
+  // Close modals
+  function closeDetailModal() {
+    document.getElementById('detail-modal').classList.add('hidden');
+    document.getElementById('detail-modal').classList.remove('flex');
+  }
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.add('hidden');
+    document.getElementById('edit-modal').classList.remove('flex');
+  }
+  function closeRejectModal() {
+    document.getElementById('reject-modal').classList.add('hidden');
+    document.getElementById('reject-modal').classList.remove('flex');
+  }
+
+  // Action handlers
+  async function handleApprove(id, btn) {
+    if (!confirm('Event wirklich genehmigen?')) return;
+    
+    const originalText = btn?.innerHTML;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '...';
+    }
+
+    try {
+      await apiFetch(`/api/admin/review/${id}/approve`, { method: 'POST' });
+      events = events.filter(e => e.id !== id);
+      renderEvents();
+      closeDetailModal();
+    } catch (e) {
+      alert('Fehler: ' + e.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
     }
   }
 
-  function handleAction(action: string | null, id: string | null) {
-    console.log(`Action: ${action} for event ${id}`);
-    // TODO: Call API
+  async function handleReject() {
+    const reasonCode = document.getElementById('reject-reason-code').value;
+    const reasonText = document.getElementById('reject-reason-text').value;
+    
+    if (!reasonCode) {
+      alert('Bitte wähle einen Grund');
+      return;
+    }
+
+    const btn = document.getElementById('reject-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Wird abgelehnt...';
+
+    try {
+      await apiFetch(`/api/admin/review/${currentEventId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason_code: reasonCode, reason: reasonText }),
+      });
+      events = events.filter(e => e.id !== currentEventId);
+      renderEvents();
+      closeRejectModal();
+    } catch (e) {
+      alert('Fehler: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ablehnen';
+    }
   }
 
-  // Close modal
-  document.getElementById('modal-close')?.addEventListener('click', () => {
-    document.getElementById('review-modal')?.classList.add('hidden');
+  async function handleQuickEdit() {
+    const lockedFields = [];
+    if (document.getElementById('lock-title').checked) lockedFields.push('title');
+    if (document.getElementById('lock-start').checked) lockedFields.push('start_datetime');
+    if (document.getElementById('lock-end').checked) lockedFields.push('end_datetime');
+    if (document.getElementById('lock-address').checked) lockedFields.push('location_address');
+
+    const btn = document.getElementById('edit-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Wird gespeichert...';
+
+    try {
+      await apiFetch(`/api/admin/review/${currentEventId}/quick-edit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: document.getElementById('edit-title').value,
+          start_datetime: document.getElementById('edit-start').value,
+          end_datetime: document.getElementById('edit-end').value || undefined,
+          location_address: document.getElementById('edit-address').value,
+          locked_fields: lockedFields,
+        }),
+      });
+      events = events.filter(e => e.id !== currentEventId);
+      renderEvents();
+      closeEditModal();
+    } catch (e) {
+      alert('Fehler: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Speichern & Genehmigen';
+    }
+  }
+
+  // Event listeners
+  document.getElementById('status-filter').addEventListener('change', loadEvents);
+  document.getElementById('refresh-btn').addEventListener('click', loadEvents);
+  
+  document.getElementById('detail-close').addEventListener('click', closeDetailModal);
+  document.getElementById('detail-approve').addEventListener('click', () => handleApprove(currentEventId));
+  document.getElementById('detail-edit').addEventListener('click', () => openEditModal(currentEventId));
+  document.getElementById('detail-reject').addEventListener('click', () => openRejectModal(currentEventId));
+
+  document.getElementById('reject-cancel').addEventListener('click', closeRejectModal);
+  document.getElementById('reject-confirm').addEventListener('click', handleReject);
+
+  document.getElementById('edit-cancel').addEventListener('click', closeEditModal);
+  document.getElementById('edit-confirm').addEventListener('click', handleQuickEdit);
+
+  // Close modals on backdrop click
+  ['detail-modal', 'reject-modal', 'edit-modal'].forEach(id => {
+    document.getElementById(id).addEventListener('click', (e) => {
+      if (e.target.id === id) {
+        document.getElementById(id).classList.add('hidden');
+        document.getElementById(id).classList.remove('flex');
+      }
+    });
   });
 
-  // Initial render
-  renderReviewList();
+  // Initial load
+  loadEvents();
 </script>

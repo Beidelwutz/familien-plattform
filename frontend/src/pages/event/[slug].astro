@@ -1,577 +1,278 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+import EventCardNew from '../../components/feed/EventCardNew.astro';
 
-// In Astro, we'll fetch the event data server-side
-// For static generation, this would need getStaticPaths
-// For now, we'll use client-side fetching
+const { slug } = Astro.params;
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+
+let event: any = null;
+let similarEvents: any[] = [];
+
+if (slug) {
+  try {
+    const [eventRes, similarRes] = await Promise.all([
+      fetch(`${API_BASE}/api/events/${slug}`),
+      fetch(`${API_BASE}/api/events/${slug}/similar`),
+    ]);
+    if (eventRes.ok) {
+      const data = await eventRes.json();
+      event = data.data;
+    }
+    if (similarRes.ok) {
+      const data = await similarRes.json();
+      similarEvents = data.data || [];
+    }
+  } catch (err) {
+    console.error('Error fetching event:', err);
+  }
+}
+
+const formatDate = (d: string | undefined) =>
+  d ? new Date(d).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+const formatTime = (d: string | undefined) =>
+  d ? new Date(d).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+const formatPrice = (e: any) => {
+  if (e?.price_type === 'free') return 'Kostenlos';
+  if (e?.price_min) return `ab ${e.price_min}€`;
+  return 'Preis auf Anfrage';
+};
 ---
 
-<BaseLayout title="Event Details - Familien-Lokal Karlsruhe">
-  <main class="event-page">
-    <div class="container">
-      <!-- Loading State -->
-      <div class="loading-state" id="loading">
-        <div class="loading-spinner"></div>
-        <p>Lade Event...</p>
-      </div>
+<BaseLayout title={event ? `${event.title} - familienlokal` : 'Event - familienlokal'}>
+  <StickyHeader />
 
-      <!-- Error State -->
-      <div class="error-state hidden" id="error">
-        <h2>Event nicht gefunden</h2>
-        <p>Das gesuchte Event existiert nicht oder wurde entfernt.</p>
-        <a href="/suche" class="btn btn-primary">Zur Suche</a>
+  {!event ? (
+    <main class="min-h-screen bg-gray-50 py-12">
+      <div class="max-w-4xl mx-auto px-4 text-center">
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">Event nicht gefunden</h1>
+        <p class="text-gray-500 mb-6">Das gesuchte Event existiert nicht oder wurde entfernt.</p>
+        <a href="/suche" class="btn-primary">Zur Suche</a>
       </div>
-
-      <!-- Event Content -->
-      <article class="event-content hidden" id="event-content">
+    </main>
+  ) : (
+    <main class="min-h-screen bg-gray-50">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Breadcrumb -->
-        <nav class="breadcrumb">
-          <a href="/">Start</a>
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="text-primary-600 hover:text-primary-700">Start</a>
           <span>/</span>
-          <a href="/suche">Events</a>
+          <a href="/suche" class="text-primary-600 hover:text-primary-700">Events</a>
           <span>/</span>
-          <span id="breadcrumb-title">Event</span>
+          <span class="text-gray-700 truncate max-w-[200px]">{event.title}</span>
         </nav>
 
-        <!-- Hero Image -->
-        <div class="event-hero" id="event-hero">
-          <img src="/placeholder-event.jpg" alt="" id="hero-image" />
+        <!-- Hero -->
+        <div class="rounded-2xl overflow-hidden bg-gray-100 aspect-[21/9] mb-6">
+          {event.image_urls?.[0] ? (
+            <img
+              src={event.image_urls[0]}
+              alt={event.title}
+              class="w-full h-full object-cover"
+            />
+          ) : (
+            <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-50">
+              <span class="text-6xl">🎈</span>
+            </div>
+          )}
         </div>
 
-        <!-- Event Header -->
-        <header class="event-header">
-          <div class="event-badges" id="event-badges">
-            <!-- Badges will be added here -->
+        <!-- Header Card -->
+        <div class="bg-white rounded-2xl shadow-card p-6 mb-6">
+          <div class="flex flex-wrap gap-2 mb-4">
+            {event.is_indoor && <span class="badge badge-indoor">🏠 Indoor</span>}
+            {event.is_outdoor && <span class="badge badge-outdoor">🌳 Outdoor</span>}
+            {event.price_type === 'free' && <span class="badge badge-free">Kostenlos</span>}
+            {event.categories?.map((c: any) => (
+              <span class="badge bg-primary-100 text-primary-700">
+                {c.category?.icon || ''} {c.category?.name_de || c.category?.slug || ''}
+              </span>
+            ))}
           </div>
-          <h1 id="event-title">Event Titel</h1>
-          
-          <!-- Quick Info -->
-          <div class="quick-info">
-            <div class="info-item">
-              <span class="icon">📅</span>
-              <span id="event-date">Datum</span>
-            </div>
-            <div class="info-item">
-              <span class="icon">⏰</span>
-              <span id="event-time">Uhrzeit</span>
-            </div>
-            <div class="info-item">
-              <span class="icon">📍</span>
-              <span id="event-location">Ort</span>
-            </div>
-            <div class="info-item">
-              <span class="icon">💰</span>
-              <span id="event-price">Preis</span>
-            </div>
-          </div>
+          <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-4">{event.title}</h1>
 
-          <!-- Scores -->
-          <div class="scores-row" id="scores-row">
-            <div class="score" title="Familienfreundlichkeit">
-              <span class="score-icon">👨‍👩‍👧‍👦</span>
-              <span class="score-value" id="score-family">--</span>
-            </div>
-            <div class="score" title="Stressfrei-Score">
-              <span class="score-icon">😌</span>
-              <span class="score-value" id="score-stressfree">--</span>
-            </div>
-          </div>
-        </header>
-
-        <!-- CTA Buttons -->
-        <div class="cta-buttons">
-          <a href="#" class="btn btn-primary btn-large" id="booking-btn">
-            Jetzt buchen
-          </a>
-          <button class="btn btn-secondary" id="add-to-plan-btn">
-            📋 Zum Plan hinzufügen
-          </button>
-          <button class="btn btn-secondary" id="save-btn">
-            ❤️ Merken
-          </button>
-        </div>
-
-        <!-- Main Content Grid -->
-        <div class="event-grid">
-          <!-- Left Column -->
-          <div class="event-main">
-            <!-- Description -->
-            <section class="content-section">
-              <h2>Beschreibung</h2>
-              <div class="description" id="event-description">
-                <p>Laden...</p>
-              </div>
-            </section>
-
-            <!-- Age Info -->
-            <section class="content-section">
-              <h2>Altersempfehlung</h2>
-              <div class="age-info" id="age-info">
-                <span class="age-badge">Für alle Altersgruppen</span>
-              </div>
-            </section>
-
-            <!-- Amenities -->
-            <section class="content-section">
-              <h2>Ausstattung</h2>
-              <div class="amenities-grid" id="amenities">
-                <p class="no-data">Keine Angaben verfügbar</p>
-              </div>
-            </section>
+          <div class="flex flex-wrap gap-6 text-gray-600 mb-4">
+            <span class="flex items-center gap-2">
+              <span>📅</span>
+              {formatDate(event.start_datetime)}
+            </span>
+            <span class="flex items-center gap-2">
+              <span>⏰</span>
+              {formatTime(event.start_datetime)} Uhr
+            </span>
+            <span class="flex items-center gap-2">
+              <span>📍</span>
+              {event.location_district || event.location_address || 'Karlsruhe'}
+            </span>
+            <span class="flex items-center gap-2">
+              <span>💰</span>
+              {formatPrice(event)}
+            </span>
           </div>
 
-          <!-- Right Column (Sidebar) -->
-          <aside class="event-sidebar">
-            <!-- Map -->
-            <div class="sidebar-card">
-              <h3>Anfahrt</h3>
-              <div class="map-container" id="event-map">
-                <p>Karte wird geladen...</p>
-              </div>
-              <p class="address" id="full-address"></p>
-              <a href="#" class="directions-link" id="directions-link" target="_blank">
-                🗺️ Route berechnen
+          {(event.scores?.stressfree_score || event.scores?.family_fit_score) && (
+            <div class="flex gap-6 pt-4 border-t border-gray-100">
+              {event.scores.family_fit_score != null && (
+                <span class="flex items-center gap-2" title="Familienfreundlichkeit">
+                  <span>👨‍👩‍👧‍👦</span>
+                  <span class="font-semibold text-primary-600">{event.scores.family_fit_score}%</span>
+                </span>
+              )}
+              {event.scores.stressfree_score != null && (
+                <span class="flex items-center gap-2" title="Stressfrei-Score">
+                  <span>😌</span>
+                  <span class="font-semibold text-primary-600">{event.scores.stressfree_score}%</span>
+                </span>
+              )}
+            </div>
+          )}
+
+          <div class="flex flex-wrap gap-3 mt-6">
+            {event.booking_url && (
+              <a href={event.booking_url} target="_blank" rel="noopener noreferrer" class="btn-primary">
+                Jetzt buchen
               </a>
-            </div>
+            )}
+            <button type="button" class="btn-secondary" id="add-to-plan-btn">
+              📋 Zum Plan hinzufügen
+            </button>
+            <button type="button" class="btn-secondary" id="save-btn" data-event-id={event.id}>
+              ❤️ Merken
+            </button>
+          </div>
+        </div>
 
-            <!-- Contact -->
-            <div class="sidebar-card">
-              <h3>Kontakt</h3>
-              <div id="contact-info">
-                <p class="no-data">Keine Kontaktdaten verfügbar</p>
+        <div class="lg:grid lg:grid-cols-[1fr_340px] lg:gap-8">
+          <!-- Main -->
+          <div class="space-y-6">
+            <section class="bg-white rounded-2xl shadow-card p-6">
+              <h2 class="text-lg font-semibold text-gray-900 mb-3">Beschreibung</h2>
+              <div class="prose prose-gray max-w-none text-gray-600" set:html={event.description_long || event.description_short || '<p>Keine Beschreibung verfügbar.</p>'}></div>
+            </section>
+
+            {((event.age_min != null) || (event.age_max != null)) && (
+              <section class="bg-white rounded-2xl shadow-card p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Altersempfehlung</h2>
+                <span class="inline-block px-4 py-2 bg-gray-100 rounded-xl font-medium">
+                  {event.age_min != null && event.age_max != null && `${event.age_min}–${event.age_max} Jahre`}
+                  {event.age_min != null && event.age_max == null && `Ab ${event.age_min} Jahren`}
+                  {event.age_min == null && event.age_max != null && `Bis ${event.age_max} Jahre`}
+                </span>
+              </section>
+            )}
+
+            {event.amenities?.length > 0 && (
+              <section class="bg-white rounded-2xl shadow-card p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Ausstattung</h2>
+                <div class="flex flex-wrap gap-2">
+                  {event.amenities.map((a: any) => (
+                    <span class="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                      {a.amenity?.icon || '✓'} {a.amenity?.name_de || a.amenity?.slug || ''}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+
+          <!-- Sidebar -->
+          <aside class="space-y-6 lg:pt-0">
+            <div class="bg-white rounded-2xl shadow-card p-6">
+              <h3 class="font-semibold text-gray-900 mb-3">Anfahrt</h3>
+              <div class="aspect-[4/3] bg-gray-100 rounded-xl mb-3 flex items-center justify-center">
+                {event.location_lat && event.location_lng ? (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${event.location_lat},${event.location_lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-primary-600 hover:underline"
+                  >
+                    🗺️ Karte öffnen
+                  </a>
+                ) : (
+                  <span class="text-gray-400">Keine Koordinaten</span>
+                )}
               </div>
+              {event.location_address && <p class="text-sm text-gray-600">{event.location_address}</p>}
+              {event.location_lat && event.location_lng && (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${event.location_lat},${event.location_lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-sm text-primary-600 hover:text-primary-700 mt-2 inline-block"
+                >
+                  Route berechnen
+                </a>
+              )}
             </div>
 
-            <!-- Source Info -->
-            <div class="sidebar-card source-info">
-              <h3>Quelle</h3>
-              <p>
-                <a href="#" id="source-link" target="_blank">Originalquelle</a>
-              </p>
-              <p class="last-updated">
-                Stand: <span id="last-verified">Unbekannt</span>
-              </p>
-              <p class="data-quality" id="data-quality">
-                Datenqualität: Automatisch erfasst
-              </p>
+            {(event.contact_email || event.contact_phone || event.booking_url) && (
+              <div class="bg-white rounded-2xl shadow-card p-6">
+                <h3 class="font-semibold text-gray-900 mb-3">Kontakt</h3>
+                <ul class="space-y-2 text-sm text-gray-600">
+                  {event.contact_email && <li><a href={`mailto:${event.contact_email}`} class="text-primary-600 hover:underline">{event.contact_email}</a></li>}
+                  {event.contact_phone && <li><a href={`tel:${event.contact_phone}`} class="text-primary-600 hover:underline">{event.contact_phone}</a></li>}
+                  {event.booking_url && <li><a href={event.booking_url} target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:underline">Zur Buchung</a></li>}
+                </ul>
+              </div>
+            )}
+
+            <div class="bg-gray-50 rounded-2xl p-6">
+              <h3 class="font-semibold text-gray-900 mb-2">Quelle</h3>
+              {event.primary_source?.source?.name && <p class="text-sm text-gray-600">{event.primary_source.source.name}</p>}
+              {event.primary_source?.source_url && (
+                <a href={event.primary_source.source_url} target="_blank" rel="noopener noreferrer" class="text-sm text-primary-600 hover:underline">
+                  Originalquelle
+                </a>
+              )}
+              {event.last_verified_at && (
+                <p class="text-xs text-gray-500 mt-2">Stand: {new Date(event.last_verified_at).toLocaleDateString('de-DE')}</p>
+              )}
             </div>
           </aside>
         </div>
 
         <!-- Similar Events -->
-        <section class="similar-events">
-          <h2>Ähnliche Events</h2>
-          <div class="events-grid" id="similar-events">
-            <p>Lade ähnliche Events...</p>
-          </div>
-        </section>
-      </article>
-    </div>
-  </main>
+        {similarEvents.length > 0 && (
+          <section class="mt-12" id="similar">
+            <h2 class="text-xl font-bold text-gray-900 mb-4">Ähnliche Events</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {similarEvents.map((e: any) => (
+                <EventCardNew
+                  id={e.id}
+                  title={e.title}
+                  imageUrl={e.image_urls?.[0]}
+                  startTime={e.start_datetime ? new Date(e.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : undefined}
+                  priceType={e.price_type || 'unknown'}
+                  priceMin={e.price_min}
+                  ageMin={e.age_min}
+                  ageMax={e.age_max}
+                  isIndoor={e.is_indoor}
+                  isOutdoor={e.is_outdoor}
+                  stressfreeScore={e.scores?.stressfree_score}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
+  )}
 </BaseLayout>
 
-<style>
-  .event-page {
-    padding: 1.5rem 1rem;
-    background: var(--color-bg-secondary);
-    min-height: calc(100vh - 4rem);
-  }
-
-  .breadcrumb {
-    display: flex;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-    margin-bottom: 1rem;
-  }
-
-  .breadcrumb a {
-    color: var(--color-primary);
-    text-decoration: none;
-  }
-
-  .event-hero {
-    width: 100%;
-    height: 300px;
-    border-radius: var(--border-radius-lg);
-    overflow: hidden;
-    margin-bottom: 1.5rem;
-    background: var(--color-bg);
-  }
-
-  .event-hero img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .event-header {
-    background: white;
-    padding: 1.5rem;
-    border-radius: var(--border-radius-lg);
-    margin-bottom: 1rem;
-  }
-
-  .event-badges {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-  }
-
-  .badge {
-    padding: 0.25rem 0.75rem;
-    background: var(--color-bg-secondary);
-    border-radius: 1rem;
-    font-size: 0.875rem;
-  }
-
-  .badge.indoor { background: #e0f2fe; color: #0369a1; }
-  .badge.outdoor { background: #dcfce7; color: #166534; }
-  .badge.category { background: var(--color-primary-light); color: white; }
-
-  .event-header h1 {
-    margin-bottom: 1rem;
-  }
-
-  .quick-info {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem 2rem;
-    margin-bottom: 1rem;
-  }
-
-  .info-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .info-item .icon {
-    font-size: 1.25rem;
-  }
-
-  .scores-row {
-    display: flex;
-    gap: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--color-border);
-  }
-
-  .score {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .score-icon {
-    font-size: 1.5rem;
-  }
-
-  .score-value {
-    font-size: 1.25rem;
-    font-weight: bold;
-    color: var(--color-primary);
-  }
-
-  .cta-buttons {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-  }
-
-  .event-grid {
-    display: grid;
-    gap: 1.5rem;
-  }
-
-  @media (min-width: 1024px) {
-    .event-grid {
-      grid-template-columns: 1fr 350px;
-    }
-  }
-
-  .event-main {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-  }
-
-  .content-section {
-    background: white;
-    padding: 1.5rem;
-    border-radius: var(--border-radius-lg);
-  }
-
-  .content-section h2 {
-    font-size: 1.125rem;
-    margin-bottom: 1rem;
-  }
-
-  .description {
-    line-height: 1.7;
-  }
-
-  .age-badge {
-    display: inline-block;
-    padding: 0.5rem 1rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-    font-weight: 500;
-  }
-
-  .amenities-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 0.75rem;
-  }
-
-  .amenity-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-  }
-
-  .event-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .sidebar-card {
-    background: white;
-    padding: 1.25rem;
-    border-radius: var(--border-radius-lg);
-  }
-
-  .sidebar-card h3 {
-    font-size: 1rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .map-container {
-    height: 200px;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-    margin-bottom: 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .directions-link {
-    display: inline-block;
-    margin-top: 0.5rem;
-    color: var(--color-primary);
-    text-decoration: none;
-  }
-
-  .source-info {
-    background: var(--color-bg-secondary);
-  }
-
-  .source-info p {
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .last-updated, .data-quality {
-    color: var(--color-text-muted);
-  }
-
-  .similar-events {
-    margin-top: 2rem;
-  }
-
-  .similar-events h2 {
-    margin-bottom: 1rem;
-  }
-
-  .events-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
-  }
-
-  .loading-state, .error-state {
-    text-align: center;
-    padding: 4rem 2rem;
-  }
-
-  .loading-spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid var(--color-border);
-    border-top-color: var(--color-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 1rem;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .hidden {
-    display: none !important;
-  }
-
-  .no-data {
-    color: var(--color-text-muted);
-    font-style: italic;
-  }
-</style>
-
 <script>
-  // Get event ID from URL
-  const path = window.location.pathname;
-  const eventId = path.split('/').pop();
-
-  // DOM elements
-  const loadingEl = document.getElementById('loading');
-  const errorEl = document.getElementById('error');
-  const contentEl = document.getElementById('event-content');
-
-  // Fetch event data
-  async function loadEvent() {
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn?.addEventListener('click', () => {
+    const id = saveBtn.getAttribute('data-event-id');
+    if (!id) return;
     try {
-      const response = await fetch(`/api/events/${eventId}`);
-      
-      if (!response.ok) {
-        throw new Error('Event not found');
-      }
-      
-      const { data: event } = await response.json();
-      displayEvent(event);
-    } catch (error) {
-      console.error('Error loading event:', error);
-      loadingEl?.classList.add('hidden');
-      errorEl?.classList.remove('hidden');
-    }
-  }
-
-  function displayEvent(event: any) {
-    // Hide loading, show content
-    loadingEl?.classList.add('hidden');
-    contentEl?.classList.remove('hidden');
-
-    // Title
-    const titleEl = document.getElementById('event-title');
-    const breadcrumbTitle = document.getElementById('breadcrumb-title');
-    if (titleEl) titleEl.textContent = event.title;
-    if (breadcrumbTitle) breadcrumbTitle.textContent = event.title;
-
-    // Update page title
-    document.title = `${event.title} - Familien-Lokal Karlsruhe`;
-
-    // Date & Time
-    const dateEl = document.getElementById('event-date');
-    const timeEl = document.getElementById('event-time');
-    if (event.start_datetime) {
-      const date = new Date(event.start_datetime);
-      if (dateEl) dateEl.textContent = date.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-      if (timeEl) timeEl.textContent = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
-    }
-
-    // Location
-    const locationEl = document.getElementById('event-location');
-    const fullAddress = document.getElementById('full-address');
-    if (locationEl) locationEl.textContent = event.location_district || event.location_address || 'Karlsruhe';
-    if (fullAddress) fullAddress.textContent = event.location_address || '';
-
-    // Price
-    const priceEl = document.getElementById('event-price');
-    if (priceEl) {
-      if (event.price_type === 'free') {
-        priceEl.textContent = 'Kostenlos';
-      } else if (event.price_min) {
-        priceEl.textContent = `ab ${event.price_min}€`;
-      } else {
-        priceEl.textContent = 'Preis auf Anfrage';
-      }
-    }
-
-    // Description
-    const descEl = document.getElementById('event-description');
-    if (descEl) {
-      descEl.innerHTML = event.description_long || event.description_short || '<p>Keine Beschreibung verfügbar.</p>';
-    }
-
-    // Badges
-    const badgesEl = document.getElementById('event-badges');
-    if (badgesEl) {
-      badgesEl.innerHTML = '';
-      if (event.is_indoor) {
-        badgesEl.innerHTML += '<span class="badge indoor">🏠 Indoor</span>';
-      }
-      if (event.is_outdoor) {
-        badgesEl.innerHTML += '<span class="badge outdoor">🌤️ Outdoor</span>';
-      }
-      event.categories?.forEach((cat: any) => {
-        const name = cat.category?.name_de || cat.category?.slug;
-        const icon = cat.category?.icon || '';
-        badgesEl.innerHTML += `<span class="badge category">${icon} ${name}</span>`;
-      });
-    }
-
-    // Scores
-    if (event.scores) {
-      const familyScore = document.getElementById('score-family');
-      const stressfreeScore = document.getElementById('score-stressfree');
-      if (familyScore && event.scores.family_fit_score) {
-        familyScore.textContent = `${event.scores.family_fit_score}%`;
-      }
-      if (stressfreeScore && event.scores.stressfree_score) {
-        stressfreeScore.textContent = `${event.scores.stressfree_score}%`;
-      }
-    }
-
-    // Age info
-    const ageInfo = document.getElementById('age-info');
-    if (ageInfo) {
-      if (event.age_min !== null && event.age_max !== null) {
-        ageInfo.innerHTML = `<span class="age-badge">${event.age_min} - ${event.age_max} Jahre</span>`;
-      } else if (event.age_min !== null) {
-        ageInfo.innerHTML = `<span class="age-badge">Ab ${event.age_min} Jahren</span>`;
-      }
-    }
-
-    // Booking button
-    const bookingBtn = document.getElementById('booking-btn') as HTMLAnchorElement;
-    if (bookingBtn && event.booking_url) {
-      bookingBtn.href = event.booking_url;
-    } else if (bookingBtn) {
-      bookingBtn.style.display = 'none';
-    }
-
-    // Source info
-    const sourceLink = document.getElementById('source-link') as HTMLAnchorElement;
-    const lastVerified = document.getElementById('last-verified');
-    const dataQuality = document.getElementById('data-quality');
-    
-    if (event.primary_source?.source_url) {
-      if (sourceLink) sourceLink.href = event.primary_source.source_url;
-    }
-    if (lastVerified && event.last_verified_at) {
-      lastVerified.textContent = new Date(event.last_verified_at).toLocaleDateString('de-DE');
-    }
-    if (dataQuality) {
-      dataQuality.textContent = event.is_verified 
-        ? 'Datenqualität: Verifiziert ✓' 
-        : 'Datenqualität: Automatisch erfasst';
-    }
-
-    // Directions link
-    const directionsLink = document.getElementById('directions-link') as HTMLAnchorElement;
-    if (directionsLink && event.location_lat && event.location_lng) {
-      directionsLink.href = `https://www.google.com/maps/dir/?api=1&destination=${event.location_lat},${event.location_lng}`;
-    }
-  }
-
-  // Load event on page load
-  loadEvent();
+      const raw = localStorage.getItem('saved_events') || '[]';
+      const arr = JSON.parse(raw);
+      const idx = arr.indexOf(id);
+      if (idx >= 0) arr.splice(idx, 1);
+      else arr.push(id);
+      localStorage.setItem('saved_events', JSON.stringify(arr));
+      (saveBtn as HTMLButtonElement).textContent = arr.includes(id) ? '❤️ Gespeichert' : '❤️ Merken';
+    } catch (_) {}
+  });
 </script>

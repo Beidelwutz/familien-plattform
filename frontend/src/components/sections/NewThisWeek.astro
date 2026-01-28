@@ -1,0 +1,82 @@
+---
+// NewThisWeek.astro - "Neu diese Woche" section
+import EventCardNew from '../feed/EventCardNew.astro';
+
+interface Event {
+  id: string;
+  title: string;
+  image_urls?: string[];
+  start_datetime?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  age_min?: number;
+  age_max?: number;
+  is_indoor?: boolean;
+  is_outdoor?: boolean;
+  created_at?: string;
+  scores?: {
+    stressfree_score?: number;
+    family_fit_score?: number;
+  };
+}
+
+interface Props {
+  events: Event[];
+}
+
+const { events } = Astro.props;
+
+const formatTime = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return undefined;
+  }
+};
+---
+
+{events.length > 0 && (
+  <section class="py-6 md:py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Section Header -->
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="section-title flex items-center gap-2">
+            <span class="text-2xl">🆕</span>
+            Neu diese Woche
+          </h2>
+          <p class="text-sm text-gray-500 mt-1">Frisch hinzugefügt</p>
+        </div>
+        <a href="/suche?sort=newest" class="hidden sm:flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium">
+          Alle neuen
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </a>
+      </div>
+
+      <!-- Horizontal Scroll -->
+      <div class="flex gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2">
+        {events.map((event) => (
+          <div class="flex-shrink-0 w-64 md:w-72">
+            <EventCardNew
+              id={event.id}
+              title={event.title}
+              imageUrl={event.image_urls?.[0]}
+              startTime={formatTime(event.start_datetime)}
+              priceType={event.price_type}
+              priceMin={event.price_min}
+              ageMin={event.age_min}
+              ageMax={event.age_max}
+              isIndoor={event.is_indoor}
+              isOutdoor={event.is_outdoor}
+              isNew={true}
+              stressfreeScore={event.scores?.stressfree_score}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+)}

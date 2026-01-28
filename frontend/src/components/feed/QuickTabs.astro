@@ -1,0 +1,67 @@
+---
+// QuickTabs.astro - Quick filter tabs for feed control
+interface Props {
+  activeTab?: string;
+}
+
+const { activeTab = 'heute' } = Astro.props;
+
+const tabs = [
+  { id: 'heute', label: 'Heute', icon: '📅' },
+  { id: 'wochenende', label: 'Wochenende', icon: '🌟' },
+  { id: 'ferien', label: 'Ferien', icon: '🏖️' },
+  { id: 'nachmittags', label: 'Nachmittags', icon: '☀️' },
+  { id: 'regen', label: 'Bei Regen', icon: '🌧️' },
+  { id: 'kostenlos', label: 'Kostenlos', icon: '✨' },
+];
+---
+
+<nav class="bg-white border-b border-gray-100 sticky top-[8.5rem] md:top-[10.5rem] z-30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex gap-1 py-3 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0" id="quick-tabs">
+      {tabs.map((tab) => (
+        <button
+          class:list={[
+            'flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200',
+            activeTab === tab.id
+              ? 'bg-primary-500 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          ]}
+          data-tab={tab.id}
+        >
+          <span class="text-base">{tab.icon}</span>
+          <span>{tab.label}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+</nav>
+
+<script>
+  const tabs = document.querySelectorAll('#quick-tabs button');
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabId = (tab as HTMLButtonElement).dataset.tab;
+      
+      // Update active state
+      tabs.forEach(t => {
+        t.classList.remove('bg-primary-500', 'text-white', 'shadow-md');
+        t.classList.add('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+      });
+      tab.classList.remove('bg-gray-100', 'text-gray-700', 'hover:bg-gray-200');
+      tab.classList.add('bg-primary-500', 'text-white', 'shadow-md');
+      
+      // Update URL without reload
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tabId || 'heute');
+      window.history.pushState({}, '', url);
+      
+      // Dispatch event for feed update
+      const event = new CustomEvent('tabChanged', {
+        detail: { tab: tabId }
+      });
+      window.dispatchEvent(event);
+    });
+  });
+</script>

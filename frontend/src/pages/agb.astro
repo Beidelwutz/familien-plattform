@@ -1,0 +1,138 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+---
+
+<BaseLayout title="Allgemeine Geschäftsbedingungen - familienlokal" description="Allgemeine Geschäftsbedingungen für die Nutzung von familienlokal">
+  <StickyHeader />
+  
+  <main class="min-h-screen bg-gray-50">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <!-- Header -->
+      <div class="mb-8">
+        <a href="/" class="text-primary-500 hover:text-primary-600 text-sm font-medium mb-4 inline-flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+          </svg>
+          Zurück zur Startseite
+        </a>
+        <h1 class="text-3xl font-bold text-gray-900 mt-4">Allgemeine Geschäftsbedingungen</h1>
+        <p class="text-gray-500 mt-2">Nutzungsbedingungen für familienlokal</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-card p-6 md:p-8 space-y-8">
+        
+        <!-- § 1 Geltungsbereich -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 1 Geltungsbereich</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Diese Allgemeinen Geschäftsbedingungen (AGB) gelten für die Nutzung der Website familienlokal (nachfolgend "Plattform") durch Nutzer (nachfolgend "Sie" oder "Nutzer").</li>
+            <li>Betreiber der Plattform ist [Firmenname / Name], [Adresse] (nachfolgend "wir" oder "Anbieter"). Siehe auch <a href="/impressum" class="text-primary-500 hover:text-primary-600">Impressum</a>.</li>
+            <li>Mit der Nutzung der Plattform erklären Sie sich mit diesen AGB einverstanden.</li>
+          </ol>
+        </section>
+
+        <!-- § 2 Leistungsbeschreibung -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 2 Leistungsbeschreibung</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>familienlokal ist eine Informationsplattform, die Veranstaltungen, Kurse und Aktivitäten für Familien in Karlsruhe und Umgebung aggregiert und darstellt.</li>
+            <li>Die Plattform bietet:
+              <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                <li>Suche und Filter für Familienveranstaltungen</li>
+                <li>Merklisten-Funktion</li>
+                <li>KI-gestützten Tagesplaner</li>
+                <li>Informationen zu Veranstaltungsorten</li>
+              </ul>
+            </li>
+            <li>Die Buchung von Veranstaltungen erfolgt direkt beim jeweiligen Anbieter. Wir sind nicht Vertragspartner bei Buchungen.</li>
+            <li>Wir bemühen uns um Aktualität und Vollständigkeit der Informationen, übernehmen jedoch keine Gewähr für deren Richtigkeit.</li>
+          </ol>
+        </section>
+
+        <!-- § 3 Nutzerkonto -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 3 Nutzerkonto</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Für bestimmte Funktionen (Merkliste, Planer) ist eine Registrierung erforderlich.</li>
+            <li>Bei der Registrierung müssen Sie wahrheitsgemäße Angaben machen.</li>
+            <li>Sie sind für die Geheimhaltung Ihrer Zugangsdaten verantwortlich.</li>
+            <li>Wir behalten uns vor, Nutzerkonten bei Verstoß gegen diese AGB zu sperren oder zu löschen.</li>
+            <li>Sie können Ihr Konto jederzeit löschen. Kontaktieren Sie uns dazu unter <a href="mailto:info@familien-lokal.de" class="text-primary-500 hover:text-primary-600">info@familien-lokal.de</a>.</li>
+          </ol>
+        </section>
+
+        <!-- § 4 Nutzungsrechte und Pflichten -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 4 Nutzungsrechte und Pflichten</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Die Nutzung der Plattform ist kostenlos.</li>
+            <li>Sie dürfen die Plattform nur für private, nicht-kommerzielle Zwecke nutzen.</li>
+            <li>Folgendes ist untersagt:
+              <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                <li>Automatisiertes Auslesen von Inhalten (Scraping)</li>
+                <li>Manipulation der Plattform oder deren Sicherheitsmechanismen</li>
+                <li>Verbreitung rechtswidriger oder anstößiger Inhalte</li>
+                <li>Kommerzielle Nutzung ohne unsere schriftliche Genehmigung</li>
+              </ul>
+            </li>
+          </ol>
+        </section>
+
+        <!-- § 5 Haftung -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 5 Haftung</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Wir haften unbeschränkt für Schäden aus der Verletzung des Lebens, des Körpers oder der Gesundheit sowie für vorsätzlich oder grob fahrlässig verursachte Schäden.</li>
+            <li>Bei leicht fahrlässiger Verletzung wesentlicher Vertragspflichten ist unsere Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt.</li>
+            <li>Für die Richtigkeit, Vollständigkeit und Aktualität der von Drittanbietern bereitgestellten Informationen übernehmen wir keine Haftung.</li>
+            <li>Für Schäden aus der Nutzung externer Links haften wir nicht, sofern wir keine Kenntnis von rechtswidrigen Inhalten hatten.</li>
+          </ol>
+        </section>
+
+        <!-- § 6 Urheberrecht -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 6 Urheberrecht</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Die Inhalte der Plattform (Texte, Bilder, Grafiken, Software) sind urheberrechtlich geschützt.</li>
+            <li>Eine Vervielfältigung, Bearbeitung oder Verbreitung bedarf unserer vorherigen schriftlichen Zustimmung.</li>
+            <li>Event-Informationen Dritter bleiben im Eigentum der jeweiligen Rechteinhaber.</li>
+          </ol>
+        </section>
+
+        <!-- § 7 Datenschutz -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 7 Datenschutz</h2>
+          <p class="text-gray-700">
+            Informationen zur Verarbeitung Ihrer personenbezogenen Daten finden Sie in unserer <a href="/datenschutz" class="text-primary-500 hover:text-primary-600">Datenschutzerklärung</a>.
+          </p>
+        </section>
+
+        <!-- § 8 Änderungen der AGB -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 8 Änderungen der AGB</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Wir behalten uns vor, diese AGB jederzeit zu ändern.</li>
+            <li>Die aktuelle Fassung ist stets auf dieser Seite einsehbar.</li>
+            <li>Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert.</li>
+          </ol>
+        </section>
+
+        <!-- § 9 Schlussbestimmungen -->
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">§ 9 Schlussbestimmungen</h2>
+          <ol class="list-decimal list-inside text-gray-700 space-y-2">
+            <li>Es gilt deutsches Recht unter Ausschluss des UN-Kaufrechts.</li>
+            <li>Gerichtsstand ist, soweit gesetzlich zulässig, [Ort].</li>
+            <li>Sollten einzelne Bestimmungen dieser AGB unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.</li>
+          </ol>
+        </section>
+      </div>
+
+      <!-- Aktualisierungsdatum -->
+      <p class="text-center text-gray-500 text-sm mt-8">
+        Stand: Januar 2026
+      </p>
+    </div>
+  </main>
+</BaseLayout>

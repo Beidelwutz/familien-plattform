@@ -1,13 +1,20 @@
 ---
+import '../styles/global.css';
+import CookieBanner from '../components/common/CookieBanner.astro';
+
 interface Props {
   title: string;
   description?: string;
+  hideFooter?: boolean;
 }
 
 const { 
   title, 
-  description = "Finde Events, Kurse und Ferienangebote für Familien in Karlsruhe. Mit KI-gestütztem Tagesplaner." 
+  description = "Finde Events, Kurse und Ferienangebote für Familien in Karlsruhe. Mit KI-gestütztem Tagesplaner.",
+  hideFooter = false,
 } = Astro.props;
+
+const currentYear = new Date().getFullYear();
 ---
 
 <!DOCTYPE html>
@@ -20,305 +27,98 @@ const {
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     
-    <!-- Preconnect to API -->
-    <link rel="preconnect" href="http://localhost:4000" />
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     
     <!-- Open Graph -->
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="de_DE" />
+    <meta property="og:site_name" content="familienlokal" />
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#4F46E5" />
   </head>
-  <body>
-    <header class="site-header">
-      <nav class="nav container">
-        <a href="/" class="logo">
-          <span class="logo-icon">👨‍👩‍👧‍👦</span>
-          <span class="logo-text">Familien-Lokal</span>
-        </a>
-        <ul class="nav-links">
-          <li><a href="/suche">Suche</a></li>
-          <li><a href="/plan">Plan erstellen</a></li>
-          <li><a href="/merkliste">Merkliste</a></li>
-        </ul>
-        <div class="nav-actions">
-          <a href="/login" class="btn btn-secondary">Anmelden</a>
-        </div>
-        <button class="mobile-menu-toggle" aria-label="Menü öffnen">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-      </nav>
-    </header>
-
+  <body class="min-h-screen flex flex-col">
+    <!-- Skip Links for Keyboard Navigation (Accessibility) -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-primary-500 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg">
+      Zum Hauptinhalt springen
+    </a>
+    <a href="#main-navigation" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-48 focus:z-[100] focus:bg-primary-500 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:shadow-lg">
+      Zur Navigation springen
+    </a>
+    
     <slot />
 
-    <footer class="site-footer">
-      <div class="container">
-        <div class="footer-grid">
-          <div class="footer-col">
-            <h4>Familien-Lokal</h4>
-            <p>Familienaktivitäten in Karlsruhe entdecken und planen.</p>
+    {!hideFooter && (
+      <footer class="bg-gray-900 text-white mt-auto" role="contentinfo">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+            <!-- Brand -->
+            <div class="col-span-2 md:col-span-1">
+              <a href="/" class="flex items-center gap-2 mb-4" aria-label="familienlokal - Zur Startseite">
+                <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center" aria-hidden="true">
+                  <span class="text-white text-xl">🏠</span>
+                </div>
+                <span class="text-xl font-bold">familien<span class="text-primary-400">lokal</span></span>
+              </a>
+              <p class="text-gray-400 text-sm">
+                Familienaktivitäten in Karlsruhe entdecken und planen.
+              </p>
+            </div>
+
+            <!-- Links -->
+            <nav aria-label="Entdecken">
+              <h4 class="font-semibold mb-4" id="footer-discover">Entdecken</h4>
+              <ul class="space-y-2" aria-labelledby="footer-discover">
+                <li><a href="/suche" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Events finden</a></li>
+                <li><a href="/plan" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Plan erstellen</a></li>
+                <li><a href="/merkliste" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Merkliste</a></li>
+              </ul>
+            </nav>
+
+            <!-- For Providers -->
+            <nav aria-label="Für Anbieter">
+              <h4 class="font-semibold mb-4" id="footer-providers">Für Anbieter</h4>
+              <ul class="space-y-2" aria-labelledby="footer-providers">
+                <li><a href="/anbieter" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Anbieter werden</a></li>
+                <li><a href="/anbieter/login" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Anbieter-Login</a></li>
+              </ul>
+            </nav>
+
+            <!-- Legal -->
+            <nav aria-label="Rechtliches">
+              <h4 class="font-semibold mb-4" id="footer-legal">Rechtliches</h4>
+              <ul class="space-y-2" aria-labelledby="footer-legal">
+                <li><a href="/impressum" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Impressum</a></li>
+                <li><a href="/datenschutz" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Datenschutz</a></li>
+                <li><a href="/agb" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">AGB</a></li>
+                <li><button onclick="window.showCookieSettings?.()" class="text-gray-400 hover:text-white transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 focus:ring-offset-gray-900 rounded">Cookie-Einstellungen</button></li>
+              </ul>
+            </nav>
           </div>
-          <div class="footer-col">
-            <h4>Links</h4>
-            <ul>
-              <li><a href="/suche">Events finden</a></li>
-              <li><a href="/plan">Plan erstellen</a></li>
-              <li><a href="/anbieter">Für Anbieter</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Rechtliches</h4>
-            <ul>
-              <li><a href="/impressum">Impressum</a></li>
-              <li><a href="/datenschutz">Datenschutz</a></li>
-              <li><a href="/agb">AGB</a></li>
-            </ul>
-          </div>
-          <div class="footer-col">
-            <h4>Kontakt</h4>
-            <ul>
-              <li><a href="mailto:info@familien-lokal.de">info@familien-lokal.de</a></li>
-            </ul>
+
+          <!-- Bottom -->
+          <div class="border-t border-gray-800 pt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p class="text-gray-500 text-sm">
+              &copy; {currentYear} familienlokal. Alle Rechte vorbehalten.
+            </p>
+            <div class="flex items-center gap-4">
+              <a href="mailto:info@familien-lokal.de" class="text-gray-400 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-primary-400 rounded p-1" aria-label="E-Mail an familienlokal senden">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
-        <div class="footer-bottom">
-          <p>&copy; {new Date().getFullYear()} Familien-Lokal. Alle Rechte vorbehalten.</p>
-        </div>
-      </div>
-    </footer>
+      </footer>
+    )}
+
+    <!-- Cookie Consent Banner -->
+    <CookieBanner />
   </body>
 </html>
-
-<style is:global>
-  :root {
-    --color-primary: #4F46E5;
-    --color-primary-dark: #3730A3;
-    --color-primary-light: #818CF8;
-    --color-secondary: #10B981;
-    --color-accent: #F59E0B;
-    --color-text: #1F2937;
-    --color-text-muted: #6B7280;
-    --color-bg: #FFFFFF;
-    --color-bg-secondary: #F9FAFB;
-    --color-border: #E5E7EB;
-    --color-error: #EF4444;
-    --color-success: #10B981;
-    --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --border-radius: 0.5rem;
-    --border-radius-lg: 1rem;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow: 0 4px 6px rgba(0,0,0,0.1);
-    --shadow-lg: 0 10px 25px rgba(0,0,0,0.15);
-  }
-
-  *, *::before, *::after {
-    box-sizing: border-box;
-  }
-
-  html {
-    font-family: var(--font-family);
-    color: var(--color-text);
-    background: var(--color-bg);
-    line-height: 1.6;
-  }
-
-  body {
-    margin: 0;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  main {
-    flex: 1;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    line-height: 1.3;
-    margin-top: 0;
-  }
-
-  img {
-    max-width: 100%;
-    height: auto;
-  }
-
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 1rem;
-  }
-
-  /* Buttons */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: var(--border-radius);
-    font-weight: 600;
-    font-size: 1rem;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-primary {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--color-primary-dark);
-    transform: translateY(-2px);
-  }
-
-  .btn-secondary {
-    background: transparent;
-    color: var(--color-primary);
-    border: 2px solid var(--color-primary);
-  }
-
-  .btn-secondary:hover {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .btn-large {
-    padding: 1rem 2rem;
-    font-size: 1.125rem;
-  }
-
-  /* Header */
-  .site-header {
-    background: white;
-    box-shadow: var(--shadow-sm);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 4rem;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    text-decoration: none;
-    color: var(--color-text);
-    font-weight: 700;
-    font-size: 1.25rem;
-  }
-
-  .logo-icon {
-    font-size: 1.5rem;
-  }
-
-  .nav-links {
-    display: none;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    gap: 2rem;
-  }
-
-  .nav-links a {
-    text-decoration: none;
-    color: var(--color-text);
-    font-weight: 500;
-    transition: color 0.2s;
-  }
-
-  .nav-links a:hover {
-    color: var(--color-primary);
-  }
-
-  .nav-actions {
-    display: none;
-  }
-
-  .mobile-menu-toggle {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0.5rem;
-  }
-
-  .mobile-menu-toggle span {
-    display: block;
-    width: 24px;
-    height: 2px;
-    background: var(--color-text);
-  }
-
-  @media (min-width: 768px) {
-    .nav-links {
-      display: flex;
-    }
-    .nav-actions {
-      display: block;
-    }
-    .mobile-menu-toggle {
-      display: none;
-    }
-  }
-
-  /* Footer */
-  .site-footer {
-    background: var(--color-text);
-    color: white;
-    padding: 3rem 1rem 1rem;
-    margin-top: auto;
-  }
-
-  .footer-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 2rem;
-    margin-bottom: 2rem;
-  }
-
-  .footer-col h4 {
-    margin-bottom: 1rem;
-  }
-
-  .footer-col ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .footer-col li {
-    margin-bottom: 0.5rem;
-  }
-
-  .footer-col a {
-    color: rgba(255,255,255,0.8);
-    text-decoration: none;
-  }
-
-  .footer-col a:hover {
-    color: white;
-  }
-
-  .footer-bottom {
-    border-top: 1px solid rgba(255,255,255,0.1);
-    padding-top: 1rem;
-    text-align: center;
-    font-size: 0.875rem;
-    color: rgba(255,255,255,0.6);
-  }
-</style>

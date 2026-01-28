@@ -1,258 +1,199 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+import PlannerBar from '../components/planner/PlannerBar.astro';
+import QuickTabs from '../components/feed/QuickTabs.astro';
+import TopPicks from '../components/sections/TopPicks.astro';
+import FeedSection from '../components/feed/FeedSection.astro';
+import MapPreview from '../components/map/MapPreview.astro';
+import AvailableNow from '../components/sections/AvailableNow.astro';
+import NewThisWeek from '../components/sections/NewThisWeek.astro';
+import TrendingNearby from '../components/sections/TrendingNearby.astro';
+
+// Get tab from URL
+const url = new URL(Astro.request.url);
+const activeTab = url.searchParams.get('tab') || 'heute';
+
+// API Base URL
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+
+// Fetch data in parallel
+let topPicks: any[] = [];
+let feedEvents: any[] = [];
+let availableEvents: any[] = [];
+let newEvents: any[] = [];
+let trendingEvents: any[] = [];
+let mapPins: any[] = [];
+
+try {
+  const [topPicksRes, feedRes, availableRes, newRes, trendingRes] = await Promise.all([
+    fetch(`${API_BASE}/api/events/top-picks?limit=8`).catch(() => null),
+    fetch(`${API_BASE}/api/events?tab=${activeTab}&limit=20`).catch(() => null),
+    fetch(`${API_BASE}/api/events/available?limit=12`).catch(() => null),
+    fetch(`${API_BASE}/api/events/new?limit=12`).catch(() => null),
+    fetch(`${API_BASE}/api/events/trending?limit=12`).catch(() => null),
+  ]);
+
+  if (topPicksRes?.ok) {
+    const data = await topPicksRes.json();
+    topPicks = data.data || [];
+  }
+  
+  if (feedRes?.ok) {
+    const data = await feedRes.json();
+    feedEvents = data.data || [];
+  }
+  
+  if (availableRes?.ok) {
+    const data = await availableRes.json();
+    availableEvents = data.data || [];
+  }
+  
+  if (newRes?.ok) {
+    const data = await newRes.json();
+    newEvents = data.data || [];
+  }
+  
+  if (trendingRes?.ok) {
+    const data = await trendingRes.json();
+    trendingEvents = data.data || [];
+  }
+
+  // Create map pins from events
+  mapPins = [...topPicks, ...feedEvents]
+    .filter(e => e.location_lat && e.location_lng)
+    .slice(0, 12)
+    .map(e => ({
+      id: e.id,
+      title: e.title,
+      lat: e.location_lat,
+      lng: e.location_lng,
+    }));
+} catch (error) {
+  console.error('Error fetching data:', error);
+}
+
+// Use dummy data if API is not available
+if (topPicks.length === 0) {
+  topPicks = generateDummyEvents(8);
+}
+if (feedEvents.length === 0) {
+  feedEvents = generateDummyEvents(20);
+}
+if (availableEvents.length === 0) {
+  availableEvents = generateDummyEvents(8).map(e => ({ ...e, available_spots: Math.floor(Math.random() * 10) + 1 }));
+}
+if (newEvents.length === 0) {
+  newEvents = generateDummyEvents(8);
+}
+if (trendingEvents.length === 0) {
+  trendingEvents = generateDummyEvents(8);
+}
+if (mapPins.length === 0) {
+  mapPins = [
+    { id: '1', title: 'Zoologischer Stadtgarten', lat: 49.0069, lng: 8.4037 },
+    { id: '2', title: 'Naturkundemuseum', lat: 49.0089, lng: 8.4077 },
+    { id: '3', title: 'Schloss Karlsruhe', lat: 49.0142, lng: 8.4044 },
+    { id: '4', title: 'Stadtbibliothek', lat: 49.0076, lng: 8.4031 },
+    { id: '5', title: 'Kinderspielhaus', lat: 49.0045, lng: 8.4112 },
+    { id: '6', title: 'Schwimmbad Rheinstraße', lat: 49.0023, lng: 8.3987 },
+  ];
+}
+
+function generateDummyEvents(count: number) {
+  const titles = [
+    'Familien-Yoga im Park',
+    'Kinderbasteln: Herbstdeko',
+    'Schwimmkurs für Anfänger',
+    'Märchenstunde in der Bibliothek',
+    'Waldentdecker-Tour',
+    'Kreativworkshop: Malen',
+    'Musikgarten für Kleinkinder',
+    'Science Lab für Kids',
+    'Kinderturnen',
+    'Eltern-Kind-Café',
+    'Puppentheater',
+    'Klettern für Familien',
+    'Naturerlebnis am Fluss',
+    'Kochen für kleine Köche',
+    'Zirkusworkshop',
+    'Astronomie-Abend',
+    'Bauernhof-Besuch',
+    'Inline-Skating Kurs',
+    'Töpfern für Familien',
+    'Geocaching-Tour',
+  ];
+
+  return Array.from({ length: count }, (_, i) => ({
+    id: `dummy-${i + 1}`,
+    title: titles[i % titles.length],
+    description_short: 'Ein tolles Angebot für die ganze Familie.',
+    start_datetime: new Date(Date.now() + i * 86400000).toISOString(),
+    price_type: i % 3 === 0 ? 'free' : 'paid',
+    price_min: i % 3 === 0 ? null : 5 + (i % 10),
+    age_min: Math.floor(i % 4) * 3,
+    age_max: Math.floor(i % 4) * 3 + 5,
+    is_indoor: i % 2 === 0,
+    is_outdoor: i % 2 === 1,
+    image_urls: null,
+    scores: {
+      stressfree_score: 70 + (i % 30),
+      family_fit_score: 75 + (i % 25),
+    },
+    last_verified_at: new Date(Date.now() - i * 3600000).toISOString(),
+  }));
+}
 ---
 
-<BaseLayout title="Familien-Lokal Karlsruhe - Familienaktivitäten finden">
-  <main>
-    <!-- Hero Section -->
-    <section class="hero">
-      <div class="hero-content">
-        <h1>Finde den perfekten Familientag in Karlsruhe</h1>
-        <p class="hero-subtitle">
-          Events, Kurse und Ferienangebote für Familien – in unter 20 Sekunden zum stressfreien Plan
+<BaseLayout title="familienlokal - Familienaktivitäten in Karlsruhe">
+  <!-- Sticky Header -->
+  <StickyHeader />
+  
+  <!-- Planner Bar (Turbo-Fokus) -->
+  <PlannerBar />
+  
+  <!-- Quick Tabs -->
+  <QuickTabs activeTab={activeTab} />
+
+  <main id="main-content" role="main">
+    <!-- Section A: Top Picks -->
+    <TopPicks events={topPicks} />
+
+    <!-- Section B: Main Feed -->
+    <FeedSection events={feedEvents} />
+
+    <!-- Section C: Map Preview -->
+    <MapPreview pins={mapPins} />
+
+    <!-- Section D: Available Now -->
+    <AvailableNow events={availableEvents} />
+
+    <!-- Section E: New This Week -->
+    <NewThisWeek events={newEvents} />
+
+    <!-- Section E: Trending Nearby -->
+    <TrendingNearby events={trendingEvents} />
+
+    <!-- Call to Action -->
+    <section class="py-12 md:py-16 bg-gradient-to-br from-primary-500 to-primary-600">
+      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">
+          Noch nicht das Richtige gefunden?
+        </h2>
+        <p class="text-primary-100 mb-8 max-w-2xl mx-auto">
+          Erstelle einen personalisierten Tagesplan basierend auf dem Alter deiner Kinder, 
+          Budget und verfügbarer Zeit.
         </p>
-        <a href="/plan" class="btn btn-primary btn-large">
-          Plan erstellen
+        <a 
+          href="/plan" 
+          class="inline-flex items-center gap-2 px-8 py-4 bg-white text-primary-600 font-semibold rounded-full hover:bg-gray-50 transition-colors shadow-lg"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+          </svg>
+          Jetzt Plan erstellen
         </a>
-      </div>
-    </section>
-
-    <!-- Quick Filters -->
-    <section class="quick-filters">
-      <div class="container">
-        <div class="filter-chips">
-          <a href="/suche?zeit=heute" class="chip">Heute</a>
-          <a href="/suche?zeit=wochenende" class="chip">Wochenende</a>
-          <a href="/suche?zeit=ferien" class="chip">Ferien</a>
-          <a href="/suche?preis=kostenlos" class="chip">Kostenlos</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Featured Events -->
-    <section class="featured">
-      <div class="container">
-        <h2>Beliebte Aktivitäten</h2>
-        <div class="event-grid" id="featured-events">
-          <!-- Events werden per API geladen -->
-          <p class="loading">Lade Events...</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Categories -->
-    <section class="categories">
-      <div class="container">
-        <h2>Kategorien</h2>
-        <div class="category-grid">
-          <a href="/suche?kategorie=museum" class="category-card">
-            <span class="category-icon">🏛️</span>
-            <span class="category-name">Museen</span>
-          </a>
-          <a href="/suche?kategorie=sport" class="category-card">
-            <span class="category-icon">⚽</span>
-            <span class="category-name">Sport</span>
-          </a>
-          <a href="/suche?kategorie=natur" class="category-card">
-            <span class="category-icon">🌳</span>
-            <span class="category-name">Natur</span>
-          </a>
-          <a href="/suche?kategorie=musik" class="category-card">
-            <span class="category-icon">🎵</span>
-            <span class="category-name">Musik</span>
-          </a>
-          <a href="/suche?kategorie=theater" class="category-card">
-            <span class="category-icon">🎭</span>
-            <span class="category-name">Theater</span>
-          </a>
-          <a href="/suche?kategorie=workshop" class="category-card">
-            <span class="category-icon">🎨</span>
-            <span class="category-name">Workshops</span>
-          </a>
-          <a href="/suche?kategorie=indoor" class="category-card">
-            <span class="category-icon">🏠</span>
-            <span class="category-name">Indoor</span>
-          </a>
-          <a href="/suche?kategorie=ferienlager" class="category-card">
-            <span class="category-icon">⛺</span>
-            <span class="category-name">Ferienlager</span>
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- How it works -->
-    <section class="how-it-works">
-      <div class="container">
-        <h2>So funktioniert's</h2>
-        <div class="steps">
-          <div class="step">
-            <div class="step-number">1</div>
-            <h3>Alter eingeben</h3>
-            <p>Gib das Alter deiner Kinder ein und wähle deine Präferenzen</p>
-          </div>
-          <div class="step">
-            <div class="step-number">2</div>
-            <h3>Plan erhalten</h3>
-            <p>Unsere KI erstellt dir einen maßgeschneiderten Tagesplan</p>
-          </div>
-          <div class="step">
-            <div class="step-number">3</div>
-            <h3>Losgehen</h3>
-            <p>Mit Route, Zeitplan und Plan B bei schlechtem Wetter</p>
-          </div>
-        </div>
       </div>
     </section>
   </main>
 </BaseLayout>
-
-<style>
-  .hero {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: white;
-    padding: 4rem 1rem;
-    text-align: center;
-  }
-
-  .hero-content {
-    max-width: 800px;
-    margin: 0 auto;
-  }
-
-  .hero h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-    line-height: 1.2;
-  }
-
-  .hero-subtitle {
-    font-size: 1.25rem;
-    opacity: 0.9;
-    margin-bottom: 2rem;
-  }
-
-  .quick-filters {
-    padding: 2rem 1rem;
-    background: var(--color-bg-secondary);
-  }
-
-  .filter-chips {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .chip {
-    padding: 0.5rem 1.25rem;
-    background: white;
-    border-radius: 2rem;
-    text-decoration: none;
-    color: var(--color-text);
-    font-weight: 500;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: all 0.2s ease;
-  }
-
-  .chip:hover {
-    background: var(--color-primary);
-    color: white;
-    transform: translateY(-2px);
-  }
-
-  .featured, .categories, .how-it-works {
-    padding: 3rem 1rem;
-  }
-
-  .featured h2, .categories h2, .how-it-works h2 {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-
-  .event-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .category-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 1rem;
-  }
-
-  .category-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 1.5rem;
-    background: white;
-    border-radius: 1rem;
-    text-decoration: none;
-    color: var(--color-text);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: all 0.2s ease;
-  }
-
-  .category-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-  }
-
-  .category-icon {
-    font-size: 2.5rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .category-name {
-    font-weight: 500;
-  }
-
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 2rem;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .step {
-    text-align: center;
-    padding: 1.5rem;
-  }
-
-  .step-number {
-    width: 3rem;
-    height: 3rem;
-    background: var(--color-primary);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin: 0 auto 1rem;
-  }
-
-  .step h3 {
-    margin-bottom: 0.5rem;
-  }
-
-  .step p {
-    color: var(--color-text-muted);
-  }
-
-  .loading {
-    text-align: center;
-    color: var(--color-text-muted);
-    grid-column: 1 / -1;
-  }
-
-  @media (min-width: 768px) {
-    .hero h1 {
-      font-size: 3.5rem;
-    }
-  }
-</style>

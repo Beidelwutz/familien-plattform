@@ -1,474 +1,347 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Quellen-Status - Admin - Familien-Lokal">
-  <main class="admin-page">
-    <div class="container">
-      <header class="page-header">
-        <a href="/admin" class="back-link">← Zurück zum Dashboard</a>
-        <h1>Quellen-Status</h1>
-        <p>Übersicht und Gesundheit aller Datenquellen</p>
+<BaseLayout title="Quellen-Status - Admin - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">Quellen-Status</h1>
+        <p class="text-gray-500">Übersicht und Gesundheit aller Datenquellen</p>
       </header>
 
-      <!-- Summary -->
-      <div class="summary-cards">
-        <div class="summary-card healthy">
-          <span class="card-value" id="healthy-count">--</span>
-          <span class="card-label">Gesund</span>
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div class="bg-white rounded-xl p-4 border-l-4 border-green-500">
+          <span id="healthy-count" class="block text-2xl font-bold text-green-600">--</span>
+          <span class="text-sm text-gray-500">Gesund</span>
         </div>
-        <div class="summary-card degraded">
-          <span class="card-value" id="degraded-count">--</span>
-          <span class="card-label">Eingeschränkt</span>
+        <div class="bg-white rounded-xl p-4 border-l-4 border-yellow-500">
+          <span id="degraded-count" class="block text-2xl font-bold text-yellow-600">--</span>
+          <span class="text-sm text-gray-500">Eingeschränkt</span>
         </div>
-        <div class="summary-card failing">
-          <span class="card-value" id="failing-count">--</span>
-          <span class="card-label">Fehlerhaft</span>
+        <div class="bg-white rounded-xl p-4 border-l-4 border-orange-500">
+          <span id="failing-count" class="block text-2xl font-bold text-orange-600">--</span>
+          <span class="text-sm text-gray-500">Fehlerhaft</span>
         </div>
-        <div class="summary-card dead">
-          <span class="card-value" id="dead-count">--</span>
-          <span class="card-label">Tot</span>
+        <div class="bg-white rounded-xl p-4 border-l-4 border-red-500">
+          <span id="dead-count" class="block text-2xl font-bold text-red-600">--</span>
+          <span class="text-sm text-gray-500">Tot</span>
+        </div>
+        <div class="bg-white rounded-xl p-4 border-l-4 border-gray-400">
+          <span id="unknown-count" class="block text-2xl font-bold text-gray-500">--</span>
+          <span class="text-sm text-gray-500">Unbekannt</span>
         </div>
       </div>
 
-      <!-- Source List -->
-      <div class="source-list">
-        <table class="source-table">
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>Quelle</th>
-              <th>Typ</th>
-              <th>Letzter Erfolg</th>
-              <th>Events</th>
-              <th>Fehler</th>
-              <th>Aktionen</th>
-            </tr>
-          </thead>
-          <tbody id="source-table-body">
-            <!-- Sources will be rendered here -->
-          </tbody>
-        </table>
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Quellen...</p>
       </div>
 
-      <!-- Source Detail Panel -->
-      <div class="detail-panel hidden" id="detail-panel">
-        <div class="panel-header">
-          <h2 id="panel-source-name">Quelle</h2>
-          <button class="panel-close" id="panel-close">×</button>
+      <!-- Source Table -->
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden hidden" id="source-table">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quelle</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Typ</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Letzter Erfolg</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events/Fetch</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fehler</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="source-tbody" class="divide-y divide-gray-200"></tbody>
+          </table>
         </div>
-        <div class="panel-content">
-          <div class="panel-section">
-            <h3>Konfiguration</h3>
-            <dl class="config-list" id="panel-config">
-              <!-- Config will be rendered here -->
-            </dl>
+      </div>
+
+      <!-- Detail Panel (Slide-over) -->
+      <div class="fixed inset-0 bg-black/50 hidden z-50" id="detail-overlay">
+        <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h2 id="panel-title" class="text-lg font-semibold">Quelle</h2>
+            <button id="panel-close" class="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
           </div>
-          <div class="panel-section">
-            <h3>Letzte Fetches</h3>
-            <div class="fetch-log" id="panel-fetches">
-              <!-- Fetch log will be rendered here -->
+          
+          <div class="flex-1 overflow-y-auto p-4 space-y-6">
+            <!-- Status & Info -->
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Info</h3>
+              <div id="panel-info" class="space-y-2"></div>
+            </div>
+
+            <!-- Error Info -->
+            <div id="panel-error-section" class="hidden">
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Letzter Fehler</h3>
+              <div id="panel-error" class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700"></div>
+            </div>
+
+            <!-- Recent Fetches -->
+            <div>
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Letzte Fetches</h3>
+              <div id="panel-fetches" class="space-y-2 text-sm text-gray-500">Keine Daten</div>
             </div>
           </div>
-          <div class="panel-section">
-            <h3>Compliance</h3>
-            <div class="compliance-info" id="panel-compliance">
-              <!-- Compliance info will be rendered here -->
-            </div>
+
+          <div class="p-4 border-t flex flex-wrap gap-2">
+            <button id="trigger-btn" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+              🔄 Jetzt abrufen
+            </button>
+            <button id="toggle-btn" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+              ⏸️ Deaktivieren
+            </button>
           </div>
-        </div>
-        <div class="panel-actions">
-          <button class="btn btn-primary" id="trigger-fetch-btn">🔄 Jetzt abrufen</button>
-          <button class="btn btn-secondary" id="edit-source-btn">✏️ Bearbeiten</button>
-          <button class="btn btn-danger" id="disable-source-btn">⏸️ Deaktivieren</button>
         </div>
       </div>
     </div>
   </main>
 </BaseLayout>
 
-<style>
-  .admin-page {
-    padding: 2rem 1rem;
-    background: var(--color-bg-secondary);
-    min-height: calc(100vh - 4rem);
+<script define:vars={{ API_URL }}>
+  let sources = [];
+  let currentSourceId = null;
+  const token = localStorage.getItem('auth_token');
+
+  // Auth check
+  if (!token) {
+    window.location.href = '/login?redirect=/admin/sources';
   }
 
-  .page-header {
-    margin-bottom: 1.5rem;
-  }
-
-  .back-link {
-    color: var(--color-primary);
-    text-decoration: none;
-    font-size: 0.875rem;
-    display: inline-block;
-    margin-bottom: 0.5rem;
-  }
-
-  .summary-cards {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 2rem;
-  }
-
-  .summary-card {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.5rem;
-    text-align: center;
-    border-left: 4px solid;
-  }
-
-  .summary-card.healthy { border-color: #10b981; }
-  .summary-card.degraded { border-color: #f59e0b; }
-  .summary-card.failing { border-color: #ef4444; }
-  .summary-card.dead { border-color: #6b7280; }
-
-  .card-value {
-    display: block;
-    font-size: 2rem;
-    font-weight: bold;
-  }
-
-  .card-label {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .source-list {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    overflow: hidden;
-  }
-
-  .source-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .source-table th,
-  .source-table td {
-    padding: 1rem;
-    text-align: left;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .source-table th {
-    background: var(--color-bg-secondary);
-    font-weight: 600;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .source-table tbody tr {
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .source-table tbody tr:hover {
-    background: var(--color-bg-secondary);
-  }
-
-  .status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.75rem;
-    border-radius: 1rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .status-badge.healthy { background: #d1fae5; color: #065f46; }
-  .status-badge.degraded { background: #fef3c7; color: #92400e; }
-  .status-badge.failing { background: #fee2e2; color: #991b1b; }
-  .status-badge.dead { background: #f3f4f6; color: #374151; }
-
-  .source-type {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-  }
-
-  .fetch-trigger {
-    padding: 0.5rem;
-    background: var(--color-bg-secondary);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .fetch-trigger:hover {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  /* Detail Panel */
-  .detail-panel {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 400px;
-    height: 100vh;
-    background: white;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.1);
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .detail-panel.hidden {
-    display: none;
-  }
-
-  .panel-header {
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--color-border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .panel-header h2 {
-    margin: 0;
-  }
-
-  .panel-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
-    color: var(--color-text-muted);
-  }
-
-  .panel-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
-  }
-
-  .panel-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .panel-section h3 {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-muted);
-    margin-bottom: 0.75rem;
-  }
-
-  .config-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-  }
-
-  .config-list dt {
-    color: var(--color-text-muted);
-    font-size: 0.875rem;
-  }
-
-  .config-list dd {
-    margin: 0;
-    font-weight: 500;
-  }
-
-  .fetch-log {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .fetch-entry {
-    padding: 0.75rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-    font-size: 0.875rem;
-  }
-
-  .fetch-entry.success { border-left: 3px solid #10b981; }
-  .fetch-entry.error { border-left: 3px solid #ef4444; }
-
-  .panel-actions {
-    padding: 1.5rem;
-    border-top: 1px solid var(--color-border);
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .btn-danger {
-    background: transparent;
-    color: var(--color-error);
-    border: 2px solid var(--color-error);
-  }
-
-  @media (max-width: 768px) {
-    .summary-cards {
-      grid-template-columns: repeat(2, 1fr);
+  // Fetch helper
+  async function apiFetch(endpoint, options = {}) {
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login?redirect=/admin/sources';
+      throw new Error('Unauthorized');
     }
+    return res.json();
+  }
 
-    .source-table {
-      font-size: 0.875rem;
-    }
+  // Load sources
+  async function loadSources() {
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('source-table').classList.add('hidden');
 
-    .detail-panel {
-      width: 100%;
+    try {
+      const data = await apiFetch('/api/sources');
+      sources = data.data || [];
+      
+      // Count by health status
+      const counts = { healthy: 0, degraded: 0, failing: 0, dead: 0, unknown: 0 };
+      sources.forEach(s => {
+        const status = s.health_status || 'unknown';
+        counts[status] = (counts[status] || 0) + 1;
+      });
+
+      document.getElementById('healthy-count').textContent = counts.healthy;
+      document.getElementById('degraded-count').textContent = counts.degraded;
+      document.getElementById('failing-count').textContent = counts.failing;
+      document.getElementById('dead-count').textContent = counts.dead;
+      document.getElementById('unknown-count').textContent = counts.unknown;
+
+      renderTable();
+      document.getElementById('source-table').classList.remove('hidden');
+    } catch (e) {
+      console.error('Load error:', e);
+    } finally {
+      document.getElementById('loading-state').classList.add('hidden');
     }
   }
-</style>
 
-<script>
-  // Mock source data
-  const mockSources = [
-    {
-      id: '1',
-      name: 'karlsruhe.de/events',
-      type: 'rss',
-      health_status: 'healthy',
-      last_success_at: '2026-01-26T10:00:00Z',
-      avg_events_per_fetch: 47,
-      consecutive_failures: 0
-    },
-    {
-      id: '2',
-      name: 'badisches-museum.de',
-      type: 'ics',
-      health_status: 'healthy',
-      last_success_at: '2026-01-26T08:00:00Z',
-      avg_events_per_fetch: 12,
-      consecutive_failures: 0
-    },
-    {
-      id: '3',
-      name: 'zoo-karlsruhe.de',
-      type: 'scraper',
-      health_status: 'degraded',
-      last_success_at: '2026-01-25T06:00:00Z',
-      avg_events_per_fetch: 2,
-      consecutive_failures: 1
-    },
-    {
-      id: '4',
-      name: 'ka-news.de/events',
-      type: 'scraper',
-      health_status: 'failing',
-      last_success_at: '2026-01-23T12:00:00Z',
-      avg_events_per_fetch: 0,
-      consecutive_failures: 5
-    },
-  ];
-
-  function renderSummary() {
-    const counts = {
-      healthy: mockSources.filter(s => s.health_status === 'healthy').length,
-      degraded: mockSources.filter(s => s.health_status === 'degraded').length,
-      failing: mockSources.filter(s => s.health_status === 'failing').length,
-      dead: mockSources.filter(s => s.health_status === 'dead').length,
-    };
-
-    document.getElementById('healthy-count')!.textContent = String(counts.healthy);
-    document.getElementById('degraded-count')!.textContent = String(counts.degraded);
-    document.getElementById('failing-count')!.textContent = String(counts.failing);
-    document.getElementById('dead-count')!.textContent = String(counts.dead);
-  }
-
-  function renderSourceTable() {
-    const tbody = document.getElementById('source-table-body');
-    if (!tbody) return;
-
-    tbody.innerHTML = mockSources.map(source => {
+  // Render table
+  function renderTable() {
+    const tbody = document.getElementById('source-tbody');
+    tbody.innerHTML = sources.map(source => {
       const lastSuccess = source.last_success_at 
-        ? new Date(source.last_success_at).toLocaleString('de-DE')
+        ? new Date(source.last_success_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         : 'Nie';
+      
+      const statusColors = {
+        healthy: 'bg-green-100 text-green-700',
+        degraded: 'bg-yellow-100 text-yellow-700',
+        failing: 'bg-orange-100 text-orange-700',
+        dead: 'bg-red-100 text-red-700',
+        unknown: 'bg-gray-100 text-gray-600',
+      };
+      const statusLabels = {
+        healthy: 'Gesund',
+        degraded: 'Eingeschränkt',
+        failing: 'Fehlerhaft',
+        dead: 'Tot',
+        unknown: 'Unbekannt',
+      };
+      const status = source.health_status || 'unknown';
+      const isActive = source.is_active !== false;
 
       return `
-        <tr data-id="${source.id}">
-          <td>
-            <span class="status-badge ${source.health_status}">
-              ${getStatusIcon(source.health_status)} ${getStatusLabel(source.health_status)}
+        <tr class="hover:bg-gray-50 cursor-pointer ${!isActive ? 'opacity-50' : ''}" data-id="${source.id}">
+          <td class="px-4 py-3">
+            <span class="px-2 py-1 text-xs rounded-full ${statusColors[status]}">
+              ${statusLabels[status]}
             </span>
+            ${!isActive ? '<span class="ml-1 px-2 py-1 text-xs rounded-full bg-gray-200 text-gray-600">Deaktiviert</span>' : ''}
           </td>
-          <td><strong>${source.name}</strong></td>
-          <td><span class="source-type">${source.type}</span></td>
-          <td>${lastSuccess}</td>
-          <td>${source.avg_events_per_fetch}</td>
-          <td>${source.consecutive_failures}</td>
-          <td>
-            <button class="fetch-trigger" data-id="${source.id}" title="Jetzt abrufen">🔄</button>
+          <td class="px-4 py-3 font-medium">${source.name}</td>
+          <td class="px-4 py-3">
+            <span class="px-2 py-1 text-xs rounded bg-gray-100 uppercase">${source.type}</span>
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-500">${lastSuccess}</td>
+          <td class="px-4 py-3 text-sm">${source.avg_events_per_fetch?.toFixed(1) || '-'}</td>
+          <td class="px-4 py-3">
+            ${source.consecutive_failures > 0 
+              ? `<span class="text-red-600 font-medium">${source.consecutive_failures}</span>` 
+              : '<span class="text-gray-400">0</span>'
+            }
+          </td>
+          <td class="px-4 py-3">
+            <button class="trigger-btn px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm" data-id="${source.id}" ${!isActive ? 'disabled' : ''}>
+              🔄
+            </button>
           </td>
         </tr>
       `;
     }).join('');
 
-    // Add click handlers
-    tbody.querySelectorAll('tr').forEach(row => {
+    // Event handlers
+    tbody.querySelectorAll('tr[data-id]').forEach(row => {
       row.addEventListener('click', (e) => {
-        if (!(e.target as HTMLElement).closest('.fetch-trigger')) {
-          openPanel(row.getAttribute('data-id'));
+        if (!e.target.closest('.trigger-btn')) {
+          openPanel(row.dataset.id);
         }
       });
     });
 
-    tbody.querySelectorAll('.fetch-trigger').forEach(btn => {
+    tbody.querySelectorAll('.trigger-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        triggerFetch((btn as HTMLElement).getAttribute('data-id'));
+        triggerFetch(btn.dataset.id, btn);
       });
     });
   }
 
-  function getStatusIcon(status: string) {
-    switch (status) {
-      case 'healthy': return '●';
-      case 'degraded': return '◐';
-      case 'failing': return '○';
-      case 'dead': return '○';
-      default: return '?';
-    }
-  }
+  // Open detail panel
+  function openPanel(id) {
+    currentSourceId = id;
+    const source = sources.find(s => s.id === id);
+    if (!source) return;
 
-  function getStatusLabel(status: string) {
-    switch (status) {
-      case 'healthy': return 'Gesund';
-      case 'degraded': return 'Eingeschränkt';
-      case 'failing': return 'Fehlerhaft';
-      case 'dead': return 'Tot';
-      default: return 'Unbekannt';
-    }
-  }
-
-  function openPanel(id: string | null) {
-    const panel = document.getElementById('detail-panel');
-    const source = mockSources.find(s => s.id === id);
+    document.getElementById('panel-title').textContent = source.name;
     
-    if (panel && source) {
-      document.getElementById('panel-source-name')!.textContent = source.name;
-      panel.classList.remove('hidden');
-    }
-  }
+    const isActive = source.is_active !== false;
+    document.getElementById('toggle-btn').textContent = isActive ? '⏸️ Deaktivieren' : '▶️ Aktivieren';
+    document.getElementById('toggle-btn').className = isActive 
+      ? 'flex-1 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50'
+      : 'flex-1 px-4 py-2 border border-green-300 text-green-600 rounded-lg hover:bg-green-50';
 
-  function triggerFetch(id: string | null) {
-    console.log(`Triggering fetch for source ${id}`);
-    // TODO: Call API
+    const formatDate = d => d ? new Date(d).toLocaleString('de-DE') : '-';
+    document.getElementById('panel-info').innerHTML = `
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Typ</span><strong>${source.type}</strong></div>
+        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Status</span><strong>${source.health_status}</strong></div>
+        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Aktiv</span><strong>${isActive ? 'Ja' : 'Nein'}</strong></div>
+        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Priorität</span><strong>${source.priority || '-'}</strong></div>
+        <div class="bg-gray-50 p-2 rounded col-span-2"><span class="text-gray-500 block">Letzter Erfolg</span><strong>${formatDate(source.last_success_at)}</strong></div>
+        <div class="bg-gray-50 p-2 rounded col-span-2"><span class="text-gray-500 block">Letzter Fehler</span><strong>${formatDate(source.last_failure_at)}</strong></div>
+        ${source.url ? `<div class="bg-gray-50 p-2 rounded col-span-2"><span class="text-gray-500 block">URL</span><a href="${source.url}" target="_blank" class="text-primary-500 break-all">${source.url}</a></div>` : ''}
+      </div>
+    `;
+
+    // Error section
+    if (source.consecutive_failures > 0) {
+      document.getElementById('panel-error-section').classList.remove('hidden');
+      document.getElementById('panel-error').textContent = `${source.consecutive_failures} aufeinanderfolgende Fehler`;
+    } else {
+      document.getElementById('panel-error-section').classList.add('hidden');
+    }
+
+    document.getElementById('detail-overlay').classList.remove('hidden');
   }
 
   // Close panel
-  document.getElementById('panel-close')?.addEventListener('click', () => {
-    document.getElementById('detail-panel')?.classList.add('hidden');
-  });
+  function closePanel() {
+    document.getElementById('detail-overlay').classList.add('hidden');
+    currentSourceId = null;
+  }
 
-  // Initial render
-  renderSummary();
-  renderSourceTable();
+  // Trigger fetch
+  async function triggerFetch(id, btn) {
+    if (!confirm('Fetch jetzt starten?')) return;
+    
+    const originalText = btn?.innerHTML;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '...';
+    }
+
+    try {
+      await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
+      alert('Fetch gestartet');
+      loadSources();
+    } catch (e) {
+      alert('Fehler: ' + e.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+  }
+
+  // Toggle active status
+  async function toggleActive() {
+    const source = sources.find(s => s.id === currentSourceId);
+    if (!source) return;
+
+    const isActive = source.is_active !== false;
+    const action = isActive ? 'deaktivieren' : 'aktivieren';
+    if (!confirm(`Quelle wirklich ${action}?`)) return;
+
+    const btn = document.getElementById('toggle-btn');
+    btn.disabled = true;
+    btn.textContent = 'Wird gespeichert...';
+
+    try {
+      await apiFetch(`/api/sources/${currentSourceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: !isActive }),
+      });
+      closePanel();
+      loadSources();
+    } catch (e) {
+      alert('Fehler: ' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // Event listeners
+  document.getElementById('panel-close').addEventListener('click', closePanel);
+  document.getElementById('detail-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'detail-overlay') closePanel();
+  });
+  document.getElementById('trigger-btn').addEventListener('click', () => {
+    if (currentSourceId) triggerFetch(currentSourceId);
+  });
+  document.getElementById('toggle-btn').addEventListener('click', toggleActive);
+
+  // Initial load
+  loadSources();
 </script>

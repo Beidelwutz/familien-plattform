@@ -1,257 +1,251 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Admin Dashboard - Familien-Lokal">
-  <main class="admin-page">
-    <div class="container">
-      <header class="admin-header">
-        <h1>Admin Dashboard</h1>
-        <p>Verwaltung von Events, Quellen und Datenqualität</p>
+<BaseLayout title="Admin Dashboard - familienlokal">
+  <StickyHeader />
+  <AdminMobileNav currentPage="dashboard" />
+  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6 lg:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1">Admin Dashboard</h1>
+          <p class="text-sm sm:text-base text-gray-500">Verwaltung von Events, Quellen und Datenqualität</p>
+        </div>
+        <button id="logout-btn" class="hidden lg:block text-sm text-gray-500 hover:text-gray-700">Abmelden</button>
       </header>
 
-      <!-- Dashboard Cards -->
-      <div class="dashboard-grid">
-        <!-- Review Queue -->
-        <a href="/admin/review" class="dashboard-card">
-          <div class="card-icon">📋</div>
-          <div class="card-content">
-            <h2>Review Queue</h2>
-            <p>Events zur manuellen Prüfung</p>
-            <div class="card-stat" id="review-count">
-              <span class="stat-value">--</span>
-              <span class="stat-label">ausstehend</span>
-            </div>
-          </div>
-        </a>
-
-        <!-- Source Health -->
-        <a href="/admin/sources" class="dashboard-card">
-          <div class="card-icon">📡</div>
-          <div class="card-content">
-            <h2>Quellen-Status</h2>
-            <p>Gesundheit der Datenquellen</p>
-            <div class="card-stat" id="source-health">
-              <span class="stat-value">--</span>
-              <span class="stat-label">aktive Quellen</span>
-            </div>
-          </div>
-        </a>
-
-        <!-- Merge Conflicts -->
-        <a href="/admin/conflicts" class="dashboard-card">
-          <div class="card-icon">⚠️</div>
-          <div class="card-content">
-            <h2>Merge-Konflikte</h2>
-            <p>Duplikate zur Zusammenführung</p>
-            <div class="card-stat" id="conflict-count">
-              <span class="stat-value">--</span>
-              <span class="stat-label">Konflikte</span>
-            </div>
-          </div>
-        </a>
-
-        <!-- AI Costs -->
-        <a href="/admin/ai-costs" class="dashboard-card">
-          <div class="card-icon">🤖</div>
-          <div class="card-content">
-            <h2>AI-Kosten</h2>
-            <p>Budget und Nutzung</p>
-            <div class="card-stat" id="ai-budget">
-              <span class="stat-value">--</span>
-              <span class="stat-label">heute</span>
-            </div>
-          </div>
-        </a>
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Dashboard...</p>
       </div>
 
-      <!-- Quick Stats -->
-      <section class="quick-stats">
-        <h2>Übersicht</h2>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <span class="stat-number" id="total-events">--</span>
-            <span class="stat-title">Events gesamt</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-number" id="published-events">--</span>
-            <span class="stat-title">Veröffentlicht</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-number" id="pending-events">--</span>
-            <span class="stat-title">Ausstehend</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-number" id="today-imports">--</span>
-            <span class="stat-title">Heute importiert</span>
-          </div>
-        </div>
-      </section>
+      <!-- Dashboard Content (hidden until loaded) -->
+      <div id="dashboard-content" class="hidden">
+        <!-- Dashboard Cards - Horizontal scroll on mobile -->
+        <div class="flex lg:grid lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 lg:mb-8 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-visible snap-x snap-mandatory lg:snap-none">
+          <!-- Review Queue -->
+          <a href="/admin/review" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
+            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">📋</div>
+            <div>
+              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Review Queue</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Events zur manuellen Prüfung</p>
+              <div class="mt-2">
+                <span id="review-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
+                <span class="block text-xs text-gray-500">ausstehend</span>
+              </div>
+            </div>
+          </a>
 
-      <!-- Recent Activity -->
-      <section class="recent-activity">
-        <h2>Letzte Aktivität</h2>
-        <div class="activity-list" id="activity-list">
-          <p class="loading">Lade Aktivität...</p>
+          <a href="/admin/sources" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
+            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">📡</div>
+            <div>
+              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Quellen-Status</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Gesundheit der Datenquellen</p>
+              <div class="mt-2">
+                <span id="source-health" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
+                <span class="block text-xs text-gray-500">aktive Quellen</span>
+              </div>
+            </div>
+          </a>
+
+          <a href="/admin/dedup" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
+            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">⚠️</div>
+            <div>
+              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Duplikate</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Mögliche Duplikate prüfen</p>
+              <div class="mt-2">
+                <span id="dup-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
+                <span class="block text-xs text-gray-500">offen</span>
+              </div>
+            </div>
+          </a>
+
+          <a href="/admin/runs" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
+            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">🔄</div>
+            <div>
+              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Ingest-Runs</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Import-Jobs überwachen</p>
+              <div class="mt-2">
+                <span id="attention-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
+                <span class="block text-xs text-gray-500">brauchen Aufmerksamkeit</span>
+              </div>
+            </div>
+          </a>
+
+          <a href="/admin/trends" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
+            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">🔥</div>
+            <div>
+              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Trends & Suche</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Suchtrends und Autocomplete</p>
+              <div class="mt-2">
+                <span id="trending-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
+                <span class="block text-xs text-gray-500">aktive Trends</span>
+              </div>
+            </div>
+          </a>
         </div>
-      </section>
+
+        <section class="mb-8">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Übersicht</h2>
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+              <span id="total-events" class="block text-xl font-bold text-primary-500">--</span>
+              <span class="text-sm text-gray-500">Events gesamt</span>
+            </div>
+            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+              <span id="published-events" class="block text-xl font-bold text-primary-500">--</span>
+              <span class="text-sm text-gray-500">Veröffentlicht</span>
+            </div>
+            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+              <span id="pending-events" class="block text-xl font-bold text-primary-500">--</span>
+              <span class="text-sm text-gray-500">Ausstehend</span>
+            </div>
+            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+              <span id="today-imports" class="block text-xl font-bold text-primary-500">--</span>
+              <span class="text-sm text-gray-500">Heute importiert</span>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Quellen-Gesundheit</h2>
+          <div class="bg-white rounded-2xl shadow-card p-4">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+              <div>
+                <span id="sources-healthy" class="block text-lg font-bold text-green-500">--</span>
+                <span class="text-xs text-gray-500">Gesund</span>
+              </div>
+              <div>
+                <span id="sources-degraded" class="block text-lg font-bold text-yellow-500">--</span>
+                <span class="text-xs text-gray-500">Eingeschränkt</span>
+              </div>
+              <div>
+                <span id="sources-failing" class="block text-lg font-bold text-orange-500">--</span>
+                <span class="text-xs text-gray-500">Fehlerhaft</span>
+              </div>
+              <div>
+                <span id="sources-dead" class="block text-lg font-bold text-red-500">--</span>
+                <span class="text-xs text-gray-500">Tot</span>
+              </div>
+              <div>
+                <span id="sources-unknown" class="block text-lg font-bold text-gray-400">--</span>
+                <span class="text-xs text-gray-500">Unbekannt</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="hidden text-center py-12">
+        <p class="text-red-500 text-lg mb-4">Fehler beim Laden des Dashboards</p>
+        <button onclick="location.reload()" class="px-4 py-2 bg-primary-500 text-white rounded-lg">Erneut versuchen</button>
+      </div>
     </div>
   </main>
 </BaseLayout>
 
-<style>
-  .admin-page {
-    padding: 2rem 1rem;
-    background: var(--color-bg-secondary);
-    min-height: calc(100vh - 4rem);
-  }
+<script define:vars={{ API_URL }}>
+  (async function() {
+    const token = localStorage.getItem('auth_token');
+    
+    // Auth check
+    if (!token) {
+      window.location.href = '/login?redirect=/admin';
+      return;
+    }
 
-  .admin-header {
-    margin-bottom: 2rem;
-  }
+    // Verify admin role
+    try {
+      const meRes = await fetch(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!meRes.ok) {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login?redirect=/admin';
+        return;
+      }
+      
+      const meData = await meRes.json();
+      if (meData.data.role !== 'admin') {
+        window.location.href = '/?error=not_admin';
+        return;
+      }
+    } catch (e) {
+      window.location.href = '/login?redirect=/admin';
+      return;
+    }
 
-  .admin-header h1 {
-    margin-bottom: 0.5rem;
-  }
+    // Load dashboard data
+    try {
+      const [statsRes, dupsRes, attentionRes, trendsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/duplicates?status=pending&limit=1`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/ingest-runs/needs-attention`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/trends/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+      ]);
 
-  .admin-header p {
-    color: var(--color-text-muted);
-  }
+      if (!statsRes.ok) throw new Error('Stats fetch failed');
 
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-  }
+      const stats = await statsRes.json();
+      const dups = dupsRes.ok ? await dupsRes.json() : { pagination: { total: 0 } };
+      const attention = attentionRes.ok ? await attentionRes.json() : { total: 0 };
+      const trends = trendsRes.ok ? await trendsRes.json() : { uniqueTerms: 0, lastComputed: null };
 
-  .dashboard-card {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.5rem;
-    text-decoration: none;
-    color: var(--color-text);
-    display: flex;
-    gap: 1rem;
-    transition: all 0.2s;
-    box-shadow: var(--shadow-sm);
-  }
+      // Update DOM
+      document.getElementById('total-events').textContent = stats.data.events.total;
+      document.getElementById('published-events').textContent = stats.data.events.published;
+      document.getElementById('pending-events').textContent = stats.data.events.pending_review;
+      document.getElementById('today-imports').textContent = stats.data.events.today_imports;
+      document.getElementById('review-count').textContent = stats.data.events.pending_review;
+      
+      // Source health
+      const sourceTotal = Object.values(stats.data.sources).reduce((a, b) => a + b, 0);
+      document.getElementById('source-health').textContent = sourceTotal;
+      document.getElementById('sources-healthy').textContent = stats.data.sources.healthy;
+      document.getElementById('sources-degraded').textContent = stats.data.sources.degraded;
+      document.getElementById('sources-failing').textContent = stats.data.sources.failing;
+      document.getElementById('sources-dead').textContent = stats.data.sources.dead;
+      document.getElementById('sources-unknown').textContent = stats.data.sources.unknown;
 
-  .dashboard-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow);
-  }
+      // Duplicates & attention
+      document.getElementById('dup-count').textContent = dups.pagination?.total || 0;
+      document.getElementById('attention-count').textContent = attention.total || 0;
 
-  .card-icon {
-    font-size: 2.5rem;
-  }
+      // Trends
+      document.getElementById('trending-count').textContent = trends.lastComputed 
+        ? (trends.uniqueTerms || 0) 
+        : 0;
 
-  .card-content h2 {
-    font-size: 1.125rem;
-    margin-bottom: 0.25rem;
-  }
+      // Show content
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('dashboard-content').classList.remove('hidden');
 
-  .card-content p {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-    margin-bottom: 0.75rem;
-  }
+    } catch (e) {
+      console.error('Dashboard load error:', e);
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('error-state').classList.remove('hidden');
+    }
 
-  .card-stat {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-  }
-
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--color-primary);
-  }
-
-  .stat-label {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .quick-stats {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.5rem;
-    margin-bottom: 2rem;
-  }
-
-  .quick-stats h2 {
-    font-size: 1.125rem;
-    margin-bottom: 1rem;
-  }
-
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-  }
-
-  .stat-card {
-    text-align: center;
-    padding: 1rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-  }
-
-  .stat-number {
-    display: block;
-    font-size: 2rem;
-    font-weight: bold;
-    color: var(--color-primary);
-  }
-
-  .stat-title {
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .recent-activity {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.5rem;
-  }
-
-  .recent-activity h2 {
-    font-size: 1.125rem;
-    margin-bottom: 1rem;
-  }
-
-  .activity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .activity-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem;
-    background: var(--color-bg-secondary);
-    border-radius: var(--border-radius);
-  }
-
-  .activity-icon {
-    font-size: 1.25rem;
-  }
-
-  .activity-text {
-    flex: 1;
-  }
-
-  .activity-time {
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
-  }
-
-  .loading {
-    color: var(--color-text-muted);
-    font-style: italic;
-  }
-</style>
+    // Logout handler
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    });
+  })();
+</script>

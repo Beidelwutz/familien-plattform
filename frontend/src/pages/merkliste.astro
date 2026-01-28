@@ -1,249 +1,119 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+import EventCardNew from '../components/feed/EventCardNew.astro';
+
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Merkliste - Familien-Lokal Karlsruhe">
-  <main class="merkliste-page">
-    <div class="container">
-      <header class="page-header">
-        <h1>Deine Merkliste</h1>
-        <p>Gespeicherte Events für später</p>
+<BaseLayout title="Merkliste - familienlokal Karlsruhe">
+  <StickyHeader />
+  
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Page Header -->
+      <header class="mb-8">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-2">Deine Merkliste</h1>
+        <p class="text-gray-500">Gespeicherte Events für später</p>
       </header>
 
       <!-- Not logged in state -->
-      <div class="auth-prompt" id="auth-prompt">
-        <div class="prompt-icon">❤️</div>
-        <h2>Melde dich an</h2>
-        <p>Um Events zu speichern und später wiederzufinden, musst du angemeldet sein.</p>
-        <div class="prompt-actions">
-          <a href="/login" class="btn btn-primary">Anmelden</a>
-          <a href="/registrieren" class="btn btn-secondary">Registrieren</a>
+      <div id="auth-prompt" class="bg-white rounded-2xl shadow-card p-8 text-center max-w-md mx-auto">
+        <div class="text-5xl mb-4">❤️</div>
+        <h2 class="text-xl font-semibold text-gray-900 mb-2">Melde dich an</h2>
+        <p class="text-gray-500 mb-6">
+          Um Events zu speichern und später wiederzufinden, musst du angemeldet sein.
+        </p>
+        <div class="flex gap-3 justify-center mb-6">
+          <a href="/login" class="btn-primary">Anmelden</a>
+          <a href="/registrieren" class="btn-secondary">Registrieren</a>
         </div>
         
-        <div class="local-storage-note">
-          <p>Du hast <span id="local-count">0</span> Events lokal gespeichert.</p>
-          <button class="btn btn-link" id="show-local">Lokal gespeicherte anzeigen</button>
-        </div>
-      </div>
-
-      <!-- Logged in state -->
-      <div class="saved-events hidden" id="saved-events">
-        <div class="events-header">
-          <span id="saved-count">0 gespeicherte Events</span>
-          <button class="btn btn-secondary" id="export-btn">
-            📅 Alle exportieren
+        <div class="pt-6 border-t border-gray-100">
+          <p class="text-sm text-gray-500 mb-2">
+            Du hast <span id="local-count" class="font-medium text-gray-700">0</span> Events lokal gespeichert.
+          </p>
+          <button id="show-local" class="text-sm text-primary-600 hover:text-primary-700 font-medium">
+            Lokal gespeicherte anzeigen
           </button>
         </div>
+      </div>
 
-        <div class="events-list" id="events-list">
-          <!-- Events will be rendered here -->
+      <!-- Saved Events (logged in or showing local) -->
+      <div id="saved-events" class="hidden">
+        <!-- Header with count and actions -->
+        <div class="flex items-center justify-between mb-6">
+          <span id="saved-count" class="text-gray-600">
+            <span class="font-medium text-gray-900" id="saved-count-n">0</span> gespeicherte Events
+          </span>
+          <div class="flex gap-2">
+            <button class="btn-ghost flex items-center gap-2 text-sm" id="export-btn">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              Alle exportieren
+            </button>
+          </div>
         </div>
 
-        <div class="empty-state hidden" id="empty-state">
-          <div class="empty-icon">📭</div>
-          <h2>Noch keine Events gespeichert</h2>
-          <p>Durchsuche Events und klicke auf ❤️ um sie hier zu speichern</p>
-          <a href="/suche" class="btn btn-primary">Events entdecken</a>
+        <!-- Events List (filled by client from API or local) -->
+        <div id="events-list" class="space-y-4"></div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden bg-white rounded-2xl shadow-card p-12 text-center">
+          <div class="text-5xl mb-4">📭</div>
+          <h2 class="text-xl font-semibold text-gray-900 mb-2">Noch keine Events gespeichert</h2>
+          <p class="text-gray-500 mb-6">
+            Durchsuche Events und klicke auf ❤️ um sie hier zu speichern
+          </p>
+          <a href="/suche" class="btn-primary">Events entdecken</a>
         </div>
       </div>
+
+      <!-- Recommendations -->
+      <section class="mt-12">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Das könnte dir auch gefallen</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <EventCardNew
+            id="rec-1"
+            title="Waldabenteuer für Kids"
+            priceType="free"
+            ageMin={3}
+            ageMax={10}
+            isIndoor={false}
+            isOutdoor={true}
+            stressfreeScore={80}
+          />
+          <EventCardNew
+            id="rec-2"
+            title="Kreativworkshop"
+            priceType="paid"
+            priceMin={13}
+            ageMin={3}
+            ageMax={10}
+            isIndoor={true}
+            isOutdoor={false}
+            stressfreeScore={85}
+          />
+          <EventCardNew
+            id="rec-3"
+            title="Familienkonzert"
+            priceType="paid"
+            priceMin={18}
+            ageMin={3}
+            ageMax={10}
+            isIndoor={true}
+            isOutdoor={false}
+            stressfreeScore={90}
+          />
+        </div>
+      </section>
     </div>
   </main>
 </BaseLayout>
 
-<style>
-  .merkliste-page {
-    padding: 2rem 1rem;
-    min-height: calc(100vh - 4rem);
-    background: var(--color-bg-secondary);
-  }
-
-  .page-header {
-    margin-bottom: 2rem;
-  }
-
-  .page-header h1 {
-    margin-bottom: 0.5rem;
-  }
-
-  .page-header p {
-    color: var(--color-text-muted);
-  }
-
-  /* Auth Prompt */
-  .auth-prompt {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 3rem 2rem;
-    text-align: center;
-    max-width: 500px;
-    margin: 0 auto;
-  }
-
-  .prompt-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-  }
-
-  .auth-prompt h2 {
-    margin-bottom: 0.5rem;
-  }
-
-  .auth-prompt > p {
-    color: var(--color-text-muted);
-    margin-bottom: 1.5rem;
-  }
-
-  .prompt-actions {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: center;
-    margin-bottom: 2rem;
-  }
-
-  .local-storage-note {
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--color-border);
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .btn-link {
-    background: none;
-    border: none;
-    color: var(--color-primary);
-    cursor: pointer;
-    text-decoration: underline;
-    font-size: 0.875rem;
-    padding: 0;
-  }
-
-  /* Saved Events */
-  .events-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-  }
-
-  .events-list {
-    display: grid;
-    gap: 1rem;
-  }
-
-  .event-card {
-    background: white;
-    border-radius: var(--border-radius-lg);
-    padding: 1.25rem;
-    display: grid;
-    grid-template-columns: 80px 1fr auto;
-    gap: 1rem;
-    align-items: center;
-  }
-
-  .event-image {
-    width: 80px;
-    height: 80px;
-    border-radius: var(--border-radius);
-    background: var(--color-bg-secondary);
-    object-fit: cover;
-  }
-
-  .event-info h3 {
-    font-size: 1rem;
-    margin-bottom: 0.25rem;
-  }
-
-  .event-info h3 a {
-    color: var(--color-text);
-    text-decoration: none;
-  }
-
-  .event-info h3 a:hover {
-    color: var(--color-primary);
-  }
-
-  .event-meta {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
-  }
-
-  .event-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .action-btn {
-    padding: 0.5rem;
-    background: var(--color-bg-secondary);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .action-btn:hover {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .action-btn.remove:hover {
-    background: var(--color-error);
-  }
-
-  /* Empty State */
-  .empty-state {
-    text-align: center;
-    padding: 3rem;
-    background: white;
-    border-radius: var(--border-radius-lg);
-  }
-
-  .empty-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-  }
-
-  .empty-state h2 {
-    margin-bottom: 0.5rem;
-  }
-
-  .empty-state p {
-    color: var(--color-text-muted);
-    margin-bottom: 1.5rem;
-  }
-
-  .hidden {
-    display: none !important;
-  }
-
-  @media (max-width: 600px) {
-    .event-card {
-      grid-template-columns: 1fr;
-    }
-
-    .event-image {
-      width: 100%;
-      height: 150px;
-    }
-
-    .event-actions {
-      flex-direction: row;
-      justify-content: flex-end;
-    }
-  }
-</style>
-
-<script>
-  // Check auth status
-  const token = localStorage.getItem('auth_token');
-  const authPrompt = document.getElementById('auth-prompt');
-  const savedEvents = document.getElementById('saved-events');
-
-  // Check for locally saved events
-  function getLocalSavedEvents(): string[] {
+<script define:vars={{ API_BASE }}>
+  function getLocalSavedEvents() {
     try {
       return JSON.parse(localStorage.getItem('saved_events') || '[]');
     } catch {
@@ -251,128 +121,173 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   }
 
-  const localEvents = getLocalSavedEvents();
-  const localCountEl = document.getElementById('local-count');
-  if (localCountEl) {
-    localCountEl.textContent = String(localEvents.length);
-  }
-
-  if (token) {
-    // User is logged in
-    authPrompt?.classList.add('hidden');
-    savedEvents?.classList.remove('hidden');
-    loadSavedEvents();
-  } else {
-    // Show local events option
-    document.getElementById('show-local')?.addEventListener('click', () => {
-      authPrompt?.classList.add('hidden');
-      savedEvents?.classList.remove('hidden');
-      showLocalEvents(localEvents);
-    });
-  }
-
-  async function loadSavedEvents() {
+  function formatDate(d) {
+    if (!d) return '';
     try {
-      const response = await fetch('/api/user/saved-events', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const data = await response.json();
-
-      if (data.success && data.data.length > 0) {
-        renderEvents(data.data);
-      } else {
-        document.getElementById('empty-state')?.classList.remove('hidden');
-      }
-    } catch (error) {
-      console.error('Error loading saved events:', error);
-    }
+      return new Date(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch { return ''; }
+  }
+  function formatTime(d) {
+    if (!d) return '';
+    try {
+      return new Date(d).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
   }
 
-  function showLocalEvents(eventIds: string[]) {
-    if (eventIds.length === 0) {
-      document.getElementById('empty-state')?.classList.remove('hidden');
-      return;
-    }
-
-    // Fetch event details
-    // For now, show placeholder
-    const list = document.getElementById('events-list');
-    if (list) {
-      list.innerHTML = `
-        <p style="text-align: center; padding: 2rem; color: var(--color-text-muted);">
-          ${eventIds.length} Events lokal gespeichert. 
-          <a href="/login">Melde dich an</a>, um sie dauerhaft zu speichern.
-        </p>
-      `;
-    }
-  }
-
-  function renderEvents(events: any[]) {
-    const list = document.getElementById('events-list');
-    const countEl = document.getElementById('saved-count');
-
-    if (countEl) {
-      countEl.textContent = `${events.length} gespeicherte Events`;
-    }
-
-    if (list) {
-      list.innerHTML = events.map(event => `
-        <div class="event-card" data-id="${event.id}">
-          <img 
-            src="${event.image_urls?.[0] || '/placeholder-event.jpg'}" 
-            alt="" 
-            class="event-image"
-          />
-          <div class="event-info">
-            <h3><a href="/event/${event.id}">${event.title}</a></h3>
-            <div class="event-meta">
-              <span>📅 ${formatDate(event.start_datetime)}</span>
-              <span>📍 ${event.location_district || 'Karlsruhe'}</span>
+  function cardHtml(event, isFromApi) {
+    const id = event.id;
+    const img = (event.image_urls && event.image_urls[0]) ? `<img src="${event.image_urls[0]}" alt="" class="w-full h-full object-cover"/>` : '<span class="text-4xl">🎈</span>';
+    const price = event.price_min ? `ab ${event.price_min}€` : '';
+    return `
+    <div class="bg-white rounded-2xl shadow-card overflow-hidden" data-event-id="${id}">
+      <div class="flex flex-col sm:flex-row">
+        <div class="sm:w-48 sm:h-36 bg-gradient-to-br from-primary-100 to-primary-50 flex items-center justify-center flex-shrink-0 overflow-hidden">${img}</div>
+        <div class="flex-1 p-4 sm:p-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1">
+              <a href="/event/${id}" class="font-semibold text-gray-900 hover:text-primary-600 transition-colors">${(event.title || '').replace(/</g,'&lt;')}</a>
+              <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-gray-500">
+                <span class="flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>${formatDate(event.start_datetime)}</span>
+                <span class="flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>${formatTime(event.start_datetime)}</span>
+                ${price ? `<span>${price}</span>` : ''}
+              </div>
+              <div class="flex gap-2 mt-3">
+                ${event.is_indoor ? '<span class="badge badge-indoor">🏠 Indoor</span>' : ''}
+                ${event.is_outdoor ? '<span class="badge badge-outdoor">🌳 Outdoor</span>' : ''}
+              </div>
+            </div>
+            <div class="flex flex-col gap-2">
+              <button class="p-2 rounded-lg bg-gray-100 hover:bg-primary-100 text-gray-600 hover:text-primary-600 transition-colors" title="Zum Plan hinzufügen"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg></button>
+              <button class="p-2 rounded-lg bg-gray-100 hover:bg-red-100 text-gray-600 hover:text-red-600 transition-colors remove-btn" title="Entfernen" data-id="${id}" data-from-api="${isFromApi}"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
             </div>
           </div>
-          <div class="event-actions">
-            <button class="action-btn" title="Zum Plan hinzufügen">📋</button>
-            <button class="action-btn remove" title="Entfernen" data-id="${event.id}">🗑️</button>
-          </div>
         </div>
-      `).join('');
-
-      // Add remove handlers
-      list.querySelectorAll('.action-btn.remove').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const eventId = (btn as HTMLElement).getAttribute('data-id');
-          await removeEvent(eventId);
-        });
-      });
-    }
+      </div>
+    </div>`;
   }
 
-  function formatDate(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('de-DE', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short'
+  function bindRemoveButtons(container, fromApi) {
+    container.querySelectorAll('.remove-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const eventId = btn.getAttribute('data-id');
+        const card = container.querySelector(`[data-event-id="${eventId}"]`);
+        const token = localStorage.getItem('auth_token');
+        if (token && fromApi) {
+          try {
+            await fetch(`${API_BASE}/api/user/saved-events/${eventId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+          } catch (_) {}
+        } else {
+          const saved = getLocalSavedEvents().filter(id => id !== eventId);
+          localStorage.setItem('saved_events', JSON.stringify(saved));
+        }
+        if (card) {
+          card.classList.add('opacity-0', 'scale-95', 'transition-all', 'duration-200');
+          setTimeout(() => {
+            card.remove();
+            const list = document.getElementById('events-list');
+            const empty = document.getElementById('empty-state');
+            if (list && list.children.length === 0 && empty) {
+              list.classList.add('hidden');
+              empty.classList.remove('hidden');
+            }
+            const n = document.getElementById('saved-count-n');
+            if (n) n.textContent = String(list ? list.children.length : 0);
+          }, 200);
+        }
+      });
     });
   }
 
-  async function removeEvent(eventId: string | null) {
-    if (!eventId) return;
+  const authPrompt = document.getElementById('auth-prompt');
+  const savedEventsDiv = document.getElementById('saved-events');
+  const eventsList = document.getElementById('events-list');
+  const emptyState = document.getElementById('empty-state');
+  const savedCountN = document.getElementById('saved-count-n');
 
+  const localEvents = getLocalSavedEvents();
+  const localCountEl = document.getElementById('local-count');
+  if (localCountEl) localCountEl.textContent = String(localEvents.length);
+
+  (async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    authPrompt?.classList.add('hidden');
+    savedEventsDiv?.classList.remove('hidden');
     try {
-      await fetch(`/api/user/saved-events/${eventId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      // Remove from UI
-      document.querySelector(`.event-card[data-id="${eventId}"]`)?.remove();
-    } catch (error) {
-      console.error('Error removing event:', error);
+      const res = await fetch(`${API_BASE}/api/user/saved-events`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const json = await res.json();
+      const events = (json.data || []);
+      if (savedCountN) savedCountN.textContent = String(events.length);
+      if (events.length === 0) {
+        eventsList?.classList.add('hidden');
+        emptyState?.classList.remove('hidden');
+      } else {
+        eventsList?.classList.remove('hidden');
+        emptyState?.classList.add('hidden');
+        eventsList.innerHTML = events.map(e => cardHtml(e, true)).join('');
+        bindRemoveButtons(eventsList, true);
+      }
+    } catch (_) {
+      if (savedCountN) savedCountN.textContent = '0';
+      eventsList?.classList.add('hidden');
+      emptyState?.classList.remove('hidden');
     }
-  }
+  })();
+
+  document.getElementById('show-local')?.addEventListener('click', async () => {
+    authPrompt?.classList.add('hidden');
+    savedEventsDiv?.classList.remove('hidden');
+    const ids = getLocalSavedEvents();
+    if (savedCountN) savedCountN.textContent = String(ids.length);
+    if (ids.length === 0) {
+      eventsList?.classList.add('hidden');
+      emptyState?.classList.remove('hidden');
+      return;
+    }
+    eventsList?.classList.remove('hidden');
+    emptyState?.classList.add('hidden');
+    eventsList.innerHTML = '';
+    for (const id of ids) {
+      try {
+        const res = await fetch(`${API_BASE}/api/events/${id}`);
+        const json = await res.json();
+        if (json.data) {
+          eventsList.innerHTML += cardHtml(json.data, false);
+        }
+      } catch (_) {}
+    }
+    bindRemoveButtons(eventsList, false);
+  });
+
+  document.getElementById('export-btn')?.addEventListener('click', async () => {
+    const token = localStorage.getItem('auth_token');
+    
+    if (token) {
+      // Logged in: download iCal from API
+      try {
+        const response = await fetch(`${API_BASE}/api/user/saved-events.ics`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'familienlokal-merkliste.ics';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        alert('Export fehlgeschlagen. Bitte versuche es später erneut.');
+      }
+    } else {
+      // Not logged in: can't export from API
+      alert('Melde dich an, um deine Merkliste als Kalender zu exportieren.');
+    }
+  });
 </script>

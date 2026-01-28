@@ -1,0 +1,397 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Ausstattung verwalten - Admin - familienlokal">
+  <StickyHeader />
+  <AdminMobileNav currentPage="amenities" />
+  
+  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">Ausstattung</h1>
+            <p class="text-gray-500 text-sm mt-1">Ausstattungsmerkmale für Events verwalten</p>
+          </div>
+          <button id="add-amenity-btn" class="btn-primary flex items-center gap-2">
+            <span class="text-lg">+</span> Neue Ausstattung
+          </button>
+        </div>
+      </header>
+
+      <!-- Tabs -->
+      <div class="flex gap-4 mb-6 border-b border-gray-200">
+        <button id="tab-all" class="px-4 py-2 text-sm font-medium text-primary-600 border-b-2 border-primary-600 -mb-px">
+          Alle
+        </button>
+        <button id="tab-unconfirmed" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+          Unbestätigt <span id="unconfirmed-badge" class="ml-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full">0</span>
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Ausstattung...</p>
+      </div>
+
+      <!-- Amenity List -->
+      <div id="amenity-list" class="hidden space-y-2"></div>
+
+      <!-- Unconfirmed List -->
+      <div id="unconfirmed-list" class="hidden space-y-2"></div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+        <p class="text-gray-500 text-lg mb-4">Noch keine Ausstattung vorhanden</p>
+        <button class="btn-primary" onclick="document.getElementById('add-amenity-btn').click()">
+          Erstes Merkmal erstellen
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add/Edit Modal -->
+  <div id="amenity-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6">
+      <h3 id="modal-title" class="text-lg font-semibold mb-4">Neue Ausstattung</h3>
+      <form id="amenity-form" class="space-y-4">
+        <input type="hidden" id="edit-id" value="">
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Name (DE)</label>
+          <input type="text" id="input-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="z.B. Wickeltisch">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+          <input type="text" id="input-slug" required pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" placeholder="z.B. wickeltisch">
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Icon (Emoji)</label>
+          <input type="text" id="input-icon" maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-2xl" placeholder="🚼">
+        </div>
+        
+        <div class="flex gap-3 mt-6">
+          <button type="button" id="modal-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
+          <button type="submit" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6">
+      <h3 class="text-lg font-semibold mb-2">Ausstattung löschen?</h3>
+      <p class="text-gray-600 mb-4">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+      <p id="delete-warning" class="text-red-600 text-sm mb-4 hidden"></p>
+      <div class="flex gap-3">
+        <button id="delete-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
+        <button id="delete-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Löschen</button>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script define:vars={{ API_URL }}>
+  let amenities = [];
+  let unconfirmed = [];
+  let currentTab = 'all';
+  let deleteTargetId = null;
+
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    window.location.href = '/login?redirect=/admin/amenities';
+  }
+
+  // Elements
+  const loadingState = document.getElementById('loading-state');
+  const amenityList = document.getElementById('amenity-list');
+  const unconfirmedList = document.getElementById('unconfirmed-list');
+  const emptyState = document.getElementById('empty-state');
+  const modal = document.getElementById('amenity-modal');
+  const deleteModal = document.getElementById('delete-modal');
+
+  // Tab switching
+  document.getElementById('tab-all').addEventListener('click', () => {
+    currentTab = 'all';
+    document.getElementById('tab-all').classList.add('text-primary-600', 'border-primary-600');
+    document.getElementById('tab-all').classList.remove('text-gray-500');
+    document.getElementById('tab-unconfirmed').classList.remove('text-primary-600', 'border-primary-600');
+    document.getElementById('tab-unconfirmed').classList.add('text-gray-500');
+    amenityList.classList.remove('hidden');
+    unconfirmedList.classList.add('hidden');
+  });
+
+  document.getElementById('tab-unconfirmed').addEventListener('click', () => {
+    currentTab = 'unconfirmed';
+    document.getElementById('tab-unconfirmed').classList.add('text-primary-600', 'border-primary-600');
+    document.getElementById('tab-unconfirmed').classList.remove('text-gray-500');
+    document.getElementById('tab-all').classList.remove('text-primary-600', 'border-primary-600');
+    document.getElementById('tab-all').classList.add('text-gray-500');
+    unconfirmedList.classList.remove('hidden');
+    amenityList.classList.add('hidden');
+    loadUnconfirmed();
+  });
+
+  async function loadAmenities() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/amenities`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Failed to load');
+      
+      const data = await res.json();
+      amenities = data.data;
+      
+      // Count unconfirmed
+      const totalUnconfirmed = amenities.reduce((sum, a) => sum + (a.unconfirmed_count || 0), 0);
+      document.getElementById('unconfirmed-badge').textContent = totalUnconfirmed;
+      
+      renderAmenities();
+    } catch (e) {
+      console.error(e);
+      amenityList.innerHTML = '<p class="text-red-500 text-center py-8">Fehler beim Laden</p>';
+    } finally {
+      loadingState.classList.add('hidden');
+    }
+  }
+
+  async function loadUnconfirmed() {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/amenities/events/unconfirmed?limit=100`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Failed to load');
+      
+      const data = await res.json();
+      unconfirmed = data.data;
+      renderUnconfirmed();
+    } catch (e) {
+      console.error(e);
+      unconfirmedList.innerHTML = '<p class="text-red-500 text-center py-8">Fehler beim Laden</p>';
+    }
+  }
+
+  function renderAmenities() {
+    if (amenities.length === 0) {
+      emptyState.classList.remove('hidden');
+      amenityList.classList.add('hidden');
+      return;
+    }
+
+    emptyState.classList.add('hidden');
+    amenityList.classList.remove('hidden');
+
+    amenityList.innerHTML = amenities
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(a => `
+        <div class="bg-white rounded-xl shadow-card p-4 flex items-center gap-4">
+          <span class="text-2xl">${a.icon || '🎯'}</span>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-gray-900">${a.name_de}</div>
+            <div class="text-xs text-gray-500 font-mono">${a.slug}</div>
+          </div>
+          <div class="text-sm text-gray-500">${a._count?.events || 0} Events</div>
+          ${a.unconfirmed_count > 0 ? `<span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">${a.unconfirmed_count} unbestätigt</span>` : ''}
+          <div class="flex items-center gap-2">
+            <button onclick="editAmenity('${a.id}')" class="p-2 text-gray-400 hover:text-primary-500 rounded-lg hover:bg-gray-100">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+              </svg>
+            </button>
+            <button onclick="confirmDelete('${a.id}', ${a._count?.events || 0})" class="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+  }
+
+  function renderUnconfirmed() {
+    if (unconfirmed.length === 0) {
+      unconfirmedList.innerHTML = '<p class="text-center py-8 text-gray-500">Alle Ausstattungen bestätigt!</p>';
+      return;
+    }
+
+    unconfirmedList.innerHTML = unconfirmed.map(item => `
+      <div class="bg-white rounded-xl shadow-card p-4 flex items-center gap-4">
+        <span class="text-2xl">${item.amenity?.icon || '🎯'}</span>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-gray-900">${item.amenity?.name_de || 'Unknown'}</div>
+          <div class="text-sm text-gray-500">Event: ${item.event?.title || item.event_id}</div>
+        </div>
+        <button onclick="confirmAmenity('${item.event_id}', '${item.amenity_id}')" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
+          Bestätigen
+        </button>
+        <button onclick="removeAmenity('${item.event_id}', '${item.amenity_id}')" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+          Entfernen
+        </button>
+      </div>
+    `).join('');
+  }
+
+  window.confirmAmenity = async function(eventId, amenityId) {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/amenities/events/${eventId}/amenities/${amenityId}/confirm`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        loadUnconfirmed();
+        loadAmenities();
+      }
+    } catch (e) {
+      alert('Fehler beim Bestätigen');
+    }
+  };
+
+  window.removeAmenity = async function(eventId, amenityId) {
+    if (!confirm('Ausstattung von diesem Event entfernen?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/amenities/events/${eventId}/amenities/${amenityId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        loadUnconfirmed();
+        loadAmenities();
+      }
+    } catch (e) {
+      alert('Fehler beim Entfernen');
+    }
+  };
+
+  // Modal handlers (similar to categories)
+  document.getElementById('add-amenity-btn').addEventListener('click', () => {
+    document.getElementById('modal-title').textContent = 'Neue Ausstattung';
+    document.getElementById('amenity-form').reset();
+    document.getElementById('edit-id').value = '';
+    document.getElementById('input-slug').disabled = false;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  });
+
+  window.editAmenity = function(id) {
+    const a = amenities.find(am => am.id === id);
+    if (!a) return;
+    document.getElementById('modal-title').textContent = 'Ausstattung bearbeiten';
+    document.getElementById('edit-id').value = id;
+    document.getElementById('input-name').value = a.name_de;
+    document.getElementById('input-slug').value = a.slug;
+    document.getElementById('input-slug').disabled = true;
+    document.getElementById('input-icon').value = a.icon || '';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  };
+
+  document.getElementById('modal-cancel').addEventListener('click', () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  });
+
+  document.getElementById('amenity-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const editId = document.getElementById('edit-id').value;
+    const data = {
+      name_de: document.getElementById('input-name').value,
+      icon: document.getElementById('input-icon').value || null,
+    };
+    if (!editId) {
+      data.slug = document.getElementById('input-slug').value;
+    }
+
+    try {
+      const res = await fetch(
+        editId ? `${API_URL}/api/admin/amenities/${editId}` : `${API_URL}/api/admin/amenities`,
+        {
+          method: editId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(data),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok) {
+        alert(result.error?.message || 'Fehler');
+        return;
+      }
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      loadAmenities();
+    } catch (e) {
+      alert('Fehler beim Speichern');
+    }
+  });
+
+  window.confirmDelete = function(id, eventCount) {
+    deleteTargetId = id;
+    const warning = document.getElementById('delete-warning');
+    if (eventCount > 0) {
+      warning.textContent = `Diese Ausstattung hat ${eventCount} Events und kann nicht gelöscht werden.`;
+      warning.classList.remove('hidden');
+      document.getElementById('delete-confirm').disabled = true;
+      document.getElementById('delete-confirm').classList.add('opacity-50');
+    } else {
+      warning.classList.add('hidden');
+      document.getElementById('delete-confirm').disabled = false;
+      document.getElementById('delete-confirm').classList.remove('opacity-50');
+    }
+    deleteModal.classList.remove('hidden');
+    deleteModal.classList.add('flex');
+  };
+
+  document.getElementById('delete-cancel').addEventListener('click', () => {
+    deleteModal.classList.add('hidden');
+    deleteModal.classList.remove('flex');
+  });
+
+  document.getElementById('delete-confirm').addEventListener('click', async () => {
+    if (!deleteTargetId) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/amenities/${deleteTargetId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const result = await res.json();
+        alert(result.error?.message || 'Fehler');
+        return;
+      }
+      deleteModal.classList.add('hidden');
+      deleteModal.classList.remove('flex');
+      deleteTargetId = null;
+      loadAmenities();
+    } catch (e) {
+      alert('Fehler beim Löschen');
+    }
+  });
+
+  // Auto-generate slug
+  document.getElementById('input-name').addEventListener('input', (e) => {
+    const slugInput = document.getElementById('input-slug');
+    if (!slugInput.disabled && !slugInput.dataset.manual) {
+      slugInput.value = e.target.value
+        .toLowerCase()
+        .replace(/[äÄ]/g, 'ae').replace(/[öÖ]/g, 'oe').replace(/[üÜ]/g, 'ue').replace(/ß/g, 'ss')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+  });
+
+  document.getElementById('input-slug').addEventListener('input', () => {
+    document.getElementById('input-slug').dataset.manual = 'true';
+  });
+
+  loadAmenities();
+</script>

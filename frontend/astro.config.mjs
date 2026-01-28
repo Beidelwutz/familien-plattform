@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import vercel from '@astrojs/vercel';
+import tailwind from '@astrojs/tailwind';
 
 // https://astro.build/config
 export default defineConfig({
@@ -9,6 +10,7 @@ export default defineConfig({
     webAnalytics: { enabled: true },
     maxDuration: 60
   }),
+  integrations: [tailwind()],
   server: {
     port: 3000,
     host: true

@@ -1,0 +1,899 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="Trends & Suggestions - Admin - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">Trends & Suggestions</h1>
+        <p class="text-gray-500">Verwaltung von Suchtrends und Autocomplete-Vorschlägen</p>
+      </header>
+
+      <div class="flex justify-end gap-3 mb-6">
+        <button id="compute-now" class="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+          Trends jetzt berechnen
+        </button>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" id="stats-container">
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <div class="text-sm text-gray-500">Gesamte Suchanfragen</div>
+          <div class="text-3xl font-bold mt-2" id="stat-total">-</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <div class="text-sm text-gray-500">Einzigartige Begriffe</div>
+          <div class="text-3xl font-bold mt-2" id="stat-unique">-</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <div class="text-sm text-gray-500">Aktive Overrides</div>
+          <div class="text-3xl font-bold mt-2" id="stat-overrides">-</div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <div class="text-sm text-gray-500">Zuletzt berechnet</div>
+          <div class="text-sm font-medium mt-2" id="stat-computed">-</div>
+        </div>
+      </div>
+
+      <!-- Live Preview Section -->
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <!-- Header with Tabs and Toggles -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 class="text-xl font-bold">Live Preview</h2>
+          
+          <div class="flex items-center gap-4">
+            <!-- Mobile/Desktop Toggle -->
+            <div class="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
+              <button class="device-toggle px-3 py-1.5 bg-gray-100" data-device="mobile">
+                Mobile
+              </button>
+              <button class="device-toggle px-3 py-1.5" data-device="desktop">
+                Desktop
+              </button>
+            </div>
+            
+            <!-- Reset Override Toggle -->
+            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input type="checkbox" id="hide-overrides" class="rounded border-gray-300">
+              <span>Ohne Overrides</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tabs: Default / Search -->
+        <div class="flex gap-2 mb-4">
+          <button class="preview-tab active px-4 py-2 rounded-lg text-sm font-medium" data-preview="default">
+            Default-Ansicht
+          </button>
+          <button class="preview-tab px-4 py-2 rounded-lg text-sm font-medium" data-preview="search">
+            Mit Suchbegriff
+          </button>
+        </div>
+
+        <!-- Search Input (hidden by default) -->
+        <div id="search-input-container" class="hidden mb-4">
+          <input 
+            type="text" 
+            id="preview-query"
+            placeholder="Suchbegriff testen..."
+            class="w-full max-w-md px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+
+        <!-- Dropdown Mockup Container -->
+        <div id="preview-container" class="preview-mobile">
+          <div class="preview-inner mx-auto">
+            <!-- Fake Search Bar -->
+            <div class="bg-gray-50 rounded-full border border-gray-200 px-5 py-3 text-gray-400 flex items-center">
+              <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+              <span id="search-placeholder">Was wollt ihr machen?</span>
+            </div>
+            
+            <!-- Dropdown -->
+            <div class="mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden relative">
+              <!-- Loading Overlay -->
+              <div id="preview-loading" class="hidden absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+                <div class="animate-spin w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+              </div>
+
+              <!-- Suggestions Section -->
+              <div id="preview-suggestions-section">
+                <div class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Vorschläge
+                </div>
+                <div id="preview-suggestions-list"></div>
+              </div>
+              
+              <!-- Trending Section -->
+              <div id="preview-trending-section" class="border-t border-gray-100">
+                <div class="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                  Trending
+                </div>
+                <div id="preview-trending-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Debug Info -->
+        <div class="mt-4 flex items-center justify-center gap-4 text-xs text-gray-400">
+          <span id="preview-debug"></span>
+          <button id="preview-refresh" class="text-primary-500 hover:text-primary-600">
+            ↻ Aktualisieren
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-xl shadow-sm">
+        <div class="border-b border-gray-200">
+          <nav class="flex gap-8 px-6">
+            <button class="tab-btn active" data-tab="trending">
+              Trending Terms
+            </button>
+            <button class="tab-btn" data-tab="overrides">
+              Overrides
+            </button>
+          </nav>
+        </div>
+
+        <!-- Trending Tab -->
+        <div id="tab-trending" class="p-6">
+          <table class="w-full">
+            <thead class="text-left text-sm text-gray-500 border-b">
+              <tr>
+                <th class="pb-3">Term</th>
+                <th class="pb-3">Score</th>
+                <th class="pb-3">Ratio</th>
+                <th class="pb-3">24h</th>
+                <th class="pb-3">7d Baseline</th>
+                <th class="pb-3">Berechnet</th>
+                <th class="pb-3">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="trending-table-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Overrides Tab -->
+        <div id="tab-overrides" class="p-6 hidden">
+          <div class="flex justify-between mb-4">
+            <h3 class="text-lg font-semibold">Override-Regeln</h3>
+            <button id="create-override" class="btn-primary">
+              + Neuer Override
+            </button>
+          </div>
+          <table class="w-full">
+            <thead class="text-left text-sm text-gray-500 border-b">
+              <tr>
+                <th class="pb-3">Term</th>
+                <th class="pb-3">Aktion</th>
+                <th class="pb-3">Details</th>
+                <th class="pb-3">Priorität</th>
+                <th class="pb-3">Status</th>
+                <th class="pb-3">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="overrides-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Undo Toast -->
+  <div id="undo-toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-4 z-50">
+    <span id="undo-message">Override erstellt</span>
+    <button id="undo-btn" class="text-primary-400 hover:text-primary-300 font-medium">Undo</button>
+    <button id="close-toast" class="text-gray-400 hover:text-white ml-2">✕</button>
+  </div>
+
+  <!-- Create/Edit Override Modal -->
+  <div id="override-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <h3 class="text-xl font-bold mb-4" id="modal-title">Neuer Override</h3>
+      
+      <form id="override-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Suchbegriff</label>
+          <input type="text" name="term" required class="w-full px-3 py-2 border rounded-lg" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Aktion</label>
+          <select name="action" required class="w-full px-3 py-2 border rounded-lg">
+            <option value="PIN">PIN - Ganz oben anzeigen</option>
+            <option value="BOOST">BOOST - Score erhöhen</option>
+            <option value="HIDE">HIDE - Verstecken</option>
+            <option value="REPLACE">REPLACE - Durch anderen Begriff ersetzen</option>
+            <option value="PUSH">PUSH - In Trending einfügen</option>
+          </select>
+        </div>
+
+        <div id="boost-field" class="hidden">
+          <label class="block text-sm font-medium mb-1">Boost (1-100)</label>
+          <input type="number" name="boost" min="1" max="100" class="w-full px-3 py-2 border rounded-lg" />
+        </div>
+
+        <div id="replacement-field" class="hidden">
+          <label class="block text-sm font-medium mb-1">Ersatz-Begriff</label>
+          <input type="text" name="replacement" class="w-full px-3 py-2 border rounded-lg" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Badge/Label (optional)</label>
+          <input type="text" name="label" placeholder="z.B. 🔥" class="w-full px-3 py-2 border rounded-lg" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Priorität</label>
+          <input type="number" name="priority" value="0" class="w-full px-3 py-2 border rounded-lg" />
+          <p class="text-xs text-gray-500 mt-1">Höhere Werte = weiter oben bei PIN</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">Start (optional)</label>
+            <input type="datetime-local" name="startsAt" class="w-full px-3 py-2 border rounded-lg" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Ende (optional)</label>
+            <input type="datetime-local" name="endsAt" class="w-full px-3 py-2 border rounded-lg" />
+          </div>
+        </div>
+
+        <div class="flex gap-3 pt-4">
+          <button type="submit" class="flex-1 btn-primary">Speichern</button>
+          <button type="button" id="cancel-modal" class="flex-1 btn-secondary">Abbrechen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</BaseLayout>
+
+<script define:vars={{ API_URL }}>
+  // State
+  let currentAbortController = null;
+  let lastCreatedOverrideId = null;
+  let undoTimeout = null;
+  let inputDebounce = null;
+
+  // Auth check
+  (async function initAuth() {
+    const token = localStorage.getItem('auth_token');
+    
+    if (!token) {
+      window.location.href = '/login?redirect=/admin/trends';
+      return;
+    }
+
+    try {
+      const meRes = await fetch(`${API_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!meRes.ok) {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login?redirect=/admin/trends';
+        return;
+      }
+      
+      const meData = await meRes.json();
+      if (meData.data.role !== 'admin') {
+        window.location.href = '/?error=not_admin';
+        return;
+      }
+
+      initializePage();
+    } catch (e) {
+      window.location.href = '/login?redirect=/admin/trends';
+      return;
+    }
+  })();
+
+  function initializePage() {
+    loadStats();
+    updatePreview();
+    loadTrendingTerms();
+    setupEventHandlers();
+  }
+
+  // API helper with auth
+  async function adminApi(method, endpoint, body = null, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    const config = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      ...options
+    };
+    
+    if (body) {
+      config.body = JSON.stringify(body);
+    }
+    
+    const res = await fetch(`${API_URL}/api${endpoint}`, config);
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Request failed' }));
+      const err = new Error(error.error || error.message || 'Request failed');
+      err.status = res.status;
+      err.data = error;
+      throw err;
+    }
+    
+    return res.json();
+  }
+
+  // Stats loading
+  async function loadStats() {
+    try {
+      const stats = await adminApi('GET', '/admin/trends/stats');
+      document.getElementById('stat-total').textContent = stats.totalSearches.toLocaleString();
+      document.getElementById('stat-unique').textContent = stats.uniqueTerms.toLocaleString();
+      document.getElementById('stat-overrides').textContent = stats.activeOverrides.toLocaleString();
+      
+      if (stats.lastComputed) {
+        const date = new Date(stats.lastComputed);
+        document.getElementById('stat-computed').textContent = date.toLocaleString('de-DE');
+      }
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  }
+
+  // Show/hide loading
+  function showLoading(show) {
+    const loading = document.getElementById('preview-loading');
+    if (show) {
+      loading.classList.remove('hidden');
+    } else {
+      loading.classList.add('hidden');
+    }
+  }
+
+  // Preview with AbortController
+  async function updatePreview() {
+    // Abort old request
+    if (currentAbortController) {
+      currentAbortController.abort();
+    }
+    currentAbortController = new AbortController();
+    
+    const activeTab = document.querySelector('.preview-tab.active');
+    const isDefault = activeTab?.dataset.preview === 'default';
+    const queryInput = document.getElementById('preview-query');
+    const query = isDefault ? '' : (queryInput?.value || '');
+    const hideOverrides = document.getElementById('hide-overrides')?.checked;
+    
+    // Update search placeholder
+    const placeholder = document.getElementById('search-placeholder');
+    if (placeholder) {
+      placeholder.textContent = query || 'Was wollt ihr machen?';
+    }
+    
+    showLoading(true);
+    
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        applyOverrides: (!hideOverrides).toString()
+      });
+      
+      const data = await adminApi('GET', `/admin/trends/preview?${params}`, null, {
+        signal: currentAbortController.signal
+      });
+      
+      renderPreview(data.preview, data.debug);
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Preview error:', error);
+      }
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // Render preview
+  function renderPreview(preview, debug) {
+    // Suggestions
+    const suggestionsHtml = preview.suggestions.map((s, idx) => `
+      <div class="flex items-center px-4 py-3 hover:bg-gray-50 group">
+        <svg class="w-5 h-5 text-gray-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+        <span class="text-gray-700 truncate">${escapeHtml(s.text)}</span>
+        <span class="source-badge source-${getSourceClass(s.source)} ml-2">
+          ${getSourceLabel(s.source)}
+        </span>
+        <div class="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button class="text-red-500 text-xs px-2 py-1 bg-red-50 rounded hover:bg-red-100" 
+                  data-action="hide" data-term="${escapeHtml(s.text)}">
+            HIDE
+          </button>
+        </div>
+      </div>
+    `).join('');
+    
+    document.getElementById('preview-suggestions-list').innerHTML = 
+      suggestionsHtml || '<div class="px-4 py-3 text-gray-400">Keine Vorschläge</div>';
+    
+    // Trending
+    const trendingHtml = preview.trending.map((t, idx) => `
+      <div class="flex items-center px-4 py-3 hover:bg-gray-50 group">
+        <span class="text-xl mr-3">${t.badge || '🔥'}</span>
+        <span class="text-gray-700 font-medium truncate">${escapeHtml(t.text)}</span>
+        ${t.originTerm ? `<span class="text-xs text-gray-400 ml-1">(${escapeHtml(t.originTerm)})</span>` : ''}
+        <span class="source-badge source-${getSourceClass(t.source)} ml-2">
+          ${getSourceLabel(t.source)}
+        </span>
+        <div class="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          ${t.source === 'override_pin' ? `
+            <button class="text-gray-500 text-xs px-1 hover:text-gray-700" data-action="move-up" data-id="${t.overrideId || ''}">▲</button>
+            <button class="text-gray-500 text-xs px-1 hover:text-gray-700" data-action="move-down" data-id="${t.overrideId || ''}">▼</button>
+          ` : `
+            <button class="text-blue-500 text-xs px-2 py-1 bg-blue-50 rounded hover:bg-blue-100" 
+                    data-action="pin" data-term="${escapeHtml(t.text)}">PIN</button>
+          `}
+          <button class="text-red-500 text-xs px-2 py-1 bg-red-50 rounded hover:bg-red-100" 
+                  data-action="hide" data-term="${escapeHtml(t.text)}">HIDE</button>
+        </div>
+      </div>
+    `).join('');
+    
+    document.getElementById('preview-trending-list').innerHTML = 
+      trendingHtml || '<div class="px-4 py-3 text-gray-400">Keine Trending-Begriffe</div>';
+    
+    // Debug Info
+    const debugInfo = [
+      `${debug.baseSuggestionsCount} Vorschläge`,
+      `${debug.baseTrendingCount} Trending`,
+      `${debug.overridesApplied} Overrides`,
+      debug.isDefaultView ? '(Default-Ansicht)' : ''
+    ].filter(Boolean).join(', ');
+    
+    document.getElementById('preview-debug').textContent = debugInfo;
+  }
+
+  function getSourceClass(source) {
+    if (!source) return 'log';
+    if (source.startsWith('override')) return 'override';
+    return source;
+  }
+
+  function getSourceLabel(source) {
+    const labels = {
+      'log': 'Suche',
+      'entity': 'Kategorie',
+      'event': 'Event',
+      'override_pin': 'PIN',
+      'override_push': 'PUSH',
+      'override_replace': 'ERSETZT',
+      'override_boost': 'BOOST'
+    };
+    return labels[source] || source || 'Suche';
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+  }
+
+  // Quick Action with Undo
+  async function quickAction(action, term) {
+    showLoading(true);
+    
+    try {
+      const result = await adminApi('POST', '/admin/trends/overrides', {
+        term,
+        action,
+        priority: action === 'PIN' ? 100 : 0
+      });
+      
+      lastCreatedOverrideId = result.data.id;
+      showUndoToast(`"${term}" ${action === 'PIN' ? 'gepinnt' : 'versteckt'}`);
+      await updatePreview();
+      loadOverrides();
+    } catch (error) {
+      if (error.status === 409) {
+        showMessage('Override existiert bereits', 'error');
+      } else {
+        showMessage('Fehler: ' + error.message, 'error');
+      }
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // Undo last action
+  async function undoLastAction() {
+    if (!lastCreatedOverrideId) return;
+    
+    try {
+      await adminApi('DELETE', `/admin/trends/overrides/${lastCreatedOverrideId}?hard=true`);
+      lastCreatedOverrideId = null;
+      hideUndoToast();
+      await updatePreview();
+      loadOverrides();
+      showMessage('Rückgängig gemacht', 'success');
+    } catch (error) {
+      showMessage('Undo fehlgeschlagen', 'error');
+    }
+  }
+
+  function showUndoToast(message) {
+    const toast = document.getElementById('undo-toast');
+    const messageEl = document.getElementById('undo-message');
+    messageEl.textContent = message;
+    toast.classList.remove('hidden');
+    
+    // Auto-hide after 5 seconds
+    clearTimeout(undoTimeout);
+    undoTimeout = setTimeout(hideUndoToast, 5000);
+  }
+
+  function hideUndoToast() {
+    const toast = document.getElementById('undo-toast');
+    toast.classList.add('hidden');
+    clearTimeout(undoTimeout);
+  }
+
+  function showMessage(message, type = 'info') {
+    // Simple alert for now
+    alert(message);
+  }
+
+  // PIN order movement
+  async function movePinOrder(overrideId, direction) {
+    if (!overrideId) return;
+    
+    try {
+      // Get all PIN overrides
+      const data = await adminApi('GET', '/admin/trends/overrides');
+      const pins = data.data
+        .filter(o => o.action === 'PIN' && o.isActive)
+        .sort((a, b) => b.priority - a.priority);
+      
+      const currentIndex = pins.findIndex(p => p.id === overrideId);
+      if (currentIndex === -1) return;
+      
+      const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (swapIndex < 0 || swapIndex >= pins.length) return;
+      
+      // Swap priorities
+      const currentPriority = pins[currentIndex].priority;
+      const swapPriority = pins[swapIndex].priority;
+      
+      await Promise.all([
+        adminApi('PATCH', `/admin/trends/overrides/${pins[currentIndex].id}`, { priority: swapPriority }),
+        adminApi('PATCH', `/admin/trends/overrides/${pins[swapIndex].id}`, { priority: currentPriority })
+      ]);
+      
+      await updatePreview();
+      loadOverrides();
+    } catch (error) {
+      showMessage('Fehler beim Verschieben', 'error');
+    }
+  }
+
+  // Load trending terms
+  async function loadTrendingTerms() {
+    try {
+      const data = await adminApi('GET', '/admin/trends/terms');
+      
+      const tbody = document.getElementById('trending-table-body');
+      tbody.innerHTML = data.data.map((t) => `
+        <tr class="border-b">
+          <td class="py-3">${escapeHtml(t.term)}</td>
+          <td class="py-3">${t.score.toFixed(2)}</td>
+          <td class="py-3">${t.trendRatio.toFixed(2)}x</td>
+          <td class="py-3">${t.searches24h}</td>
+          <td class="py-3">${t.baseline7d.toFixed(1)}</td>
+          <td class="py-3 text-sm">${new Date(t.computedAt).toLocaleString('de-DE')}</td>
+          <td class="py-3">
+            <button class="text-blue-600 hover:underline text-sm mr-2" data-action="pin" data-term="${escapeHtml(t.term)}">Pin</button>
+            <button class="text-red-600 hover:underline text-sm" data-action="hide" data-term="${escapeHtml(t.term)}">Hide</button>
+          </td>
+        </tr>
+      `).join('');
+      
+      if (data.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">Keine Trending Terms berechnet</td></tr>';
+      }
+    } catch (error) {
+      console.error('Failed to load trending terms:', error);
+    }
+  }
+
+  // Load overrides
+  async function loadOverrides() {
+    try {
+      const data = await adminApi('GET', '/admin/trends/overrides');
+      
+      const tbody = document.getElementById('overrides-table-body');
+      tbody.innerHTML = data.data.map((o) => `
+        <tr class="border-b">
+          <td class="py-3">${escapeHtml(o.term)}</td>
+          <td class="py-3"><span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">${o.action}</span></td>
+          <td class="py-3 text-sm text-gray-600">
+            ${o.action === 'BOOST' ? `Boost: ${o.boost}` : ''}
+            ${o.action === 'REPLACE' ? `→ ${escapeHtml(o.replacement || '')}` : ''}
+            ${o.label ? `Badge: ${o.label}` : ''}
+          </td>
+          <td class="py-3">${o.priority}</td>
+          <td class="py-3">
+            <span class="px-2 py-1 ${o.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'} rounded text-xs">
+              ${o.isActive ? 'Aktiv' : 'Inaktiv'}
+            </span>
+          </td>
+          <td class="py-3">
+            <button class="text-red-600 hover:underline text-sm" data-action="delete-override" data-id="${o.id}">Löschen</button>
+          </td>
+        </tr>
+      `).join('');
+      
+      if (data.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-400">Keine Overrides definiert</td></tr>';
+      }
+    } catch (error) {
+      console.error('Failed to load overrides:', error);
+    }
+  }
+
+  function setupEventHandlers() {
+    // CSP-safe event delegation for all actions
+    document.addEventListener('click', async (e) => {
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+      
+      const action = target.dataset.action;
+      const term = target.dataset.term;
+      const id = target.dataset.id;
+      
+      switch (action) {
+        case 'pin':
+          await quickAction('PIN', term);
+          break;
+        case 'hide':
+          await quickAction('HIDE', term);
+          break;
+        case 'boost':
+        case 'push':
+        case 'replace':
+          openActionModal(action.toUpperCase(), term);
+          break;
+        case 'move-up':
+          await movePinOrder(id, 'up');
+          break;
+        case 'move-down':
+          await movePinOrder(id, 'down');
+          break;
+        case 'delete-override':
+          if (confirm('Override wirklich löschen?')) {
+            try {
+              await adminApi('DELETE', `/admin/trends/overrides/${id}`);
+              loadOverrides();
+              updatePreview();
+            } catch (error) {
+              showMessage('Fehler beim Löschen', 'error');
+            }
+          }
+          break;
+      }
+    });
+
+    // Preview tabs
+    document.querySelectorAll('.preview-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.preview-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        const isSearch = btn.dataset.preview === 'search';
+        document.getElementById('search-input-container').classList.toggle('hidden', !isSearch);
+        
+        updatePreview();
+      });
+    });
+
+    // Device toggle
+    document.querySelectorAll('.device-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.device-toggle').forEach(b => b.classList.remove('bg-gray-100'));
+        btn.classList.add('bg-gray-100');
+        
+        const container = document.getElementById('preview-container');
+        const device = btn.dataset.device;
+        container.classList.remove('preview-mobile', 'preview-desktop');
+        container.classList.add(`preview-${device}`);
+      });
+    });
+
+    // Hide overrides checkbox
+    document.getElementById('hide-overrides')?.addEventListener('change', updatePreview);
+
+    // Preview refresh button
+    document.getElementById('preview-refresh')?.addEventListener('click', updatePreview);
+
+    // Debounced search input
+    document.getElementById('preview-query')?.addEventListener('input', () => {
+      clearTimeout(inputDebounce);
+      inputDebounce = setTimeout(updatePreview, 300);
+    });
+
+    // Tab switching (trending/overrides)
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-tab');
+        
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+        document.getElementById(`tab-${tab}`)?.classList.remove('hidden');
+        
+        if (tab === 'trending') {
+          loadTrendingTerms();
+        } else if (tab === 'overrides') {
+          loadOverrides();
+        }
+      });
+    });
+
+    // Undo toast buttons
+    document.getElementById('undo-btn')?.addEventListener('click', undoLastAction);
+    document.getElementById('close-toast')?.addEventListener('click', hideUndoToast);
+
+    // Modal handling
+    const modal = document.getElementById('override-modal');
+    const form = document.getElementById('override-form');
+    
+    document.getElementById('create-override')?.addEventListener('click', () => {
+      form.reset();
+      modal.classList.remove('hidden');
+    });
+    
+    document.getElementById('cancel-modal')?.addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    // Action field visibility
+    const actionSelect = form?.querySelector('[name="action"]');
+    actionSelect?.addEventListener('change', () => {
+      const action = actionSelect.value;
+      document.getElementById('boost-field')?.classList.toggle('hidden', action !== 'BOOST');
+      document.getElementById('replacement-field')?.classList.toggle('hidden', action !== 'REPLACE');
+    });
+
+    // Form submission
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(form);
+      const data = {};
+      formData.forEach((value, key) => {
+        if (value) data[key] = value;
+      });
+      
+      try {
+        await adminApi('POST', '/admin/trends/overrides', data);
+        modal.classList.add('hidden');
+        loadOverrides();
+        updatePreview();
+        showMessage('Override erstellt!', 'success');
+      } catch (error) {
+        showMessage('Fehler: ' + (error.data?.error || error.message), 'error');
+      }
+    });
+
+    // Compute now button
+    document.getElementById('compute-now')?.addEventListener('click', async () => {
+      if (!confirm('Trends jetzt neu berechnen?')) return;
+      
+      try {
+        await adminApi('POST', '/admin/trends/compute', {});
+        showMessage('Trends wurden neu berechnet!', 'success');
+        loadStats();
+        loadTrendingTerms();
+        updatePreview();
+      } catch (error) {
+        showMessage('Fehler bei der Berechnung', 'error');
+      }
+    });
+  }
+
+  function openActionModal(action, term) {
+    const modal = document.getElementById('override-modal');
+    const form = document.getElementById('override-form');
+    
+    form.reset();
+    form.querySelector('[name="term"]').value = term || '';
+    form.querySelector('[name="action"]').value = action;
+    
+    // Trigger change event to show/hide fields
+    form.querySelector('[name="action"]').dispatchEvent(new Event('change'));
+    
+    modal.classList.remove('hidden');
+  }
+</script>
+
+<style>
+  /* Preview device modes */
+  .preview-mobile .preview-inner {
+    max-width: 375px;
+  }
+  
+  .preview-mobile .rounded-2xl {
+    font-size: 14px;
+  }
+  
+  .preview-desktop .preview-inner {
+    max-width: 600px;
+  }
+
+  /* Preview tabs */
+  .preview-tab {
+    background: transparent;
+    color: #6b7280;
+  }
+  
+  .preview-tab.active {
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  /* Source badges */
+  .source-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  
+  .source-log {
+    background: #dbeafe;
+    color: #1d4ed8;
+  }
+  
+  .source-entity {
+    background: #dcfce7;
+    color: #15803d;
+  }
+  
+  .source-override {
+    background: #fef3c7;
+    color: #b45309;
+  }
+  
+  .source-event {
+    background: #f3e8ff;
+    color: #7c3aed;
+  }
+
+  /* Tab button styling */
+  .tab-btn {
+    @apply py-4 text-gray-600 border-b-2 border-transparent transition-colors;
+  }
+  
+  .tab-btn.active {
+    @apply text-primary-600 border-primary-600 font-semibold;
+  }
+  
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors;
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors;
+  }
+</style>

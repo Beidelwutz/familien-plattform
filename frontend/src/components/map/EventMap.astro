@@ -1,0 +1,153 @@
+---
+interface Props {
+  events: Array<{
+    id: string;
+    title: string;
+    location_lat?: number | string | null;
+    location_lng?: number | string | null;
+    location_address?: string | null;
+    start_datetime: string;
+    price_type?: string;
+  }>;
+  userLat?: number;
+  userLng?: number;
+  height?: string;
+}
+
+const { events, userLat, userLng, height = '600px' } = Astro.props;
+
+// Filter events with valid coordinates
+const eventsWithCoords = events.filter(e => {
+  const lat = typeof e.location_lat === 'string' ? parseFloat(e.location_lat) : e.location_lat;
+  const lng = typeof e.location_lng === 'string' ? parseFloat(e.location_lng) : e.location_lng;
+  return lat && lng && !isNaN(lat) && !isNaN(lng);
+});
+
+const mapData = {
+  events: eventsWithCoords.map(e => ({
+    id: e.id,
+    title: e.title,
+    lat: typeof e.location_lat === 'string' ? parseFloat(e.location_lat) : e.location_lat,
+    lng: typeof e.location_lng === 'string' ? parseFloat(e.location_lng) : e.location_lng,
+    address: e.location_address || '',
+    datetime: e.start_datetime,
+    priceType: e.price_type || 'unknown',
+  })),
+  userLocation: userLat && userLng ? { lat: userLat, lng: userLng } : null,
+};
+---
+
+<div id="event-map" style={`height: ${height}`} class="rounded-2xl overflow-hidden shadow-card"></div>
+
+<script define:vars={{ mapData }}>
+  import maplibregl from 'maplibre-gl';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+
+  // Initialize map
+  const map = new maplibregl.Map({
+    container: 'event-map',
+    style: 'https://demotiles.maplibre.org/style.json', // Free demo tiles
+    center: mapData.userLocation 
+      ? [mapData.userLocation.lng, mapData.userLocation.lat]
+      : mapData.events.length > 0 
+        ? [mapData.events[0].lng, mapData.events[0].lat]
+        : [8.4044, 49.0094], // Karlsruhe default
+    zoom: mapData.userLocation ? 12 : 11,
+  });
+
+  // Add navigation controls
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+  map.on('load', () => {
+    // Add user location marker if available
+    if (mapData.userLocation) {
+      new maplibregl.Marker({ color: '#3b82f6' })
+        .setLngLat([mapData.userLocation.lng, mapData.userLocation.lat])
+        .setPopup(new maplibregl.Popup().setHTML('<p class="text-sm font-medium">Ihr Standort</p>'))
+        .addTo(map);
+    }
+
+    // Add event markers
+    const markers: maplibregl.Marker[] = [];
+    mapData.events.forEach((event) => {
+      const el = document.createElement('div');
+      el.className = 'event-marker';
+      el.innerHTML = `
+        <div style="
+          width: 32px;
+          height: 32px;
+          background: #10b981;
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+        ">
+          📍
+        </div>
+      `;
+
+      const priceLabel = event.priceType === 'free' ? 'Kostenlos' : event.priceType === 'paid' ? 'Kostenpflichtig' : 'Preis unbekannt';
+      const dateLabel = new Date(event.datetime).toLocaleDateString('de-DE', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+
+      const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
+        <div style="min-width: 200px; max-width: 300px;">
+          <h3 style="font-weight: 600; margin-bottom: 8px; font-size: 14px;">${event.title}</h3>
+          <p style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">📅 ${dateLabel}</p>
+          ${event.address ? `<p style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">📍 ${event.address}</p>` : ''}
+          <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">💶 ${priceLabel}</p>
+          <a href="/event/${event.id}" style="color: #3b82f6; font-size: 12px; font-weight: 500;">Details ansehen →</a>
+        </div>
+      `);
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([event.lng, event.lat])
+        .setPopup(popup)
+        .addTo(map);
+
+      markers.push(marker);
+    });
+
+    // Fit map to show all markers
+    if (mapData.events.length > 0) {
+      const bounds = new maplibregl.LngLatBounds();
+      mapData.events.forEach((event) => {
+        bounds.extend([event.lng, event.lat]);
+      });
+      // Also include user location in bounds
+      if (mapData.userLocation) {
+        bounds.extend([mapData.userLocation.lng, mapData.userLocation.lat]);
+      }
+      map.fitBounds(bounds, { padding: 50, maxZoom: 14 });
+    }
+  });
+</script>
+
+<style is:global>
+  .event-marker {
+    cursor: pointer;
+  }
+
+  .event-marker:hover div {
+    transform: scale(1.1);
+    transition: transform 0.2s;
+  }
+
+  .maplibregl-popup-content {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .maplibregl-popup-close-button {
+    font-size: 20px;
+    padding: 4px 8px;
+  }
+</style>

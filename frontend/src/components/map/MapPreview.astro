@@ -1,0 +1,109 @@
+---
+// MapPreview.astro - Map preview section with nearby pins
+interface Pin {
+  id: string;
+  title: string;
+  lat: number;
+  lng: number;
+}
+
+interface Props {
+  pins?: Pin[];
+}
+
+const { 
+  pins = [],
+} = Astro.props;
+---
+
+<section class="py-6 md:py-8">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Section Header -->
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="section-title flex items-center gap-2">
+          <span class="text-2xl">🗺️</span>
+          In deiner Nähe
+        </h2>
+        <p class="text-sm text-gray-500 mt-1">{pins.length} Aktivitäten auf der Karte</p>
+      </div>
+      <a href="/entdecken" class="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium">
+        Karte öffnen
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+        </svg>
+      </a>
+    </div>
+
+    <!-- Map Container -->
+    <div class="relative rounded-2xl overflow-hidden bg-gray-100 aspect-[16/6] md:aspect-[16/4]">
+      <!-- Static Map Placeholder -->
+      <div class="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
+        <!-- Simplified map visualization -->
+        <div class="relative w-full h-full">
+          <!-- Grid pattern for map feel -->
+          <div class="absolute inset-0 opacity-20">
+            <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#94a3b8" stroke-width="0.5"/>
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
+            </svg>
+          </div>
+          
+          <!-- Simulated pins -->
+          <div class="absolute inset-0 p-8">
+            {pins.slice(0, 8).map((pin, index) => {
+              // Distribute pins somewhat randomly but evenly
+              const left = 10 + (index % 4) * 22 + Math.random() * 10;
+              const top = 15 + Math.floor(index / 4) * 40 + Math.random() * 20;
+              return (
+                <div 
+                  class="absolute transform -translate-x-1/2 -translate-y-full cursor-pointer group/pin"
+                  style={`left: ${left}%; top: ${top}%`}
+                  title={pin.title}
+                >
+                  <div class="relative">
+                    <svg class="w-8 h-8 text-primary-500 drop-shadow-md transition-transform group-hover/pin:scale-110" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                    <!-- Tooltip -->
+                    <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity pointer-events-none">
+                      {pin.title.length > 25 ? pin.title.substring(0, 25) + '...' : pin.title}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          <!-- Center marker (user location) -->
+          <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Overlay gradient -->
+      <div class="absolute inset-0 bg-gradient-to-t from-white/60 via-transparent to-transparent"></div>
+      
+      <!-- CTA Overlay -->
+      <a 
+        href="/entdecken" 
+        class="absolute inset-0 flex items-end justify-center pb-6 group/map"
+      >
+        <div class="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg flex items-center gap-2 transition-all group-hover/map:bg-white group-hover/map:shadow-xl">
+          <svg class="w-5 h-5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+          </svg>
+          <span class="font-medium text-gray-900">Interaktive Karte öffnen</span>
+          <svg class="w-4 h-4 text-gray-400 group-hover/map:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
