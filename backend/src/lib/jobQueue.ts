@@ -12,9 +12,9 @@
  */
 
 import { prisma } from './prisma.js';
-import { JobStatus } from '@prisma/client';
 
-export { JobStatus };
+// JobStatus enum matches Prisma schema
+export type JobStatus = 'QUEUED' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 
 export interface JobPayload {
   [key: string]: any;
