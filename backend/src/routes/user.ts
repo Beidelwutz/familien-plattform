@@ -149,13 +149,19 @@ router.post('/saved-events/:eventId', requireAuth, async (req: Request, res: Res
       });
     }
 
-    // Save event
-    await prisma.savedEvent.create({
-      data: {
-        user_id: userId,
-        event_id: eventId
-      }
-    });
+    // Save event and increment save count
+    await prisma.$transaction([
+      prisma.savedEvent.create({
+        data: {
+          user_id: userId,
+          event_id: eventId
+        }
+      }),
+      prisma.canonicalEvent.update({
+        where: { id: eventId },
+        data: { save_count: { increment: 1 } }
+      })
+    ]);
 
     res.status(201).json({
       success: true,
@@ -172,7 +178,8 @@ router.delete('/saved-events/:eventId', requireAuth, async (req: Request, res: R
     const userId = getUserId(req);
     const { eventId } = req.params;
 
-    await prisma.savedEvent.delete({
+    // Check if saved before deleting
+    const existing = await prisma.savedEvent.findUnique({
       where: {
         user_id_event_id: {
           user_id: userId,
@@ -180,6 +187,24 @@ router.delete('/saved-events/:eventId', requireAuth, async (req: Request, res: R
         }
       }
     });
+
+    if (existing) {
+      // Delete and decrement save count
+      await prisma.$transaction([
+        prisma.savedEvent.delete({
+          where: {
+            user_id_event_id: {
+              user_id: userId,
+              event_id: eventId
+            }
+          }
+        }),
+        prisma.canonicalEvent.update({
+          where: { id: eventId },
+          data: { save_count: { decrement: 1 } }
+        })
+      ]);
+    }
 
     res.json({
       success: true,

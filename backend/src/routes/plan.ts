@@ -3,8 +3,12 @@ import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, optionalAuth, type AuthRequest } from '../middleware/auth.js';
+import { searchEventsWithinRadius } from '../lib/geo.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
+
+const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 
 // Validation for plan generation
 const validatePlanRequest = [
@@ -31,7 +35,9 @@ router.post('/generate', validatePlanRequest, async (req: Request, res: Response
       budget = 50,
       lat = 49.0069, // Karlsruhe center
       lng = 8.4037,
-      preferences = {}
+      radius = 15, // km
+      preferences = {},
+      use_ai = false, // Optional: use AI for plan optimization
     } = req.body;
 
     // Determine age range
@@ -45,110 +51,222 @@ router.post('/generate', validatePlanRequest, async (req: Request, res: Response
     const dayEnd = new Date(targetDate);
     dayEnd.setHours(20, 0, 0, 0);
 
-    const where: any = {
-      status: 'published',
-      is_complete: true,
-      start_datetime: {
-        gte: dayStart,
-        lte: dayEnd,
-      },
-      age_min: { lte: maxAge },
-      age_max: { gte: minAge },
-    };
+    // Use geo-search to find events within radius
+    let availableEvents: any[] = [];
+    
+    try {
+      const geoResult = await searchEventsWithinRadius(lat, lng, radius, {
+        limit: 30,
+        status: 'published',
+        dateFrom: dayStart,
+        dateTo: dayEnd,
+      });
+      
+      // Fetch full event data with categories and scores
+      if (geoResult.events.length > 0) {
+        const eventIds = geoResult.events.map(e => e.id);
+        availableEvents = await prisma.canonicalEvent.findMany({
+          where: {
+            id: { in: eventIds },
+            is_complete: true,
+            // Age filter
+            OR: [
+              { age_min: null, age_max: null }, // No age restriction
+              {
+                AND: [
+                  { OR: [{ age_min: null }, { age_min: { lte: maxAge } }] },
+                  { OR: [{ age_max: null }, { age_max: { gte: minAge } }] },
+                ]
+              }
+            ]
+          },
+          include: {
+            categories: { include: { category: true } },
+            scores: true,
+          },
+        });
+        
+        // Add distance from geo search
+        availableEvents = availableEvents.map(event => {
+          const geoEvent = geoResult.events.find(e => e.id === event.id);
+          return { ...event, distance_km: geoEvent?.distance_km };
+        });
+      }
+    } catch (geoError) {
+      logger.warn('Geo search failed, falling back to standard query', { error: geoError });
+      
+      // Fallback to standard query without geo
+      const where: any = {
+        status: 'published',
+        is_complete: true,
+        is_cancelled: false,
+        start_datetime: { gte: dayStart, lte: dayEnd },
+        OR: [
+          { age_min: null, age_max: null },
+          {
+            AND: [
+              { OR: [{ age_min: null }, { age_min: { lte: maxAge } }] },
+              { OR: [{ age_max: null }, { age_max: { gte: minAge } }] },
+            ]
+          }
+        ]
+      };
+      
+      availableEvents = await prisma.canonicalEvent.findMany({
+        where,
+        include: {
+          categories: { include: { category: true } },
+          scores: true,
+        },
+        orderBy: [
+          { scores: { family_fit_score: 'desc' } },
+          { scores: { stressfree_score: 'desc' } },
+        ],
+        take: 30,
+      });
+    }
 
     // Apply budget filter
     if (budget <= 0) {
-      where.price_type = 'free';
+      availableEvents = availableEvents.filter(e => e.price_type === 'free');
     } else {
-      where.OR = [
-        { price_type: 'free' },
-        { price_min: { lte: budget / 2 } }, // Leave room for multiple activities
-      ];
+      availableEvents = availableEvents.filter(e => 
+        e.price_type === 'free' || 
+        (e.price_min && Number(e.price_min) <= budget / 2)
+      );
     }
 
     // Apply preferences
     if (preferences.indoor === true && preferences.outdoor !== true) {
-      where.is_indoor = true;
+      availableEvents = availableEvents.filter(e => e.is_indoor);
     } else if (preferences.outdoor === true && preferences.indoor !== true) {
-      where.is_outdoor = true;
+      availableEvents = availableEvents.filter(e => e.is_outdoor);
     }
 
     if (preferences.categories?.length > 0) {
-      where.categories = {
-        some: {
-          category: {
-            slug: { in: preferences.categories }
-          }
-        }
-      };
+      availableEvents = availableEvents.filter(e => 
+        e.categories?.some((c: any) => preferences.categories.includes(c.category?.slug))
+      );
     }
 
-    // Get available events
-    const availableEvents = await prisma.canonicalEvent.findMany({
-      where,
-      include: {
-        categories: {
-          include: { category: true }
-        },
-        scores: true,
-      },
-      orderBy: [
-        { scores: { family_fit_score: 'desc' } },
-        { scores: { stressfree_score: 'desc' } },
-      ],
-      take: 20, // Get pool of candidates
+    // Sort by score and distance
+    availableEvents.sort((a, b) => {
+      const scoreA = (a.scores?.family_fit_score || 0) + (a.scores?.stressfree_score || 0);
+      const scoreB = (b.scores?.family_fit_score || 0) + (b.scores?.stressfree_score || 0);
+      const distanceA = a.distance_km || 100;
+      const distanceB = b.distance_km || 100;
+      
+      // Weighted score: quality (60%) + proximity (40%)
+      const weightedA = scoreA * 0.6 - distanceA * 4;
+      const weightedB = scoreB * 0.6 - distanceB * 4;
+      
+      return weightedB - weightedA;
     });
 
-    // Simple plan generation logic (to be replaced with AI)
-    // Select 2-4 activities with good variety
-    const selectedEvents = selectEventsForPlan(availableEvents, {
-      targetCount: 3,
-      children_ages,
-    });
+    // Select events for the plan
+    let selectedEvents: any[];
+    let planBEvents: any[];
+    let aiUsed = false;
+
+    // Try AI-based selection if requested and available
+    if (use_ai && AI_WORKER_URL) {
+      try {
+        const aiResponse = await fetch(`${AI_WORKER_URL}/plan/optimize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            events: availableEvents.map(e => ({
+              id: e.id,
+              title: e.title,
+              description: e.description_short,
+              start_datetime: e.start_datetime,
+              end_datetime: e.end_datetime,
+              location_address: e.location_address,
+              location_lat: e.location_lat,
+              location_lng: e.location_lng,
+              price_type: e.price_type,
+              price_min: e.price_min,
+              is_indoor: e.is_indoor,
+              is_outdoor: e.is_outdoor,
+              categories: e.categories?.map((c: any) => c.category?.slug),
+              scores: e.scores,
+              distance_km: e.distance_km,
+            })),
+            children_ages,
+            date: targetDate.toISOString(),
+            budget,
+            preferences,
+            user_location: { lat, lng },
+          }),
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        });
+
+        if (aiResponse.ok) {
+          const aiResult = await aiResponse.json();
+          if (aiResult.selected_events && aiResult.plan_b_events) {
+            selectedEvents = aiResult.selected_events.map((id: string) => 
+              availableEvents.find(e => e.id === id)
+            ).filter(Boolean);
+            planBEvents = aiResult.plan_b_events.map((id: string) => 
+              availableEvents.find(e => e.id === id)
+            ).filter(Boolean);
+            aiUsed = true;
+          }
+        }
+      } catch (aiError) {
+        logger.warn('AI plan optimization failed, using fallback', { error: aiError });
+      }
+    }
+
+    // Fallback to rule-based selection
+    if (!aiUsed) {
+      selectedEvents = selectEventsForPlan(availableEvents, {
+        targetCount: 3,
+        children_ages,
+      });
+
+      // Get Plan B (indoor alternatives)
+      planBEvents = availableEvents
+        .filter(e => e.is_indoor && !selectedEvents.includes(e))
+        .slice(0, 3);
+    }
 
     // Create time slots
     const slots = createTimeSlots(selectedEvents, targetDate);
-
-    // Generate Plan B (indoor alternatives)
-    const planBEvents = await prisma.canonicalEvent.findMany({
-      where: {
-        ...where,
-        is_indoor: true,
-        id: { notIn: selectedEvents.map(e => e.id) }
-      },
-      include: {
-        categories: {
-          include: { category: true }
-        },
-        scores: true,
-      },
-      orderBy: { scores: { family_fit_score: 'desc' } },
-      take: 4,
-    });
-
-    const planBSlots = createTimeSlots(planBEvents.slice(0, 3), targetDate);
+    const planBSlots = createTimeSlots(planBEvents, targetDate);
 
     // Calculate total cost
     const estimatedCost = selectedEvents.reduce((sum, event) => {
       if (event.price_type === 'free') return sum;
-      const price = event.price_min || 0;
+      const price = Number(event.price_min) || 0;
       return sum + (price * (children_ages.length + 2)); // Assume 2 adults
+    }, 0);
+
+    // Calculate total distance
+    const totalDistance = selectedEvents.reduce((sum, event) => {
+      return sum + (event.distance_km || 0);
     }, 0);
 
     const plan = {
       date: targetDate.toISOString().split('T')[0],
       children_ages,
       budget,
-      estimated_cost: estimatedCost,
+      estimated_cost: Math.round(estimatedCost * 100) / 100,
+      total_distance_km: Math.round(totalDistance * 10) / 10,
       main_plan: {
         slots,
-        total_events: slots.length,
+        total_events: slots.filter(s => s.event_id).length,
       },
       plan_b: {
         reason: 'Bei Regen oder wenn ausgebucht',
         slots: planBSlots,
       },
       tips: generateTips(selectedEvents, children_ages),
+      meta: {
+        events_considered: availableEvents.length,
+        ai_optimized: aiUsed,
+        search_radius_km: radius,
+      }
     };
 
     res.json({

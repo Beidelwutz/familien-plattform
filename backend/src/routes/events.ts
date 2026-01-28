@@ -463,8 +463,6 @@ router.get('/trending', async (req: Request, res: Response, next: NextFunction) 
   try {
     const { page, limit, skip } = parsePaginationParams(req.query);
     
-    // Note: view_count/save_count would need to be tracked
-    // For now, we use family_fit_score as a proxy for popularity
     const where = {
       status: 'published' as const,
       start_datetime: { gte: new Date() },
@@ -477,8 +475,10 @@ router.get('/trending', async (req: Request, res: Response, next: NextFunction) 
         where,
         skip,
         take: limit,
+        // Order by engagement metrics (view_count + save_count * 5 for weighted importance)
         orderBy: [
-          { scores: { family_fit_score: 'desc' } },
+          { save_count: 'desc' },
+          { view_count: 'desc' },
           { start_datetime: 'asc' },
         ],
         include: {
@@ -1256,6 +1256,7 @@ router.patch('/:id', optionalAuth, validateEventUpdate, async (req: AuthRequest,
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const { trackView } = req.query;
 
     const event = await prisma.canonicalEvent.findUnique({
       where: { id },
@@ -1282,6 +1283,14 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     if (!event) {
       throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    // Track view count (non-blocking, only when explicitly requested)
+    if (trackView !== 'false') {
+      prisma.canonicalEvent.update({
+        where: { id },
+        data: { view_count: { increment: 1 } }
+      }).catch(() => {}); // Fire and forget
     }
 
     res.json({

@@ -16,9 +16,8 @@ psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.25
 asyncpg>=0.29.0
 
-# Redis/Queue
+# Redis/Queue (redis includes async support via redis.asyncio)
 redis>=5.0.1
-rq>=1.15.1
 
 # Crawling & Parsing
 feedparser>=6.0.10

@@ -205,3 +205,61 @@ export async function getPendingRevisions(eventId: string) {
     }
   });
 }
+
+/**
+ * Applies an approved revision to the event
+ */
+export async function applyRevision(revisionId: string): Promise<{ success: boolean; eventId: string }> {
+  const revision = await prisma.eventRevision.findUnique({
+    where: { id: revisionId }
+  });
+  
+  if (!revision) {
+    throw new Error('Revision not found');
+  }
+  
+  if (revision.status !== 'approved') {
+    throw new Error(`Revision is not approved (status: ${revision.status})`);
+  }
+  
+  const changeset = revision.changeset as Record<string, { old: any; new: any }>;
+  const updates = applyChangeset(changeset);
+  
+  await prisma.canonicalEvent.update({
+    where: { id: revision.event_id },
+    data: {
+      ...updates,
+      updated_at: new Date(),
+    }
+  });
+  
+  return {
+    success: true,
+    eventId: revision.event_id,
+  };
+}
+
+/**
+ * Checks if a changeset has conflicts with the current event state
+ */
+export function hasConflicts(
+  changeset: Record<string, { old: any; new: any }>,
+  currentEvent: Record<string, any>
+): { hasConflicts: boolean; conflictingFields: string[] } {
+  const conflictingFields: string[] = [];
+  
+  for (const [field, change] of Object.entries(changeset)) {
+    const currentValue = normalizeValue(currentEvent[field]);
+    const expectedOldValue = normalizeValue(change.old);
+    
+    // If the current value doesn't match what we expected, there's a conflict
+    if (JSON.stringify(currentValue) !== JSON.stringify(expectedOldValue)) {
+      conflictingFields.push(field);
+    }
+  }
+  
+  return {
+    hasConflicts: conflictingFields.length > 0,
+    conflictingFields,
+  };
+}

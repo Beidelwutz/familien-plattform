@@ -72,6 +72,10 @@ model CanonicalEvent {
   completeness_score Int?       @db.SmallInt // 0-100
   last_verified_at  DateTime?   @db.Timestamptz
   
+  // Engagement Tracking
+  view_count        Int         @default(0)
+  save_count        Int         @default(0)
+  
   // Cancel/Reschedule
   is_cancelled              Boolean   @default(false)
   cancelled_at              DateTime? @db.Timestamptz
@@ -457,6 +461,10 @@ model Provider {
   
   logo_url          String?  @db.VarChar(500)
   subscription_tier SubscriptionTier @default(free)
+  
+  // Verification status
+  is_verified       Boolean  @default(false)
+  verified_at       DateTime? @db.Timestamptz
   
   user_id           String?  @unique
   user              User?    @relation(fields: [user_id], references: [id])

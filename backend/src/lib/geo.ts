@@ -24,6 +24,28 @@ function toRad(deg: number): number {
 }
 
 /**
+ * Calculate distance between two points in kilometers
+ * Returns null if coordinates are invalid
+ */
+export function calculateDistance(
+  lat1: number | null,
+  lng1: number | null,
+  lat2: number | null,
+  lng2: number | null
+): number | null {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) {
+    return null;
+  }
+  
+  if (lat1 === lat2 && lng1 === lng2) {
+    return 0;
+  }
+  
+  const distanceMeters = haversineDistance(lat1, lng1, lat2, lng2);
+  return distanceMeters / 1000; // Convert to km
+}
+
+/**
  * Search events within a radius using PostGIS
  */
 export async function searchEventsWithinRadius(
@@ -151,12 +173,15 @@ export function addDistanceToEvents(
   userLng: number
 ): any[] {
   return events.map((event) => {
-    if (event.location_lat && event.location_lng) {
+    const eventLat = event.location_lat;
+    const eventLng = event.location_lng;
+    
+    if (eventLat != null && eventLng != null) {
       const distance = haversineDistance(
         userLat,
         userLng,
-        Number(event.location_lat),
-        Number(event.location_lng)
+        Number(eventLat),
+        Number(eventLng)
       );
       return {
         ...event,
@@ -164,6 +189,10 @@ export function addDistanceToEvents(
         distance_km: Math.round(distance / 100) / 10, // Round to 1 decimal
       };
     }
-    return event;
+    return {
+      ...event,
+      distance_meters: null,
+      distance_km: null,
+    };
   });
 }

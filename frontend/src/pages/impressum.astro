@@ -21,14 +21,29 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       </div>
 
       <div class="bg-white rounded-2xl shadow-card p-6 md:p-8 space-y-8">
+        <!-- 
+          WICHTIG: Vor dem Launch müssen folgende Platzhalter mit echten Daten ersetzt werden:
+          - Firmenname/Name des Betreibers
+          - Adresse (Straße, PLZ, Ort)
+          - Telefonnummer
+          - Name des Vertretungsberechtigten/Geschäftsführers
+          - Registergericht und HRB-Nummer (falls GmbH/UG)
+          - USt-IdNr (falls vorhanden)
+          
+          Umgebungsvariablen können für sensible Daten genutzt werden.
+        -->
+        
         <!-- Anbieterkennung -->
         <section>
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Angaben gemäß § 5 TMG</h2>
           <div class="text-gray-700 space-y-1">
-            <p class="font-semibold">[Firmenname / Vor- und Nachname]</p>
-            <p>[Straße und Hausnummer]</p>
-            <p>[PLZ] [Ort]</p>
+            <p class="font-semibold">Familien-Lokal</p>
+            <p>Musterstraße 1</p>
+            <p>76131 Karlsruhe</p>
             <p>Deutschland</p>
+          </div>
+          <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+            <strong>Hinweis:</strong> Bitte ersetzen Sie diese Platzhalter vor dem Launch mit Ihren echten Unternehmensdaten.
           </div>
         </section>
 
@@ -36,7 +51,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         <section>
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Kontakt</h2>
           <div class="text-gray-700 space-y-1">
-            <p>Telefon: <a href="tel:+49721XXXXXXX" class="text-primary-500 hover:text-primary-600">[Telefonnummer]</a></p>
+            <p>Telefon: <a href="tel:+497211234567" class="text-primary-500 hover:text-primary-600">+49 721 123 4567</a></p>
             <p>E-Mail: <a href="mailto:info@familien-lokal.de" class="text-primary-500 hover:text-primary-600">info@familien-lokal.de</a></p>
           </div>
         </section>
@@ -44,7 +59,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         <!-- Vertretungsberechtigte -->
         <section>
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Vertreten durch</h2>
-          <p class="text-gray-700">[Name des Vertretungsberechtigten / Geschäftsführers]</p>
+          <p class="text-gray-700">Max Mustermann, Geschäftsführer</p>
         </section>
 
         <!-- Registereintrag (falls zutreffend) -->
@@ -52,8 +67,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Registereintrag</h2>
           <div class="text-gray-700 space-y-1">
             <p>Eintragung im Handelsregister.</p>
-            <p>Registergericht: [Amtsgericht Ort]</p>
-            <p>Registernummer: [HRB XXXXX]</p>
+            <p>Registergericht: Amtsgericht Karlsruhe</p>
+            <p>Registernummer: HRB 123456</p>
           </div>
           <p class="text-gray-500 text-sm mt-2 italic">
             (Dieser Abschnitt entfällt bei Einzelunternehmern oder Freiberuflern ohne HR-Eintrag)
@@ -65,7 +80,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Umsatzsteuer-ID</h2>
           <p class="text-gray-700">
             Umsatzsteuer-Identifikationsnummer gemäß § 27a Umsatzsteuergesetz:<br />
-            <span class="font-mono">DE [XXX XXX XXX]</span>
+            <span class="font-mono">DE 123 456 789</span>
           </p>
           <p class="text-gray-500 text-sm mt-2 italic">
             (Nur erforderlich, wenn eine USt-ID vorhanden ist)
@@ -76,8 +91,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         <section>
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Redaktionell verantwortlich</h2>
           <div class="text-gray-700 space-y-1">
-            <p>[Name]</p>
-            <p>[Adresse wie oben]</p>
+            <p>Max Mustermann</p>
+            <p>Musterstraße 1, 76131 Karlsruhe</p>
           </div>
         </section>
 

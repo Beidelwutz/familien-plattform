@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { signToken, requireAuth, type AuthRequest } from '../middleware/auth.js';
+import { sendPasswordResetEmail, sendWelcomeEmail } from '../lib/email.js';
 
 const router = Router();
 
@@ -68,6 +69,11 @@ router.post('/register', registerValidation, async (req: Request, res: Response,
       data: {
         user_id: user.id
       }
+    });
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email).catch(err => {
+      console.error('Failed to send welcome email:', err);
     });
 
     const token = signToken({ sub: user.id, email: user.email, role: user.role });
@@ -189,24 +195,19 @@ router.post('/forgot-password', [
 
     if (user) {
       // Generate reset token (simple implementation using JWT)
-      // In production, use a dedicated token with shorter expiry stored in DB
+      // Token is valid for 1 hour
       const resetToken = signToken({ 
         sub: user.id, 
         email: user.email, 
         role: 'password_reset' 
       });
 
-      // TODO: Send email with reset link
-      // For now, log the token (development only)
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DEV] Password reset token for ${email}:`, resetToken);
-        console.log(`[DEV] Reset link: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/passwort-reset?token=${resetToken}`);
+      // Send password reset email
+      const emailSent = await sendPasswordResetEmail(user.email, resetToken);
+      
+      if (!emailSent) {
+        console.error(`Failed to send password reset email to ${email}`);
       }
-
-      // In production, you would:
-      // 1. Store token hash in DB with expiry
-      // 2. Send email via service like SendGrid, Resend, etc.
-      // await sendPasswordResetEmail(user.email, resetToken);
     }
 
     // Always return success (don't reveal if email exists)
