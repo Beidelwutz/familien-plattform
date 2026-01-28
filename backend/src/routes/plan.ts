@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
+import { requireAuth, optionalAuth, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -159,6 +160,97 @@ router.post('/generate', validatePlanRequest, async (req: Request, res: Response
   }
 });
 
+// ============================================
+// SAVE & SHARE PLANS
+// ============================================
+
+// POST /api/plan/save - Save a generated plan
+router.post('/save', optionalAuth, [
+  body('date').isISO8601(),
+  body('children_ages').isArray(),
+  body('budget').optional().isFloat({ min: 0 }),
+  body('title').optional().isString().isLength({ max: 200 }),
+  body('slots').isArray(),
+  body('plan_b_slots').optional().isArray(),
+], async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw createError('Validation error', 400, 'VALIDATION_ERROR');
+    }
+
+    const authReq = req as AuthRequest;
+    const userId = authReq.user?.sub || null;
+
+    const {
+      date,
+      children_ages,
+      budget,
+      title,
+      slots,
+      plan_b_slots = [],
+      preferences,
+    } = req.body;
+
+    // Create the plan
+    const plan = await prisma.plan.create({
+      data: {
+        user_id: userId,
+        title: title || `Familientag am ${new Date(date).toLocaleDateString('de-DE')}`,
+        date: new Date(date),
+        children_ages,
+        budget: budget || null,
+        preferences: preferences || null,
+      }
+    });
+
+    // Create main plan slots
+    for (const slot of slots) {
+      await prisma.planSlot.create({
+        data: {
+          plan_id: plan.id,
+          event_id: slot.event_id || null,
+          slot_type: slot.type === 'break' ? 'break' : 'activity',
+          start_time: new Date(slot.start_time),
+          end_time: new Date(slot.end_time),
+          duration_minutes: slot.duration_minutes,
+          notes: slot.notes || slot.suggestion || null,
+        }
+      });
+    }
+
+    // Create Plan B slots
+    for (const slot of plan_b_slots) {
+      await prisma.planSlot.create({
+        data: {
+          plan_id: plan.id,
+          plan_b_for_id: plan.id,
+          event_id: slot.event_id || null,
+          slot_type: slot.type === 'break' ? 'break' : 'activity',
+          start_time: new Date(slot.start_time),
+          end_time: new Date(slot.end_time),
+          duration_minutes: slot.duration_minutes,
+          notes: slot.notes || null,
+        }
+      });
+    }
+
+    // Generate share URL
+    const shareUrl = `/plan/${plan.id}`;
+
+    res.status(201).json({
+      success: true,
+      message: 'Plan gespeichert',
+      data: {
+        id: plan.id,
+        share_url: shareUrl,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/plan/:id - Get saved plan
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -166,6 +258,43 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     const plan = await prisma.plan.findUnique({
       where: { id },
+      include: {
+        slots: {
+          where: { plan_b_for_id: null },
+          include: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                description_short: true,
+                location_address: true,
+                price_type: true,
+                price_min: true,
+                is_indoor: true,
+                is_outdoor: true,
+              }
+            }
+          },
+          orderBy: { start_time: 'asc' }
+        },
+        plan_b_slots: {
+          include: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                description_short: true,
+                location_address: true,
+                price_type: true,
+                price_min: true,
+                is_indoor: true,
+                is_outdoor: true,
+              }
+            }
+          },
+          orderBy: { start_time: 'asc' }
+        }
+      }
     });
 
     if (!plan) {
@@ -175,6 +304,38 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
     res.json({
       success: true,
       data: plan,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/plan/:id - Delete own plan
+router.delete('/:id', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authReq = req as AuthRequest;
+    const { id } = req.params;
+
+    const plan = await prisma.plan.findUnique({
+      where: { id }
+    });
+
+    if (!plan) {
+      throw createError('Plan not found', 404, 'NOT_FOUND');
+    }
+
+    // Only owner can delete (admin check could be added)
+    if (plan.user_id !== authReq.user!.sub) {
+      throw createError('Not authorized', 403, 'FORBIDDEN');
+    }
+
+    await prisma.plan.delete({
+      where: { id }
+    });
+
+    res.json({
+      success: true,
+      message: 'Plan deleted'
     });
   } catch (error) {
     next(error);

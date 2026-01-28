@@ -26,6 +26,7 @@ model CanonicalEvent {
   // DateTime
   start_datetime    DateTime @db.Timestamptz
   end_datetime      DateTime? @db.Timestamptz
+  is_all_day        Boolean   @default(false)
   
   // Location
   location_address  String?  @db.VarChar(300)
@@ -71,6 +72,18 @@ model CanonicalEvent {
   completeness_score Int?       @db.SmallInt // 0-100
   last_verified_at  DateTime?   @db.Timestamptz
   
+  // Cancel/Reschedule
+  is_cancelled              Boolean   @default(false)
+  cancelled_at              DateTime? @db.Timestamptz
+  cancellation_reason       String?   @db.Text
+  rescheduled_to_event_id   String?
+  rescheduled_to            CanonicalEvent? @relation("RescheduledTo", fields: [rescheduled_to_event_id], references: [id])
+  rescheduled_from          CanonicalEvent[] @relation("RescheduledTo")
+  previous_start_datetime   DateTime? @db.Timestamptz
+  
+  // Field locking (prevents AI/scraper from overwriting)
+  locked_fields     Json?     @default("[]")
+  
   // Timestamps
   created_at        DateTime    @default(now()) @db.Timestamptz
   updated_at        DateTime    @updatedAt @db.Timestamptz
@@ -82,10 +95,14 @@ model CanonicalEvent {
   event_sources     EventSource[] @relation("CanonicalEventSources")
   saved_by          SavedEvent[]
   plan_slots        PlanSlot[]
+  revisions         EventRevision[]
+  dup_candidates_a  DupCandidate[] @relation("DupCandidateA")
+  dup_candidates_b  DupCandidate[] @relation("DupCandidateB")
   
   @@index([status, start_datetime])
   @@index([start_datetime])
   @@index([provider_id])
+  @@index([is_cancelled])
   @@map("canonical_events")
 }
 
@@ -98,6 +115,7 @@ enum EventStatus {
   stale
   archived
   rejected
+  cancelled
 }
 
 enum PriceType {
@@ -153,6 +171,7 @@ model EventSource {
   primary_for         CanonicalEvent? @relation("PrimarySource")
   
   @@unique([source_id, external_id])
+  @@unique([fingerprint, source_id], name: "event_sources_fingerprint_source_unique")
   @@index([fingerprint])
   @@index([canonical_event_id])
   @@map("event_sources")
@@ -193,6 +212,7 @@ model Source {
   event_sources         EventSource[]
   fetch_logs            SourceFetchLog[]
   compliance            SourceCompliance?
+  ingest_runs           IngestRun[]
   
   @@map("sources")
 }
@@ -321,21 +341,34 @@ model AICache {
 }
 
 model AIUsageLog {
-  id                String   @id @default(uuid())
-  timestamp         DateTime @default(now()) @db.Timestamptz
+  id                  String   @id @default(uuid())
+  timestamp           DateTime @default(now()) @db.Timestamptz
   
-  model             String   @db.VarChar(50)
-  operation         String   @db.VarChar(50) // classify, score, enrich, plan
+  model               String   @db.VarChar(50)
+  operation           String   @db.VarChar(50) // classify, score, enrich, plan
   
-  input_tokens      Int?
-  output_tokens     Int?
-  estimated_cost_usd Decimal? @db.Decimal(10, 6)
+  input_tokens        Int?
+  output_tokens       Int?
+  estimated_cost_usd  Decimal? @db.Decimal(10, 6)
   
-  event_id          String?
-  user_id           String?
+  // Pricing snapshot for cost recalculation
+  price_input_per_1k  Decimal? @db.Decimal(10, 6)  // Price per 1k input tokens at time of call
+  price_output_per_1k Decimal? @db.Decimal(10, 6)  // Price per 1k output tokens at time of call
+  pricing_version     String?  @db.VarChar(20)     // e.g., "2024-01" for auditing
+  
+  // Context (no PII!)
+  event_id            String?
+  user_id             String?
+  request_id          String?  @db.VarChar(50)     // Correlation ID
+  
+  // Response metadata
+  response_time_ms    Int?
+  was_cached          Boolean  @default(false)
+  error_code          String?  @db.VarChar(50)
   
   @@index([timestamp])
   @@index([model, operation])
+  @@index([event_id])
   @@map("ai_usage_log")
 }
 
@@ -348,12 +381,20 @@ model Category {
   slug        String   @unique @db.VarChar(50)
   name_de     String   @db.VarChar(100)
   icon        String?  @db.VarChar(10)
+  sort_order  Int      @default(0)
   parent_id   String?
   parent      Category? @relation("CategoryHierarchy", fields: [parent_id], references: [id])
   children    Category[] @relation("CategoryHierarchy")
   
+  // Audit fields
+  created_at    DateTime @default(now()) @db.Timestamptz
+  updated_at    DateTime @updatedAt @db.Timestamptz
+  updated_by_id String?
+  updated_by    User?    @relation("CategoryUpdatedBy", fields: [updated_by_id], references: [id], onDelete: SetNull)
+  
   events      EventCategory[]
   
+  @@index([parent_id, sort_order])
   @@map("categories")
 }
 
@@ -372,9 +413,17 @@ model Amenity {
   slug        String   @unique @db.VarChar(50)
   name_de     String   @db.VarChar(100)
   icon        String?  @db.VarChar(10)
+  sort_order  Int      @default(0)
+  
+  // Audit fields
+  created_at    DateTime @default(now()) @db.Timestamptz
+  updated_at    DateTime @updatedAt @db.Timestamptz
+  updated_by_id String?
+  updated_by    User?    @relation("AmenityUpdatedBy", fields: [updated_by_id], references: [id], onDelete: SetNull)
   
   events      EventAmenity[]
   
+  @@index([sort_order])
   @@map("amenities")
 }
 
@@ -452,6 +501,16 @@ model User {
   family_profile FamilyProfile?
   saved_events  SavedEvent[]
   plans         Plan[]
+  
+  // Revision relations
+  revisions_created  EventRevision[] @relation("RevisionCreator")
+  revisions_reviewed EventRevision[] @relation("RevisionReviewer")
+  dup_resolutions    DupCandidate[]
+  
+  // Admin audit relations
+  categories_updated Category[] @relation("CategoryUpdatedBy")
+  amenities_updated  Amenity[]  @relation("AmenityUpdatedBy")
+  admin_audit_logs   AdminAuditLog[] @relation("AdminAuditLogs")
   
   @@map("users")
 }
@@ -543,4 +602,270 @@ enum SlotType {
   activity
   break
   travel
+}
+
+// ============================================
+// EVENT REVISIONS (Draft/Audit System)
+// ============================================
+
+model EventRevision {
+  id            String   @id @default(uuid())
+  event_id      String
+  event         CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  
+  // Changeset (only changed fields as JSON)
+  changeset     Json
+  
+  // Audit
+  created_by    String?
+  created_by_user User? @relation("RevisionCreator", fields: [created_by], references: [id])
+  created_at    DateTime @default(now()) @db.Timestamptz
+  
+  // Review status
+  status        RevisionStatus @default(pending)
+  reviewed_by   String?
+  reviewed_by_user User? @relation("RevisionReviewer", fields: [reviewed_by], references: [id])
+  reviewed_at   DateTime? @db.Timestamptz
+  review_note   String?  @db.Text
+  
+  @@index([event_id])
+  @@index([status])
+  @@map("event_revisions")
+}
+
+enum RevisionStatus {
+  pending
+  approved
+  rejected
+}
+
+// ============================================
+// INGEST RUNS (Observability)
+// ============================================
+
+model IngestRun {
+  id              String   @id @default(uuid())
+  correlation_id  String   @db.VarChar(50)
+  source_id       String?
+  source          Source?  @relation(fields: [source_id], references: [id])
+  
+  started_at      DateTime @default(now()) @db.Timestamptz
+  finished_at     DateTime? @db.Timestamptz
+  
+  status          IngestStatus @default(running)
+  
+  events_found    Int      @default(0)
+  events_created  Int      @default(0)
+  events_updated  Int      @default(0)
+  events_skipped  Int      @default(0)
+  
+  error_message   String?  @db.Text
+  error_details   Json?
+  
+  retry_count     Int      @default(0)
+  needs_attention Boolean  @default(false)
+  
+  @@index([status])
+  @@index([needs_attention])
+  @@index([source_id, started_at])
+  @@map("ingest_runs")
+}
+
+enum IngestStatus {
+  running
+  success
+  partial
+  failed
+}
+
+// ============================================
+// DUPLICATE CANDIDATES (Dedup Quality)
+// ============================================
+
+model DupCandidate {
+  id            String   @id @default(uuid())
+  event_a_id    String
+  event_a       CanonicalEvent @relation("DupCandidateA", fields: [event_a_id], references: [id], onDelete: Cascade)
+  event_b_id    String
+  event_b       CanonicalEvent @relation("DupCandidateB", fields: [event_b_id], references: [id], onDelete: Cascade)
+  
+  confidence    DupConfidence
+  score         Decimal? @db.Decimal(3, 2) // 0.00-1.00
+  
+  detected_at   DateTime @default(now()) @db.Timestamptz
+  resolved_at   DateTime? @db.Timestamptz
+  resolution    DupResolution?
+  resolved_by   String?
+  resolved_by_user User? @relation(fields: [resolved_by], references: [id])
+  
+  @@unique([event_a_id, event_b_id])
+  @@index([confidence])
+  @@index([resolution])
+  @@map("dup_candidates")
+}
+
+enum DupConfidence {
+  exact
+  likely
+  maybe
+}
+
+enum DupResolution {
+  merged
+  different
+  ignored
+}
+
+// ============================================
+// SEARCH & TRENDING
+// ============================================
+
+// Search query logs for trending analysis
+model SearchQueryLog {
+  id        String   @id @default(cuid())
+  queryNorm String   @db.VarChar(120)  // lowercase, trimmed, normalized
+  city      String?  @db.VarChar(80)   // 'karlsruhe' hardcoded for MVP
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([city, createdAt])
+  @@index([queryNorm])
+  @@map("search_query_logs")
+}
+
+// Computed trending terms
+model TrendingTerm {
+  id          String   @id @default(cuid())
+  term        String   @db.VarChar(120)
+  city        String?  @db.VarChar(80)
+  score       Float                      // current * trendRatio
+  trendRatio  Float                      // (current + 1) / (baseline + 1)
+  searches24h Int                        // count last 24h
+  baseline7d  Float                      // avg per 24h over 7d
+  computedAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([city, score])
+  @@index([computedAt])
+  @@map("trending_terms")
+}
+
+// Admin override actions for trending
+enum TrendAction {
+  PIN      // Always show at top
+  BOOST    // Increase score
+  HIDE     // Remove from lists
+  REPLACE  // Replace term with another
+  PUSH     // Insert into trending (even if not trending)
+}
+
+// Admin-controlled trending overrides
+model TrendOverride {
+  id          String      @id @default(cuid())
+  term        String      @db.VarChar(120)
+  termNorm    String      @db.VarChar(120)  // Normalized term for deduplication
+  city        String?     @db.VarChar(80)
+  action      TrendAction
+  boost       Int?                       // 1-100 for BOOST
+  replacement String?     @db.VarChar(120)  // Required for REPLACE
+  label       String?     @db.VarChar(50)   // Custom badge text (e.g. "🔥")
+  startsAt    DateTime?   @db.Timestamptz
+  endsAt      DateTime?   @db.Timestamptz
+  priority    Int         @default(0)
+  isActive    Boolean     @default(true)
+
+  createdById String?
+  createdAt   DateTime    @default(now()) @db.Timestamptz
+  updatedAt   DateTime    @updatedAt @db.Timestamptz
+
+  @@unique([termNorm, city, action], name: "unique_override_per_action")
+  @@index([city, isActive])
+  @@index([startsAt, endsAt])
+  @@index([action])
+  @@map("trend_overrides")
+}
+
+// ============================================
+// ADMIN AUDIT LOG
+// ============================================
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  REORDER
+  MERGE
+  APPROVE
+  REJECT
+  CONFIRM
+}
+
+model AdminAuditLog {
+  id          String      @id @default(cuid())
+  timestamp   DateTime    @default(now()) @db.Timestamptz
+  
+  // Who
+  user_id     String
+  user        User        @relation("AdminAuditLogs", fields: [user_id], references: [id], onDelete: Cascade)
+  
+  // What
+  action      AuditAction
+  entity_type String      @db.VarChar(50)  // 'category', 'amenity', 'event', 'source', etc.
+  entity_id   String      @db.VarChar(50)
+  entity_name String?     @db.VarChar(200) // Human-readable name at time of action
+  
+  // Details
+  changes     Json?       // { field: { old: x, new: y } }
+  metadata    Json?       // Additional context (e.g., batch operation info)
+  ip_address  String?     @db.VarChar(45)
+  user_agent  String?     @db.VarChar(500)
+  
+  @@index([user_id])
+  @@index([timestamp])
+  @@index([entity_type, entity_id])
+  @@index([action])
+  @@map("admin_audit_logs")
+}
+
+// ============================================
+// JOB QUEUE (Simple DB-based)
+// ============================================
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model JobQueueEntry {
+  id            String    @id @default(cuid())
+  
+  // Job identification (for idempotency)
+  job_type      String    @db.VarChar(50)   // 'source_fetch', 'trend_compute', etc.
+  job_key       String    @db.VarChar(200)  // Unique key for deduplication (e.g., sourceId + date)
+  
+  // Status
+  status        JobStatus @default(QUEUED)
+  priority      Int       @default(0)
+  
+  // Payload
+  payload       Json
+  
+  // Timing
+  scheduled_at  DateTime  @default(now()) @db.Timestamptz
+  started_at    DateTime? @db.Timestamptz
+  completed_at  DateTime? @db.Timestamptz
+  
+  // Results
+  result        Json?
+  error_message String?   @db.Text
+  attempts      Int       @default(0)
+  
+  // Metadata
+  created_by_id String?
+  created_at    DateTime  @default(now()) @db.Timestamptz
+  
+  @@unique([job_type, job_key])
+  @@index([status, priority, scheduled_at])
+  @@index([job_type, status])
+  @@map("job_queue")
 }

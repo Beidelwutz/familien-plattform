@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -51,10 +53,10 @@ router.get('/health', async (_req: Request, res: Response, next: NextFunction) =
 
     const summary = {
       total: sources.length,
-      healthy: sources.filter(s => s.health_status === 'healthy').length,
-      degraded: sources.filter(s => s.health_status === 'degraded').length,
-      failing: sources.filter(s => s.health_status === 'failing').length,
-      dead: sources.filter(s => s.health_status === 'dead').length,
+      healthy: sources.filter((s: { health_status: string }) => s.health_status === 'healthy').length,
+      degraded: sources.filter((s: { health_status: string }) => s.health_status === 'degraded').length,
+      failing: sources.filter((s: { health_status: string }) => s.health_status === 'failing').length,
+      dead: sources.filter((s: { health_status: string }) => s.health_status === 'dead').length,
     };
 
     res.json({
@@ -104,7 +106,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // POST /api/sources/:id/trigger - Manually trigger a source fetch
-router.post('/:id/trigger', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
@@ -116,16 +118,243 @@ router.post('/:id/trigger', async (req: Request, res: Response, next: NextFuncti
       throw createError('Source not found', 404, 'NOT_FOUND');
     }
 
-    // TODO: Queue fetch job to Redis
-    // For now, just return success
+    // Create an ingest run entry
+    const ingestRun = await prisma.ingestRun.create({
+      data: {
+        correlation_id: `manual-${Date.now()}`,
+        source_id: id,
+        status: 'running',
+      }
+    });
+
+    // Update source last_fetch_at
+    await prisma.source.update({
+      where: { id },
+      data: { last_fetch_at: new Date() }
+    });
+
+    // TODO: Actually queue fetch job to Redis/worker
     
     res.json({
       success: true,
       message: 'Fetch job queued',
       data: {
         source_id: id,
+        ingest_run_id: ingestRun.id,
         queued_at: new Date().toISOString(),
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// SOURCE CRUD (Admin only)
+// ============================================
+
+const validateSource = [
+  body('name').isString().isLength({ min: 2, max: 200 }).withMessage('name required (2-200 chars)'),
+  body('type').isIn(['api', 'rss', 'ics', 'scraper', 'partner', 'manual']).withMessage('type must be valid SourceType'),
+  body('url').optional().isURL().withMessage('url must be valid URL'),
+  body('schedule_cron').optional().isString().isLength({ max: 50 }),
+  body('priority').optional().isInt({ min: 1, max: 5 }),
+  body('rate_limit_ms').optional().isInt({ min: 0 }),
+  body('expected_event_count_min').optional().isInt({ min: 0 }),
+  body('scrape_allowed').optional().isBoolean(),
+  body('notes').optional().isString(),
+];
+
+// POST /api/sources - Create a new source (admin only)
+router.post('/', requireAuth, requireAdmin, validateSource, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw createError('Validation error: ' + errors.array().map(e => e.msg).join(', '), 400, 'VALIDATION_ERROR');
+    }
+
+    const {
+      name,
+      type,
+      url,
+      schedule_cron,
+      priority,
+      rate_limit_ms,
+      expected_event_count_min,
+      scrape_allowed,
+      notes,
+    } = req.body;
+
+    // Create source
+    const source = await prisma.source.create({
+      data: {
+        name,
+        type,
+        url: url || null,
+        schedule_cron: schedule_cron || null,
+        priority: priority || 3,
+        rate_limit_ms: rate_limit_ms || 5000,
+        expected_event_count_min: expected_event_count_min || null,
+        scrape_allowed: scrape_allowed !== false,
+        notes: notes || null,
+        health_status: 'unknown',
+      }
+    });
+
+    // Create compliance entry
+    await prisma.sourceCompliance.create({
+      data: {
+        source_id: source.id,
+        partnership_status: 'none',
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Source created',
+      data: source,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/sources/:id - Update a source (admin only)
+router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const source = await prisma.source.findUnique({ where: { id } });
+    if (!source) {
+      throw createError('Source not found', 404, 'NOT_FOUND');
+    }
+
+    const allowedFields = [
+      'name', 'type', 'url', 'schedule_cron', 'priority',
+      'rate_limit_ms', 'expected_event_count_min', 'scrape_allowed',
+      'notes', 'is_active', 'health_status',
+    ];
+
+    const updateData: Record<string, any> = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    const updated = await prisma.source.update({
+      where: { id },
+      data: updateData,
+    });
+
+    res.json({
+      success: true,
+      message: 'Source updated',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/sources/:id - Partial update (alias for PUT)
+router.patch('/:id', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  // Delegate to PUT handler
+  req.method = 'PUT';
+  router.handle(req, res, next);
+});
+
+// DELETE /api/sources/:id - Soft-delete a source (admin only)
+router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { hard } = req.query; // ?hard=true for actual delete
+
+    const source = await prisma.source.findUnique({ where: { id } });
+    if (!source) {
+      throw createError('Source not found', 404, 'NOT_FOUND');
+    }
+
+    if (hard === 'true') {
+      // Hard delete - remove source and all related data
+      await prisma.$transaction([
+        prisma.sourceFetchLog.deleteMany({ where: { source_id: id } }),
+        prisma.sourceCompliance.deleteMany({ where: { source_id: id } }),
+        prisma.eventSource.deleteMany({ where: { source_id: id } }),
+        prisma.ingestRun.deleteMany({ where: { source_id: id } }),
+        prisma.source.delete({ where: { id } }),
+      ]);
+
+      res.json({
+        success: true,
+        message: 'Source permanently deleted',
+      });
+    } else {
+      // Soft delete - just deactivate
+      await prisma.source.update({
+        where: { id },
+        data: { is_active: false },
+      });
+
+      res.json({
+        success: true,
+        message: 'Source deactivated',
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/sources/:id/compliance - Update source compliance info (admin only)
+router.put('/:id/compliance', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const source = await prisma.source.findUnique({ where: { id } });
+    if (!source) {
+      throw createError('Source not found', 404, 'NOT_FOUND');
+    }
+
+    const {
+      robots_txt_allows,
+      tos_allows_scraping,
+      contact_attempted,
+      partnership_status,
+      legal_notes,
+    } = req.body;
+
+    const compliance = await prisma.sourceCompliance.upsert({
+      where: { source_id: id },
+      update: {
+        robots_txt_allows: robots_txt_allows ?? undefined,
+        robots_txt_checked_at: robots_txt_allows !== undefined ? new Date() : undefined,
+        tos_allows_scraping: tos_allows_scraping ?? undefined,
+        tos_reviewed_at: tos_allows_scraping !== undefined ? new Date() : undefined,
+        contact_attempted: contact_attempted ?? undefined,
+        partnership_status: partnership_status ?? undefined,
+        legal_notes: legal_notes ?? undefined,
+      },
+      create: {
+        source_id: id,
+        robots_txt_allows: robots_txt_allows ?? null,
+        robots_txt_checked_at: robots_txt_allows !== undefined ? new Date() : null,
+        tos_allows_scraping: tos_allows_scraping ?? null,
+        tos_reviewed_at: tos_allows_scraping !== undefined ? new Date() : null,
+        contact_attempted: contact_attempted ?? false,
+        partnership_status: partnership_status ?? 'none',
+        legal_notes: legal_notes ?? null,
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Compliance info updated',
+      data: compliance,
     });
   } catch (error) {
     next(error);
