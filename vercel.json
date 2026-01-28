@@ -23,7 +23,7 @@
   "rewrites": [
     {
       "source": "/api/cron/compute-trends",
-      "destination": "https://api.familien-lokal.de/api/admin/trends/compute"
+      "destination": "https://api.kiezling.com/api/admin/trends/compute"
     }
   ]
 }
