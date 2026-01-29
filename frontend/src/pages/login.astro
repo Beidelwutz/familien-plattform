@@ -96,7 +96,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
 </BaseLayout>
 
 <script>
-  import { supabase, signInWithGoogle, signInWithEmail } from '../lib/supabase';
+  import { supabase, signInWithGoogle, signInWithEmail, isSupabaseConfigured } from '../lib/supabase';
 
   const form = document.getElementById('login-form') as HTMLFormElement;
   const errorEl = document.getElementById('login-error');
@@ -274,6 +274,12 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   });
 
   // Initialize
-  checkExistingSession();
+  // Show error immediately if Supabase is not configured
+  if (!isSupabaseConfigured) {
+    showError('Authentifizierung ist momentan nicht verfügbar. Bitte versuche es später erneut.');
+    console.error('Supabase nicht konfiguriert - prüfe PUBLIC_SUPABASE_URL und PUBLIC_SUPABASE_ANON_KEY');
+  } else {
+    checkExistingSession();
+  }
   checkUrlError();
 </script>

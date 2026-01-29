@@ -11,9 +11,15 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 // Track if Supabase is properly configured
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
-if (!isSupabaseConfigured) {
-  console.warn('Supabase environment variables not set. Auth features will not work.');
-  console.warn('Required: PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY');
+// Debug logging (remove in production later)
+if (typeof window !== 'undefined') {
+  console.log('[Supabase] URL configured:', !!supabaseUrl);
+  console.log('[Supabase] Key configured:', !!supabaseAnonKey);
+  if (!isSupabaseConfigured) {
+    console.error('[Supabase] FEHLER: Umgebungsvariablen nicht gesetzt!');
+    console.error('[Supabase] PUBLIC_SUPABASE_URL:', supabaseUrl || '(leer)');
+    console.error('[Supabase] PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '(gesetzt)' : '(leer)');
+  }
 }
 
 export const supabase = createClient(
