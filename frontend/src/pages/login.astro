@@ -14,6 +14,23 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <p class="text-gray-500">Melde dich an, um deine Merkliste und Pläne zu sehen</p>
         </div>
 
+        <!-- Google Login Button -->
+        <button type="button" id="google-login-btn" class="w-full flex items-center justify-center gap-3 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors mb-6">
+          <svg class="w-5 h-5" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Mit Google anmelden
+        </button>
+
+        <div class="flex items-center gap-4 mb-6">
+          <span class="flex-1 h-px bg-gray-200"></span>
+          <span class="text-gray-400 text-sm">oder mit E-Mail</span>
+          <span class="flex-1 h-px bg-gray-200"></span>
+        </div>
+
         <form class="flex flex-col gap-5" id="login-form">
           <div class="flex flex-col gap-2">
             <label for="email" class="font-medium text-sm text-gray-700">E-Mail</label>
@@ -32,20 +49,11 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             </label>
             <a href="/passwort-vergessen" class="text-primary-500 hover:text-primary-600 font-medium">Passwort vergessen?</a>
           </div>
-          <button type="submit" class="btn-primary w-full py-3 mt-2">Anmelden</button>
-          <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="login-error">E-Mail oder Passwort falsch</div>
+          <button type="submit" id="email-login-btn" class="btn-primary w-full py-3 mt-2">Anmelden</button>
+          <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="login-error"></div>
+          <div class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm text-center" id="login-success"></div>
         </form>
 
-        <div class="flex items-center gap-4 my-6">
-          <span class="flex-1 h-px bg-gray-200"></span>
-          <span class="text-gray-400 text-sm">oder</span>
-          <span class="flex-1 h-px bg-gray-200"></span>
-        </div>
-        <div class="flex flex-col gap-3">
-          <button type="button" class="w-full flex items-center justify-center gap-2 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-600 cursor-not-allowed opacity-60" disabled>
-            <span>G</span> Mit Google anmelden (demnächst)
-          </button>
-        </div>
         <p class="text-center text-sm text-gray-600 mt-6">
           Noch kein Konto? <a href="/registrieren" class="text-primary-500 hover:text-primary-600 font-semibold">Jetzt registrieren</a>
         </p>
@@ -88,42 +96,142 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
-  const form = document.getElementById('login-form');
-  const errorEl = document.getElementById('login-error');
+<script>
+  import { supabase, signInWithGoogle, signInWithEmail, getSession } from '../lib/supabase';
 
+  const form = document.getElementById('login-form') as HTMLFormElement;
+  const errorEl = document.getElementById('login-error');
+  const successEl = document.getElementById('login-success');
+  const googleBtn = document.getElementById('google-login-btn');
+  const emailBtn = document.getElementById('email-login-btn');
+
+  // Check if user is already logged in
+  async function checkExistingSession() {
+    const session = await getSession();
+    if (session) {
+      const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+      window.location.href = redirectTo;
+    }
+  }
+
+  // Check for error in URL (from callback)
+  function checkUrlError() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    if (error && errorEl) {
+      errorEl.textContent = error === 'auth_failed' 
+        ? 'Anmeldung fehlgeschlagen. Bitte versuche es erneut.'
+        : error;
+      errorEl.classList.remove('hidden');
+    }
+  }
+
+  // Show error message
+  function showError(message: string) {
+    if (errorEl) {
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+    }
+    if (successEl) successEl.classList.add('hidden');
+  }
+
+  // Show success message
+  function showSuccess(message: string) {
+    if (successEl) {
+      successEl.textContent = message;
+      successEl.classList.remove('hidden');
+    }
+    if (errorEl) errorEl.classList.add('hidden');
+  }
+
+  // Set button loading state
+  function setLoading(btn: HTMLElement | null, loading: boolean) {
+    if (!btn) return;
+    if (loading) {
+      btn.setAttribute('disabled', 'true');
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+    } else {
+      btn.removeAttribute('disabled');
+      btn.classList.remove('opacity-60', 'cursor-not-allowed');
+    }
+  }
+
+  // Google Login Handler
+  googleBtn?.addEventListener('click', async () => {
+    try {
+      setLoading(googleBtn, true);
+      if (errorEl) errorEl.classList.add('hidden');
+      
+      // Store redirect URL for callback
+      const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+      localStorage.setItem('auth_redirect', redirectTo);
+      
+      await signInWithGoogle();
+      // User will be redirected to Google, then to /auth/callback
+    } catch (err) {
+      console.error('Google login error:', err);
+      showError('Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.');
+      setLoading(googleBtn, false);
+    }
+  });
+
+  // Email Login Handler
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (errorEl) errorEl.classList.add('hidden');
+    setLoading(emailBtn, true);
+
     const formData = new FormData(form);
-    const email = formData.get('email');
-    const password = formData.get('password');
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
     try {
-      const response = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await response.json();
-      if (data.success && data.data?.token) {
-        const token = data.data.token;
-        localStorage.setItem('auth_token', token);
-        // Lokale Merkliste an Backend anbinden
+      const { session, user } = await signInWithEmail(email, password);
+
+      if (session && user) {
+        showSuccess('Anmeldung erfolgreich! Du wirst weitergeleitet...');
+        
+        // Store access token for API calls (backward compatibility)
+        localStorage.setItem('auth_token', session.access_token);
+        
+        // Sync local saved events to backend
         try {
           const localIds = JSON.parse(localStorage.getItem('saved_events') || '[]');
-          const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+          const headers = { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${session.access_token}` 
+          };
+          const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           for (const eventId of localIds) {
             await fetch(`${API_BASE}/api/user/saved-events/${eventId}`, { method: 'POST', headers });
           }
         } catch (_) { /* Sync optional */ }
-        const back = new URLSearchParams(window.location.search).get('redirect') || '/';
-        window.location.href = back;
+
+        // Redirect
+        const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+        setTimeout(() => {
+          window.location.href = redirectTo;
+        }, 500);
       } else {
-        if (errorEl) errorEl.classList.remove('hidden');
+        showError('Anmeldung fehlgeschlagen. Bitte überprüfe deine Zugangsdaten.');
+        setLoading(emailBtn, false);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      if (errorEl) errorEl.classList.remove('hidden');
+      
+      // Handle specific Supabase errors
+      if (err.message?.includes('Invalid login credentials')) {
+        showError('E-Mail oder Passwort falsch.');
+      } else if (err.message?.includes('Email not confirmed')) {
+        showError('Bitte bestätige zuerst deine E-Mail-Adresse.');
+      } else {
+        showError(err.message || 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
+      }
+      setLoading(emailBtn, false);
     }
   });
+
+  // Initialize
+  checkExistingSession();
+  checkUrlError();
 </script>

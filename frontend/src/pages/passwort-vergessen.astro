@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import StickyHeader from '../components/layout/StickyHeader.astro';
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Passwort vergessen - familienlokal">
@@ -90,9 +89,11 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
-  const form = document.getElementById('reset-request-form');
-  const submitBtn = document.getElementById('submit-btn');
+<script>
+  import { resetPassword } from '../lib/supabase';
+
+  const form = document.getElementById('reset-request-form') as HTMLFormElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
   const errorMessage = document.getElementById('error-message');
   const successMessage = document.getElementById('success-message');
   const tryAgainBtn = document.getElementById('try-again-btn');
@@ -101,7 +102,8 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      const email = (document.getElementById('email')).value;
+      const emailInput = document.getElementById('email') as HTMLInputElement;
+      const email = emailInput.value;
       
       // Reset states
       errorMessage.classList.add('hidden');
@@ -109,29 +111,26 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       submitBtn.textContent = 'Wird gesendet...';
 
       try {
-        const response = await fetch(`${API_BASE}/api/auth/forgot-password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          // Show success regardless of whether email exists (security)
-          form.classList.add('hidden');
-          successMessage.classList.remove('hidden');
+        await resetPassword(email);
+        
+        // Show success regardless of whether email exists (security)
+        form.classList.add('hidden');
+        successMessage.classList.remove('hidden');
+      } catch (error: any) {
+        console.error('Password reset error:', error);
+        
+        // For security, still show success to not reveal if email exists
+        // Only show error for actual technical failures
+        if (error.message?.includes('rate limit')) {
+          errorMessage.textContent = 'Zu viele Anfragen. Bitte warte einen Moment.';
+          errorMessage.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Link anfordern';
         } else {
-          // Even on error, show success for security (don't reveal if email exists)
+          // Show success even on error (don't reveal if email exists)
           form.classList.add('hidden');
           successMessage.classList.remove('hidden');
         }
-      } catch (error) {
-        // Network error
-        errorMessage.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
-        errorMessage.classList.remove('hidden');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Link anfordern';
       }
     });
 
@@ -140,7 +139,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       successMessage.classList.add('hidden');
       submitBtn.disabled = false;
       submitBtn.textContent = 'Link anfordern';
-      (document.getElementById('email')).value = '';
+      (document.getElementById('email') as HTMLInputElement).value = '';
     });
   }
 </script>

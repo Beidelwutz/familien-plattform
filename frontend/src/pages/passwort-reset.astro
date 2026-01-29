@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import StickyHeader from '../components/layout/StickyHeader.astro';
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Neues Passwort setzen - familienlokal">
@@ -17,7 +16,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             </svg>
           </div>
           <h1 class="text-2xl font-bold text-gray-900 mb-2">Neues Passwort setzen</h1>
-          <p class="text-gray-500">Wähle ein sicheres Passwort mit mindestens 8 Zeichen.</p>
+          <p class="text-gray-500">Wähle ein sicheres Passwort mit mindestens 6 Zeichen.</p>
         </div>
 
         <!-- Invalid Token Message (shown when no token) -->
@@ -47,8 +46,8 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               id="password" 
               name="password" 
               required 
-              minlength="8"
-              placeholder="Mindestens 8 Zeichen" 
+              minlength="6"
+              placeholder="Mindestens 6 Zeichen" 
               autocomplete="new-password"
               class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
             />
@@ -61,7 +60,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               id="password-confirm" 
               name="password-confirm" 
               required 
-              minlength="8"
+              minlength="6"
               placeholder="Passwort wiederholen" 
               autocomplete="new-password"
               class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
@@ -72,7 +71,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <div class="text-sm text-gray-500 space-y-1">
             <p class="flex items-center gap-2">
               <span id="req-length" class="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-xs">·</span>
-              Mindestens 8 Zeichen
+              Mindestens 6 Zeichen
             </p>
             <p class="flex items-center gap-2">
               <span id="req-match" class="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-xs">·</span>
@@ -112,33 +111,68 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
-  const form = document.getElementById('reset-form');
-  const submitBtn = document.getElementById('submit-btn');
+<script>
+  import { supabase, updatePassword } from '../lib/supabase';
+
+  const form = document.getElementById('reset-form') as HTMLFormElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
   const errorMessage = document.getElementById('error-message');
   const successMessage = document.getElementById('success-message');
   const invalidTokenMessage = document.getElementById('invalid-token-message');
-  const passwordInput = document.getElementById('password');
-  const passwordConfirmInput = document.getElementById('password-confirm');
+  const passwordInput = document.getElementById('password') as HTMLInputElement;
+  const passwordConfirmInput = document.getElementById('password-confirm') as HTMLInputElement;
   const reqLength = document.getElementById('req-length');
   const reqMatch = document.getElementById('req-match');
 
-  // Get token from URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('token');
+  // Check if we have a valid session (from the reset email link)
+  // Supabase automatically handles the token exchange from the URL hash
+  async function checkSession() {
+    // Check URL for error
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const error = hashParams.get('error');
+    const errorDescription = hashParams.get('error_description');
+    
+    if (error) {
+      console.error('Reset link error:', errorDescription);
+      if (form) form.classList.add('hidden');
+      if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
+      return;
+    }
 
-  // Check if token exists
-  if (!token) {
-    if (form) form.classList.add('hidden');
-    if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
+    // Try to get session (Supabase handles token from URL automatically)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      // No valid session, check if we have a token in URL
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      
+      if (type === 'recovery' && accessToken) {
+        // Set the session manually
+        const { error: setError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: hashParams.get('refresh_token') || '',
+        });
+        
+        if (setError) {
+          console.error('Set session error:', setError);
+          if (form) form.classList.add('hidden');
+          if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
+        }
+      } else if (!window.location.hash && !window.location.search.includes('token')) {
+        // No token at all
+        if (form) form.classList.add('hidden');
+        if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
+      }
+    }
   }
 
   // Password validation
-  function validatePassword() {
+  function validatePassword(): boolean {
     const password = passwordInput?.value || '';
     const passwordConfirm = passwordConfirmInput?.value || '';
     
-    const lengthValid = password.length >= 8;
+    const lengthValid = password.length >= 6;
     const matchValid = password === passwordConfirm && password.length > 0;
 
     // Update UI
@@ -167,7 +201,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   passwordInput?.addEventListener('input', validatePassword);
   passwordConfirmInput?.addEventListener('input', validatePassword);
 
-  if (form && submitBtn && errorMessage && successMessage && token) {
+  if (form && submitBtn && errorMessage && successMessage) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -181,34 +215,32 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       submitBtn.textContent = 'Wird gespeichert...';
 
       try {
-        const response = await fetch(`${API_BASE}/api/auth/reset-password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, password }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
+        await updatePassword(password);
+        
+        // Success
+        form.classList.add('hidden');
+        successMessage.classList.remove('hidden');
+        
+        // Sign out after password change (user needs to login again)
+        await supabase.auth.signOut();
+        localStorage.removeItem('auth_token');
+      } catch (err: any) {
+        console.error('Password update error:', err);
+        
+        if (err.message?.includes('session')) {
+          // Session expired
           form.classList.add('hidden');
-          successMessage.classList.remove('hidden');
+          if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
         } else {
-          if (data.error?.code === 'INVALID_TOKEN') {
-            form.classList.add('hidden');
-            if (invalidTokenMessage) invalidTokenMessage.classList.remove('hidden');
-          } else {
-            errorMessage.textContent = data.error?.message || 'Ein Fehler ist aufgetreten';
-            errorMessage.classList.remove('hidden');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Passwort ändern';
-          }
+          errorMessage.textContent = err.message || 'Ein Fehler ist aufgetreten';
+          errorMessage.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Passwort ändern';
         }
-      } catch (error) {
-        errorMessage.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
-        errorMessage.classList.remove('hidden');
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Passwort ändern';
       }
     });
   }
+
+  // Initialize
+  checkSession();
 </script>

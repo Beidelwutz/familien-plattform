@@ -1,0 +1,150 @@
+---
+/**
+ * OAuth Callback Page
+ * Handles the redirect from Supabase OAuth (Google, etc.)
+ * Exchanges the code for a session and redirects to the appropriate page
+ */
+---
+
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anmeldung wird verarbeitet...</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #10b981;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 {
+      color: #1f2937;
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      color: #6b7280;
+      font-size: 0.875rem;
+    }
+    .error {
+      color: #dc2626;
+      background: #fef2f2;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin-top: 1rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner" id="spinner"></div>
+    <h1 id="title">Anmeldung wird verarbeitet...</h1>
+    <p id="message">Bitte warten Sie einen Moment.</p>
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    import { supabase } from '../../lib/supabase';
+
+    async function handleCallback() {
+      const titleEl = document.getElementById('title') as HTMLElement | null;
+      const messageEl = document.getElementById('message') as HTMLElement | null;
+      const spinnerEl = document.getElementById('spinner') as HTMLElement | null;
+      const errorEl = document.getElementById('error') as HTMLElement | null;
+
+      try {
+        // Get the code from URL (Supabase PKCE flow)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        
+        // Check for error in URL
+        const error = hashParams.get('error') || queryParams.get('error');
+        const errorDescription = hashParams.get('error_description') || queryParams.get('error_description');
+        
+        if (error) {
+          throw new Error(errorDescription || error);
+        }
+
+        // Exchange code for session (Supabase handles this automatically via detectSessionInUrl)
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (!session) {
+          // Try to get session from URL hash (for implicit flow)
+          const code = queryParams.get('code');
+          if (code) {
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            if (exchangeError) {
+              throw exchangeError;
+            }
+          }
+        }
+
+        // Success - update UI
+        if (titleEl) titleEl.textContent = 'Anmeldung erfolgreich!';
+        if (messageEl) messageEl.textContent = 'Sie werden weitergeleitet...';
+        if (spinnerEl) spinnerEl.style.borderTopColor = '#10b981';
+
+        // Store token for API calls
+        const { data: { session: finalSession } } = await supabase.auth.getSession();
+        if (finalSession?.access_token) {
+          localStorage.setItem('auth_token', finalSession.access_token);
+        }
+
+        // Get redirect URL from localStorage or default to home
+        const redirectTo = localStorage.getItem('auth_redirect') || '/';
+        localStorage.removeItem('auth_redirect');
+
+        // Short delay for UX
+        setTimeout(() => {
+          window.location.href = redirectTo;
+        }, 1000);
+
+      } catch (err) {
+        console.error('Auth callback error:', err);
+        
+        if (spinnerEl) spinnerEl.style.display = 'none';
+        if (titleEl) titleEl.textContent = 'Anmeldung fehlgeschlagen';
+        if (messageEl) messageEl.textContent = 'Es gab ein Problem bei der Anmeldung.';
+        
+        if (errorEl) {
+          errorEl.style.display = 'block';
+          errorEl.textContent = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        }
+
+        // Redirect to login after delay
+        setTimeout(() => {
+          window.location.href = '/login?error=auth_failed';
+        }, 3000);
+      }
+    }
+
+    // Run on page load
+    handleCallback();
+  </script>
+</body>
+</html>
