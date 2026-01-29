@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     ai_monthly_limit_usd: float = 200.0
     
     # Geocoding
-    nominatim_user_agent: str = "familien-lokal-dev"
+    nominatim_user_agent: str = "kiezling-dev"
     
     # Location defaults (Karlsruhe)
     default_lat: float = 49.0069

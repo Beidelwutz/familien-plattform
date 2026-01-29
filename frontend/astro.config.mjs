@@ -4,7 +4,7 @@ import tailwind from '@astrojs/tailwind';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://familien-lokal.de',
+  site: 'https://www.kiezling.com',
   output: 'server',
   adapter: vercel({
     webAnalytics: { enabled: true },

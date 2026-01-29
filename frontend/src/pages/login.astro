@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import StickyHeader from '../components/layout/StickyHeader.astro';
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Anmelden - familienlokal">
@@ -97,7 +96,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 </BaseLayout>
 
 <script>
-  import { supabase, signInWithGoogle, signInWithEmail, getSession } from '../lib/supabase';
+  import { supabase, signInWithGoogle, signInWithEmail } from '../lib/supabase';
 
   const form = document.getElementById('login-form') as HTMLFormElement;
   const errorEl = document.getElementById('login-error');

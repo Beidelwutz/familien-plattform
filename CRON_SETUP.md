@@ -42,7 +42,7 @@ Verwende einen externen Cron-Service wie:
 #### Beispiel: cURL Command
 
 ```bash
-curl -X POST https://api.familien-lokal.de/api/admin/trends/compute \
+curl -X POST https://api.kiezling.com/api/admin/trends/compute \
   -H "X-Cron-Secret: YOUR_CRON_SECRET" \
   -H "Content-Type: application/json"
 ```
@@ -70,7 +70,7 @@ jobs:
 ```
 
 Secrets in GitHub Repository Settings setzen:
-- `API_URL`: https://api.familien-lokal.de
+- `API_URL`: https://api.kiezling.com
 - `CRON_SECRET`: (Dein Secret aus .env)
 
 ## Manuelle Berechnung

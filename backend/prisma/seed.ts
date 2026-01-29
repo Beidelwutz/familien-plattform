@@ -448,15 +448,15 @@ async function main() {
   // Create admin user
   const adminHash = await bcrypt.hash('admin123', 10);
   await prisma.user.upsert({
-    where: { email: 'admin@familien-lokal.de' },
+    where: { email: 'admin@kiezling.com' },
     update: { password_hash: adminHash, role: 'admin' },
     create: {
-      email: 'admin@familien-lokal.de',
+      email: 'admin@kiezling.com',
       password_hash: adminHash,
       role: 'admin',
     },
   });
-  console.log('✅ Admin created: admin@familien-lokal.de / admin123');
+  console.log('✅ Admin created: admin@kiezling.com / admin123');
 
   console.log('✨ Seeding complete!');
 }

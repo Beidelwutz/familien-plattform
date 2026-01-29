@@ -4,7 +4,7 @@ Vollständige Referenz aller Backend-API-Endpunkte.
 
 ## Basis-Information
 
-- **Base URL:** `https://api.familien-lokal.de/api`
+- **Base URL:** `https://api.kiezling.com/api`
 - **Format:** JSON
 - **Authentifizierung:** JWT Bearer Token
 
@@ -607,7 +607,7 @@ Bei Überschreitung: `429 Too Many Requests`
 ### cURL: Login
 
 ```bash
-curl -X POST https://api.familien-lokal.de/api/auth/login \
+curl -X POST https://api.kiezling.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"password123"}'
 ```
@@ -615,20 +615,20 @@ curl -X POST https://api.familien-lokal.de/api/auth/login \
 ### cURL: Events suchen
 
 ```bash
-curl "https://api.familien-lokal.de/api/events?lat=49.0069&lng=8.4037&radius=10&categories=indoor"
+curl "https://api.kiezling.com/api/events?lat=49.0069&lng=8.4037&radius=10&categories=indoor"
 ```
 
 ### cURL: Event speichern
 
 ```bash
-curl -X POST https://api.familien-lokal.de/api/user/saved-events/EVENT_ID \
+curl -X POST https://api.kiezling.com/api/user/saved-events/EVENT_ID \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### JavaScript: Fetch
 
 ```javascript
-const response = await fetch('https://api.familien-lokal.de/api/events?limit=10', {
+const response = await fetch('https://api.kiezling.com/api/events?limit=10', {
   headers: {
     'Authorization': `Bearer ${token}`
   }

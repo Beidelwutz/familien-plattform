@@ -76,7 +76,7 @@ jobs:
       
       - name: Check frontend health
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://familien-lokal.de)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://www.kiezling.com)
           if [ "$STATUS" != "200" ]; then
             echo "Frontend health check failed with status $STATUS"
             exit 1

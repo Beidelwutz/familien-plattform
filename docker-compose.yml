@@ -4,7 +4,7 @@ services:
   # PostgreSQL mit PostGIS Extension
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: familien-lokal-db
+    container_name: kiezling-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: familien
@@ -24,7 +24,7 @@ services:
   # Redis für Job Queue
   redis:
     image: redis:7-alpine
-    container_name: familien-lokal-redis
+    container_name: kiezling-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -39,7 +39,7 @@ services:
   # Meilisearch für Volltextsuche (optional, für später)
   # meilisearch:
   #   image: getmeili/meilisearch:v1.6
-  #   container_name: familien-lokal-search
+  #   container_name: kiezling-search
   #   restart: unless-stopped
   #   environment:
   #     MEILI_ENV: development

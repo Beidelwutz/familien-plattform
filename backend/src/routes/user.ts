@@ -281,7 +281,7 @@ function generateICalEvent(event: any): string {
   const title = escapeIcal(event.title);
   const description = escapeIcal(event.description_short || event.description_long || '');
   const location = escapeIcal(event.location_address || '');
-  const url = event.booking_url || `https://familien-lokal.de/event/${event.id}`;
+  const url = event.booking_url || `https://www.kiezling.com/event/${event.id}`;
   
   // Build categories
   const categories = event.categories?.map((c: any) => c.category?.name_de || c.category?.slug).join(',') || '';

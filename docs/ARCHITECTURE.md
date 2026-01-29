@@ -389,7 +389,7 @@ ai-worker/
 │                         Vercel                              │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │                 Frontend (Astro)                     │   │
-│  │              https://familien-lokal.de               │   │
+│  │              https://www.kiezling.com               │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                           │                                 │
 │                           │ API Calls                       │

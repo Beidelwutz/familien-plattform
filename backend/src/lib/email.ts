@@ -7,7 +7,7 @@ const resend = process.env.RESEND_API_KEY
   : null;
 
 // Email configuration
-const FROM_EMAIL = process.env.EMAIL_FROM || 'Familien-Lokal <noreply@familien-lokal.de>';
+const FROM_EMAIL = process.env.EMAIL_FROM || 'Kiezling <noreply@kiezling.com>';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 export interface EmailOptions {
@@ -171,7 +171,7 @@ export async function sendWelcomeEmail(email: string): Promise<boolean> {
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
     
     <p style="color: #6b7280; font-size: 14px; margin-bottom: 0;">
-      Bei Fragen erreichst du uns unter <a href="mailto:support@familien-lokal.de" style="color: #6366f1;">support@familien-lokal.de</a>
+      Bei Fragen erreichst du uns unter <a href="mailto:support@kiezling.com" style="color: #6366f1;">support@kiezling.com</a>
     </p>
   </div>
   

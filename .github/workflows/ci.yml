@@ -125,7 +125,7 @@ jobs:
       run:
         working-directory: frontend
     env:
-      PUBLIC_API_URL: https://api.familien-lokal.de
+      PUBLIC_API_URL: https://api.kiezling.com
     steps:
       - uses: actions/checkout@v4
       

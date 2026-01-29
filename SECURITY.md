@@ -14,7 +14,7 @@ Wir nehmen Sicherheit ernst. Wenn du eine Sicherheitslücke entdeckst, hilf uns 
 ### Meldeprozess
 
 1. **NICHT** als öffentliches GitHub Issue melden
-2. Sende eine E-Mail an: **security@familien-lokal.de**
+2. Sende eine E-Mail an: **security@kiezling.com**
 3. Füge folgende Informationen bei:
    - Beschreibung der Schwachstelle
    - Schritte zur Reproduktion
@@ -67,7 +67,7 @@ JWT_SECRET="<zufällig-generierter-string>"
 CRON_SECRET="<zufällig-generierter-string>"
 
 # CORS restriktiv setzen
-CORS_ORIGIN="https://familien-lokal.de"
+CORS_ORIGIN="https://www.kiezling.com"
 
 # Production Mode
 NODE_ENV="production"
@@ -171,8 +171,8 @@ pip-audit
 
 ## Kontakt
 
-- **Sicherheitsprobleme:** security@familien-lokal.de
-- **Allgemeine Fragen:** info@familien-lokal.de
+- **Sicherheitsprobleme:** security@kiezling.com
+- **Allgemeine Fragen:** info@kiezling.com
 
 ---
 

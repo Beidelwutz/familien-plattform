@@ -18,7 +18,7 @@ Eltern bekommen in unter 20 Sekunden einen fertigen, stressfreien Plan (inkl. Ro
 ## Projektstruktur
 
 ```
-familien-lokal/
+kiezling/
 ├── frontend/          # Astro App
 ├── backend/           # Node.js API
 ├── ai-worker/         # Python AI Service
@@ -108,7 +108,7 @@ npm run db:push
 3. **Build Command:** `npm run build`
 4. **Output Directory:** `dist`
 5. Environment Variables in Vercel Dashboard setzen:
-   - `PUBLIC_API_URL` = `https://api.familien-lokal.de`
+   - `PUBLIC_API_URL` = `https://api.kiezling.com`
 
 ### Backend (Railway / Render / Fly.io)
 
@@ -161,7 +161,7 @@ Für automatische Trending-Berechnung, `vercel.json` erweitern:
 | `REDIS_URL` | ✅ Ja | Redis Connection String | `redis://localhost:6379` |
 | `PORT` | Nein | Server Port (default: 4000) | `4000` |
 | `NODE_ENV` | Nein | Environment | `production` |
-| `CORS_ORIGIN` | ✅ Ja | Erlaubte Origins (kommasepariert) | `https://familien-lokal.de` |
+| `CORS_ORIGIN` | ✅ Ja | Erlaubte Origins (kommasepariert) | `https://www.kiezling.com` |
 | `JWT_SECRET` | ✅ Prod | JWT Signing Secret (min. 32 Zeichen) | `your-super-secret-key-here` |
 | `JWT_EXPIRES_IN` | Nein | Token Ablaufzeit (default: 7d) | `7d` |
 | `AI_WORKER_URL` | Nein | AI Worker Service URL | `http://localhost:5000` |

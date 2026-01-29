@@ -23,11 +23,11 @@
   "rewrites": [
     {
       "source": "/api/cron/compute-trends",
-      "destination": "https://api.familien-lokal.de/api/admin/trends/compute"
+      "destination": "https://api.kiezling.com/api/admin/trends/compute"
     },
     {
       "source": "/api/cron/check-sources",
-      "destination": "https://api.familien-lokal.de/api/sources/cron/check"
+      "destination": "https://api.kiezling.com/api/sources/cron/check"
     }
   ]
 }

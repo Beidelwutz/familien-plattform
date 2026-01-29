@@ -25,8 +25,8 @@ Vielen Dank für dein Interesse an Familien-Lokal! Diese Richtlinien helfen dir 
 
 2. **Repository klonen:**
    ```bash
-   git clone https://github.com/DEIN-USERNAME/familien-lokal.git
-   cd familien-lokal
+   git clone https://github.com/DEIN-USERNAME/kiezling.git
+   cd kiezling
    ```
 
 3. **Dependencies installieren:**

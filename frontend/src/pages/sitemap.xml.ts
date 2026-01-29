@@ -10,7 +10,7 @@ export async function GET() {
     { url: '/anbieter', changefreq: 'weekly', priority: 0.5 },
   ];
 
-  const baseUrl = 'https://familien-lokal.de';
+  const baseUrl = 'https://www.kiezling.com';
   const today = new Date().toISOString().split('T')[0];
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>

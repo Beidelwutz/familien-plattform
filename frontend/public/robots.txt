@@ -1,11 +1,11 @@
-# Familien-Lokal Robots.txt
-# https://familien-lokal.de
+# Kiezling Robots.txt
+# https://www.kiezling.com
 
 User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://familien-lokal.de/sitemap.xml
+Sitemap: https://www.kiezling.com/sitemap.xml
 
 # Disallow admin and private areas
 Disallow: /admin/
