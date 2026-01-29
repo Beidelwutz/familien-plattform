@@ -247,12 +247,14 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
   });
 
   // Auth state management
-  const API_BASE = import.meta.env?.PUBLIC_API_URL || window.location.origin.includes('localhost') 
-    ? 'http://localhost:4000' 
-    : '';
+  const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   async function checkAuthState() {
     const token = localStorage.getItem('auth_token');
+    
+    // Debug logging
+    console.log('[Auth] Checking auth state, API_BASE:', API_BASE);
+    console.log('[Auth] Token exists:', !!token);
     
     const loginBtn = document.getElementById('login-btn');
     const userMenu = document.getElementById('user-menu');
@@ -261,6 +263,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
     if (!token) {
       // Not logged in
+      console.log('[Auth] No token found, showing login button');
       loginBtn?.classList.remove('hidden');
       userMenu?.classList.add('hidden');
       mobileLoginBtn?.classList.remove('hidden');
@@ -276,6 +279,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
       if (!response.ok) {
         // Token invalid - clear and show login
+        console.log('[Auth] Token invalid, response status:', response.status);
         localStorage.removeItem('auth_token');
         loginBtn?.classList.remove('hidden');
         userMenu?.classList.add('hidden');
@@ -286,6 +290,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
       const data = await response.json();
       const user = data.data;
+      console.log('[Auth] User authenticated:', user.email, 'Role:', user.role);
 
       // Show logged in state
       loginBtn?.classList.add('hidden');
@@ -323,7 +328,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
       }
 
     } catch (error) {
-      console.error('Auth check failed:', error);
+      console.error('[Auth] Auth check failed:', error);
       // On error, show login button
       loginBtn?.classList.remove('hidden');
       userMenu?.classList.add('hidden');
