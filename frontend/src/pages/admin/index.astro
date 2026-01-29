@@ -2,8 +2,6 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
 import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
-
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Admin Dashboard - familienlokal">
@@ -243,8 +241,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       // Netzwerkfehler (z. B. Backend nicht erreichbar): nicht zu Login weiterleiten
       const isNetworkError = e instanceof TypeError && (e.message === 'Failed to fetch' || e.message?.includes('fetch'));
       if (isNetworkError) {
-        document.getElementById('loading-state').classList.add('hidden');
-        document.getElementById('error-state').classList.remove('hidden');
+        document.getElementById('loading-state')?.classList.add('hidden');
+        document.getElementById('error-state')?.classList.remove('hidden');
         const errEl = document.querySelector('#error-state p');
         if (errEl) errEl.textContent = 'Backend nicht erreichbar. Bitte prüfe, ob der Server läuft, und versuche es erneut.';
         return;
@@ -278,42 +276,55 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const trends = trendsRes.ok ? await trendsRes.json() : { uniqueTerms: 0, lastComputed: null };
 
       // Update DOM
-      document.getElementById('total-events').textContent = stats.data.events.total;
-      document.getElementById('published-events').textContent = stats.data.events.published;
-      document.getElementById('pending-events').textContent = stats.data.events.pending_review;
-      document.getElementById('today-imports').textContent = stats.data.events.today_imports;
-      document.getElementById('review-count').textContent = stats.data.events.pending_review;
-      
+      const totalEvents = document.getElementById('total-events');
+      const publishedEvents = document.getElementById('published-events');
+      const pendingEvents = document.getElementById('pending-events');
+      const todayImports = document.getElementById('today-imports');
+      const reviewCount = document.getElementById('review-count');
+      if (totalEvents) totalEvents.textContent = stats.data.events.total;
+      if (publishedEvents) publishedEvents.textContent = stats.data.events.published;
+      if (pendingEvents) pendingEvents.textContent = stats.data.events.pending_review;
+      if (todayImports) todayImports.textContent = stats.data.events.today_imports;
+      if (reviewCount) reviewCount.textContent = stats.data.events.pending_review;
+
       // Source health
-      const sourceTotal = Object.values(stats.data.sources).reduce((a, b) => a + b, 0);
-      document.getElementById('source-health').textContent = sourceTotal;
-      document.getElementById('sources-healthy').textContent = stats.data.sources.healthy;
-      document.getElementById('sources-degraded').textContent = stats.data.sources.degraded;
-      document.getElementById('sources-failing').textContent = stats.data.sources.failing;
-      document.getElementById('sources-dead').textContent = stats.data.sources.dead;
-      document.getElementById('sources-unknown').textContent = stats.data.sources.unknown;
+      const sourceTotal = (Object.values(stats.data.sources) as number[]).reduce((a, b) => a + b, 0);
+      const sourceHealth = document.getElementById('source-health');
+      const sourcesHealthy = document.getElementById('sources-healthy');
+      const sourcesDegraded = document.getElementById('sources-degraded');
+      const sourcesFailing = document.getElementById('sources-failing');
+      const sourcesDead = document.getElementById('sources-dead');
+      const sourcesUnknown = document.getElementById('sources-unknown');
+      if (sourceHealth) sourceHealth.textContent = String(sourceTotal);
+      if (sourcesHealthy) sourcesHealthy.textContent = stats.data.sources.healthy;
+      if (sourcesDegraded) sourcesDegraded.textContent = stats.data.sources.degraded;
+      if (sourcesFailing) sourcesFailing.textContent = stats.data.sources.failing;
+      if (sourcesDead) sourcesDead.textContent = stats.data.sources.dead;
+      if (sourcesUnknown) sourcesUnknown.textContent = stats.data.sources.unknown;
 
       // Duplicates & attention
-      document.getElementById('dup-count').textContent = dups.pagination?.total || 0;
-      document.getElementById('attention-count').textContent = attention.total || 0;
+      const dupCount = document.getElementById('dup-count');
+      const attentionCount = document.getElementById('attention-count');
+      if (dupCount) dupCount.textContent = String(dups.pagination?.total || 0);
+      if (attentionCount) attentionCount.textContent = String(attention.total || 0);
 
       // Trends
-      document.getElementById('trending-count').textContent = trends.lastComputed 
-        ? (trends.uniqueTerms || 0) 
-        : 0;
+      const trendingCount = document.getElementById('trending-count');
+      if (trendingCount) trendingCount.textContent = String(trends.lastComputed ? (trends.uniqueTerms || 0) : 0);
 
       // Show content
-      document.getElementById('loading-state').classList.add('hidden');
-      document.getElementById('dashboard-content').classList.remove('hidden');
+      document.getElementById('loading-state')?.classList.add('hidden');
+      document.getElementById('dashboard-content')?.classList.remove('hidden');
 
     } catch (e) {
       console.error('Dashboard load error:', e);
-      document.getElementById('loading-state').classList.add('hidden');
-      document.getElementById('error-state').classList.remove('hidden');
+      document.getElementById('loading-state')?.classList.add('hidden');
+      document.getElementById('error-state')?.classList.remove('hidden');
     }
 
     // Logout handler
-    document.getElementById('logout-btn').addEventListener('click', () => {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', () => {
       localStorage.removeItem('auth_token');
       window.location.href = '/login';
     });
