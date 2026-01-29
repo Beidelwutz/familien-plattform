@@ -26,6 +26,7 @@ export const supabase = createClient(
 
 /**
  * Get the current session
+ * Also syncs the access_token to localStorage for backward compatibility
  */
 export async function getSession() {
   const { data: { session }, error } = await supabase.auth.getSession();
@@ -33,6 +34,15 @@ export async function getSession() {
     console.error('Error getting session:', error);
     return null;
   }
+  
+  // Sync access_token to localStorage for pages that use it directly
+  if (session?.access_token && typeof localStorage !== 'undefined') {
+    const currentToken = localStorage.getItem('auth_token');
+    if (currentToken !== session.access_token) {
+      localStorage.setItem('auth_token', session.access_token);
+    }
+  }
+  
   return session;
 }
 

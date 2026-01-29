@@ -4,6 +4,7 @@
  */
 
 import { adminApi, type ApiResponse } from './adminApi';
+import { getSession } from './supabase';
 
 export interface User {
   id: string;
@@ -13,14 +14,39 @@ export interface User {
 }
 
 /**
+ * Synchronize auth token from Supabase session to localStorage
+ * This ensures the token is available even when navigating directly to admin pages
+ */
+async function syncAuthToken(): Promise<string | null> {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+
+  let token = localStorage.getItem('auth_token');
+  
+  // Wenn kein Token im localStorage, versuche Supabase-Session
+  if (!token) {
+    try {
+      const session = await getSession();
+      if (session?.access_token) {
+        token = session.access_token;
+        localStorage.setItem('auth_token', token);
+      }
+    } catch (e) {
+      console.error('Error syncing auth token from Supabase:', e);
+    }
+  }
+  
+  return token;
+}
+
+/**
  * Require admin role - redirects to login if not authenticated or not admin
  * Call this at the start of any admin page script
  */
 export async function requireAdmin(): Promise<User> {
-  // Check for token
-  const token = typeof localStorage !== 'undefined' 
-    ? localStorage.getItem('auth_token') 
-    : null;
+  // Sync token from Supabase session if needed
+  const token = await syncAuthToken();
 
   if (!token) {
     redirectToLogin();
@@ -40,6 +66,23 @@ export async function requireAdmin(): Promise<User> {
 
     return user;
   } catch (error) {
+    // Token might be expired - try refreshing from Supabase
+    try {
+      const session = await getSession();
+      if (session?.access_token && typeof localStorage !== 'undefined') {
+        localStorage.setItem('auth_token', session.access_token);
+        // Retry with new token
+        const response = await adminApi.get<ApiResponse<User>>('/api/auth/me');
+        const user = response.data;
+        if (user.role !== 'admin') {
+          redirectToHome('not_admin');
+          throw new Error('Admin role required');
+        }
+        return user;
+      }
+    } catch {
+      // Fallback to original error handling
+    }
     // adminApi handles 401/403 redirects
     throw error;
   }
@@ -49,9 +92,8 @@ export async function requireAdmin(): Promise<User> {
  * Check if user is authenticated (any role)
  */
 export async function requireAuth(): Promise<User> {
-  const token = typeof localStorage !== 'undefined' 
-    ? localStorage.getItem('auth_token') 
-    : null;
+  // Sync token from Supabase session if needed
+  const token = await syncAuthToken();
 
   if (!token) {
     redirectToLogin();
@@ -70,9 +112,8 @@ export async function requireAuth(): Promise<User> {
  * Get current user without redirecting (returns null if not authenticated)
  */
 export async function getCurrentUser(): Promise<User | null> {
-  const token = typeof localStorage !== 'undefined' 
-    ? localStorage.getItem('auth_token') 
-    : null;
+  // Sync token from Supabase session if needed
+  const token = await syncAuthToken();
 
   if (!token) {
     return null;

@@ -107,10 +107,42 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // Check if user is already logged in
   async function checkExistingSession() {
-    const session = await getSession();
+    // Erst mal auf Supabase Auth State warten
+    const { data: { session } } = await supabase.auth.getSession();
+
     if (session) {
+      // WICHTIG: Token aus Supabase-Session holen und im localStorage setzen
+      // Sonst entsteht eine Redirect-Schleife, da Admin-Seiten den Token erwarten
+      if (session.access_token) {
+        localStorage.setItem('auth_token', session.access_token);
+      }
       const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
       window.location.href = redirectTo;
+      return;
+    }
+
+    // Wenn keine Session, aber ein Token existiert, prüfen ob er gültig ist
+    const existingToken = localStorage.getItem('auth_token');
+    if (existingToken) {
+      // Token existiert - versuche zu validieren durch Backend-Call
+      try {
+        const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${existingToken}` }
+        });
+        if (res.ok) {
+          // Token ist gültig - weiterleiten
+          const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+          window.location.href = redirectTo;
+          return;
+        } else {
+          // Token ungültig - entfernen
+          localStorage.removeItem('auth_token');
+        }
+      } catch {
+        // Fehler - Token entfernen
+        localStorage.removeItem('auth_token');
+      }
     }
   }
 

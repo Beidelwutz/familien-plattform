@@ -69,8 +69,10 @@ cp ai-worker/.env.example ai-worker/.env
 
 ## Entwicklung
 
+**Admin-Konsole:** Frontend und Backend müssen laufen. Im Projektroot `npm run dev` startet beides; das Backend erlaubt CORS für `localhost:3000` und `localhost:3001`.
+
 ```bash
-# Alle Services starten
+# Alle Services starten (Frontend + Backend)
 npm run dev
 
 # Nur Frontend

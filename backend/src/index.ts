@@ -27,8 +27,8 @@ import aiUsageRoutes from './routes/aiUsage.js';
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// CORS: allow single origin or comma-separated list (e.g. for Vercel preview + production)
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000';
+// CORS: allow single origin or comma-separated list (Frontend 3000/3001, Vercel preview + production)
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001';
 const corsOrigins = corsOrigin.split(',').map((o) => o.trim()).filter(Boolean);
 
 // Middleware

@@ -151,11 +151,52 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_URL }}>
+<script>
+  import { supabase, getSession } from '../../lib/supabase';
+  
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  
+  // Hilfsfunktion: Warte auf Auth-Initialisierung
+  async function waitForAuth(maxWaitMs = 3000): Promise<string | null> {
+    let token = localStorage.getItem('auth_token');
+    if (token) return token;
+
+    // Warte auf Supabase Auth State Change (robuster als getSession allein)
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(localStorage.getItem('auth_token'));
+        }
+      }, maxWaitMs);
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!resolved && session?.access_token) {
+          resolved = true;
+          clearTimeout(timeout);
+          localStorage.setItem('auth_token', session.access_token);
+          subscription.unsubscribe();
+          resolve(session.access_token);
+        }
+      });
+
+      getSession().then(session => {
+        if (!resolved && session?.access_token) {
+          resolved = true;
+          clearTimeout(timeout);
+          localStorage.setItem('auth_token', session.access_token);
+          subscription.unsubscribe();
+          resolve(session.access_token);
+        }
+      });
+    });
+  }
+
   (async function() {
-    const token = localStorage.getItem('auth_token');
-    
-    // Auth check
+    let token = await waitForAuth();
+
     if (!token) {
       window.location.href = '/login?redirect=/admin';
       return;
@@ -166,19 +207,48 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const meRes = await fetch(`${API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (!meRes.ok) {
-        localStorage.removeItem('auth_token');
-        window.location.href = '/login?redirect=/admin';
-        return;
-      }
-      
-      const meData = await meRes.json();
-      if (meData.data.role !== 'admin') {
-        window.location.href = '/?error=not_admin';
-        return;
+        // Token ungültig - versuche Supabase-Session als Fallback
+        const session = await getSession();
+        if (session?.access_token) {
+          token = session.access_token;
+          localStorage.setItem('auth_token', token);
+          const retryRes = await fetch(`${API_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!retryRes.ok) {
+            localStorage.removeItem('auth_token');
+            window.location.href = '/login?redirect=/admin';
+            return;
+          }
+          const retryData = await retryRes.json();
+          if (retryData.data.role !== 'admin') {
+            window.location.href = '/?error=not_admin';
+            return;
+          }
+        } else {
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login?redirect=/admin';
+          return;
+        }
+      } else {
+        const meData = await meRes.json();
+        if (meData.data.role !== 'admin') {
+          window.location.href = '/?error=not_admin';
+          return;
+        }
       }
     } catch (e) {
+      // Netzwerkfehler (z. B. Backend nicht erreichbar): nicht zu Login weiterleiten
+      const isNetworkError = e instanceof TypeError && (e.message === 'Failed to fetch' || e.message?.includes('fetch'));
+      if (isNetworkError) {
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('error-state').classList.remove('hidden');
+        const errEl = document.querySelector('#error-state p');
+        if (errEl) errEl.textContent = 'Backend nicht erreichbar. Bitte prüfe, ob der Server läuft, und versuche es erneut.';
+        return;
+      }
       window.location.href = '/login?redirect=/admin';
       return;
     }
