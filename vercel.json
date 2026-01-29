@@ -5,12 +5,8 @@
   "framework": "astro",
   "crons": [
     {
-      "path": "/api/cron/compute-trends",
-      "schedule": "*/30 * * * *"
-    },
-    {
       "path": "/api/cron/check-sources",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     }
   ],
   "headers": [
