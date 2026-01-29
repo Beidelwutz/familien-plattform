@@ -87,7 +87,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
               </svg>
             </div>
-            <span id="user-email" class="hidden sm:inline text-sm font-medium max-w-[120px] truncate"></span>
+            <span id="user-email" class="sr-only"></span>
             <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
@@ -198,6 +198,8 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 </header>
 
 <script>
+  import { syncAuthToken } from '../../lib/authSync';
+  import { getSession } from '../../lib/supabase';
   // Mobile menu toggle
   const mobileMenuBtn = document.getElementById('mobile-menu-btn');
   const mobileMenu = document.getElementById('mobile-menu');
@@ -247,10 +249,10 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
   });
 
   // Auth state management
-  const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
 
   async function checkAuthState() {
-    const token = localStorage.getItem('auth_token');
+    let token = localStorage.getItem('auth_token');
     
     // Debug logging
     console.log('[Auth] Checking auth state, API_BASE:', API_BASE);
@@ -260,6 +262,10 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     const userMenu = document.getElementById('user-menu');
     const mobileLoginBtn = document.getElementById('mobile-login-btn');
     const mobileUserSection = document.getElementById('mobile-user-section');
+
+    if (!token) {
+      token = await syncAuthToken();
+    }
 
     if (!token) {
       // Not logged in
@@ -329,7 +335,27 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
     } catch (error) {
       console.error('[Auth] Auth check failed:', error);
-      // On error, show login button
+
+      // Fallback: try to show session-based logged-in UI when backend is unreachable
+      const session = await getSession();
+      if (session?.user?.email) {
+        loginBtn?.classList.add('hidden');
+        userMenu?.classList.remove('hidden');
+        mobileLoginBtn?.classList.add('hidden');
+        mobileUserSection?.classList.remove('hidden');
+
+        const userEmail = document.getElementById('user-email');
+        const dropdownEmail = document.getElementById('dropdown-email');
+        const dropdownRole = document.getElementById('dropdown-role');
+        const mobileUserEmail = document.getElementById('mobile-user-email');
+        if (userEmail) userEmail.textContent = session.user.email.split('@')[0];
+        if (dropdownEmail) dropdownEmail.textContent = session.user.email;
+        if (mobileUserEmail) mobileUserEmail.textContent = session.user.email;
+        if (dropdownRole) dropdownRole.textContent = 'Angemeldet';
+        return;
+      }
+
+      // On error without session, show login button
       loginBtn?.classList.remove('hidden');
       userMenu?.classList.add('hidden');
       mobileLoginBtn?.classList.remove('hidden');
@@ -371,6 +397,15 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
   } else {
     checkAuthState();
   }
+
+  // React to Supabase auth state changes in this tab
+  import('../../lib/supabase').then(({ supabase }) => {
+    supabase.auth.onAuthStateChange(() => {
+      checkAuthState();
+    });
+  }).catch(() => {
+    // Supabase not available, ignore
+  });
 
   // Listen for storage changes (login/logout in other tabs)
   window.addEventListener('storage', (e) => {

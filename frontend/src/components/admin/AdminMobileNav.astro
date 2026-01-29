@@ -22,27 +22,28 @@ const navItems = [
 ];
 ---
 
-<!-- Mobile Navigation Toggle (shown on mobile) -->
-<div class="lg:hidden fixed bottom-4 right-4 z-40">
-  <button 
-    id="mobile-nav-toggle"
-    class="w-14 h-14 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors"
-    aria-label="Navigation öffnen"
-  >
-    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-    </svg>
-  </button>
-</div>
+<div id="admin-nav-root" class="hidden">
+  <!-- Mobile Navigation Toggle (shown on mobile) -->
+  <div class="lg:hidden fixed bottom-4 right-4 z-40">
+    <button 
+      id="mobile-nav-toggle"
+      class="w-14 h-14 bg-primary-500 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-600 transition-colors"
+      aria-label="Navigation öffnen"
+    >
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+      </svg>
+    </button>
+  </div>
 
-<!-- Mobile Navigation Drawer -->
-<div 
-  id="mobile-nav-drawer" 
-  class="fixed inset-0 z-50 hidden"
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="mobile-nav-title"
->
+  <!-- Mobile Navigation Drawer -->
+  <div 
+    id="mobile-nav-drawer" 
+    class="fixed inset-0 z-50 hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="mobile-nav-title"
+  >
   <!-- Backdrop -->
   <div id="mobile-nav-backdrop" class="absolute inset-0 bg-black/50 opacity-0 transition-opacity"></div>
   
@@ -101,30 +102,32 @@ const navItems = [
   </div>
 </div>
 
-<!-- Desktop Sidebar (shown on larger screens) -->
-<aside class="hidden lg:block fixed left-0 top-16 bottom-0 w-56 bg-white border-r border-gray-200 overflow-y-auto">
-  <nav class="p-4">
-    <ul class="space-y-1">
-      {navItems.map(item => (
-        <li>
-          <a 
-            href={item.href}
-            class={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-              currentPage === item.id 
-                ? 'bg-primary-100 text-primary-700 font-medium' 
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            }`}
-          >
-            <span>{item.icon}</span>
-            <span>{item.label}</span>
-          </a>
-        </li>
-      ))}
-    </ul>
-  </nav>
-</aside>
+  <!-- Desktop Sidebar (shown on larger screens) -->
+  <aside class="hidden lg:block fixed left-0 top-16 bottom-0 w-56 bg-white border-r border-gray-200 overflow-y-auto">
+    <nav class="p-4">
+      <ul class="space-y-1">
+        {navItems.map(item => (
+          <li>
+            <a 
+              href={item.href}
+              class={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                currentPage === item.id 
+                  ? 'bg-primary-100 text-primary-700 font-medium' 
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <span>{item.icon}</span>
+              <span>{item.label}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  </aside>
+</div>
 
 <script>
+  const adminNavRoot = document.getElementById('admin-nav-root');
   const toggle = document.getElementById('mobile-nav-toggle');
   const drawer = document.getElementById('mobile-nav-drawer');
   const backdrop = document.getElementById('mobile-nav-backdrop');
@@ -165,6 +168,52 @@ const navItems = [
       closeDrawer();
     }
   });
+
+  const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
+
+  async function ensureAdminNavVisible() {
+    let token = localStorage.getItem('auth_token');
+
+    if (!token) {
+      try {
+        const { getSession } = await import('../../lib/supabase');
+        const session = await getSession();
+        if (session?.access_token) {
+          token = session.access_token;
+          localStorage.setItem('auth_token', token);
+        }
+      } catch {
+        // Supabase not available, continue
+      }
+    }
+
+    if (!token) {
+      adminNavRoot?.classList.add('hidden');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        adminNavRoot?.classList.add('hidden');
+        return;
+      }
+
+      const data = await res.json();
+      if (data.data?.role === 'admin') {
+        adminNavRoot?.classList.remove('hidden');
+      } else {
+        adminNavRoot?.classList.add('hidden');
+      }
+    } catch {
+      adminNavRoot?.classList.add('hidden');
+    }
+  }
+
+  ensureAdminNavVisible();
 
   // Logout
   logoutBtn?.addEventListener('click', async () => {
