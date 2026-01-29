@@ -8,13 +8,17 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+// Track if Supabase is properly configured
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+
+if (!isSupabaseConfigured) {
   console.warn('Supabase environment variables not set. Auth features will not work.');
+  console.warn('Required: PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_ANON_KEY');
 }
 
 export const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || '',
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
   {
     auth: {
       autoRefreshToken: true,
@@ -23,6 +27,15 @@ export const supabase = createClient(
     },
   }
 );
+
+/**
+ * Helper to check if Supabase is configured before auth operations
+ */
+function checkSupabaseConfig() {
+  if (!isSupabaseConfigured) {
+    throw new Error('Supabase ist nicht konfiguriert. Bitte kontaktiere den Administrator.');
+  }
+}
 
 /**
  * Get the current session
@@ -62,6 +75,8 @@ export async function getUser() {
  * Sign in with Google OAuth
  */
 export async function signInWithGoogle(redirectTo?: string) {
+  checkSupabaseConfig();
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -81,6 +96,8 @@ export async function signInWithGoogle(redirectTo?: string) {
  * Sign in with email and password
  */
 export async function signInWithEmail(email: string, password: string) {
+  checkSupabaseConfig();
+  
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -97,6 +114,8 @@ export async function signInWithEmail(email: string, password: string) {
  * Sign up with email and password
  */
 export async function signUpWithEmail(email: string, password: string, metadata?: Record<string, unknown>) {
+  checkSupabaseConfig();
+  
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
