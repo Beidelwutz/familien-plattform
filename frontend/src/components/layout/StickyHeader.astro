@@ -239,7 +239,8 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
   // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
-    if (!userMenuBtn?.contains(e.target) && !userDropdown?.contains(e.target)) {
+    const target = e.target as Node | null;
+    if (!userMenuBtn?.contains(target) && !userDropdown?.contains(target)) {
       userDropdown?.classList.add('hidden');
       userMenuBtn?.setAttribute('aria-expanded', 'false');
     }
@@ -302,7 +303,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
       if (dropdownEmail) dropdownEmail.textContent = user.email;
       if (mobileUserEmail) mobileUserEmail.textContent = user.email;
       
-      const roleLabels = {
+      const roleLabels: Record<string, string> = {
         'admin': 'Administrator',
         'provider': 'Anbieter',
         'parent': 'Familie'
@@ -337,9 +338,12 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
       // Clear local storage
       localStorage.removeItem('auth_token');
       
-      // Try to sign out from Supabase if available on window
-      if (typeof window !== 'undefined' && window.supabase?.auth) {
-        await window.supabase.auth.signOut();
+      // Try to sign out from Supabase dynamically
+      try {
+        const { supabase } = await import('../lib/supabase');
+        await supabase.auth.signOut();
+      } catch {
+        // Supabase not available, continue
       }
 
       // Redirect to home
