@@ -76,7 +76,7 @@ export async function sendPasswordResetEmail(
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Familien-Lokal</h1>
+    <h1 style="color: white; margin: 0; font-size: 24px;">Kiezling</h1>
   </div>
   
   <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
@@ -109,7 +109,7 @@ export async function sendPasswordResetEmail(
   </div>
   
   <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
-    <p>&copy; ${new Date().getFullYear()} Familien-Lokal. Alle Rechte vorbehalten.</p>
+    <p>&copy; ${new Date().getFullYear()} Kiezling. Alle Rechte vorbehalten.</p>
     <p>
       <a href="${FRONTEND_URL}/datenschutz" style="color: #9ca3af;">Datenschutz</a> |
       <a href="${FRONTEND_URL}/impressum" style="color: #9ca3af;">Impressum</a>
@@ -121,7 +121,7 @@ export async function sendPasswordResetEmail(
 
   return sendEmail({
     to: email,
-    subject: 'Passwort zurücksetzen - Familien-Lokal',
+    subject: 'Passwort zurücksetzen - Kiezling',
     html,
   });
 }
@@ -136,11 +136,11 @@ export async function sendWelcomeEmail(email: string): Promise<boolean> {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Willkommen bei Familien-Lokal</title>
+  <title>Willkommen bei Kiezling</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Willkommen bei Familien-Lokal!</h1>
+    <h1 style="color: white; margin: 0; font-size: 24px;">Willkommen bei Kiezling!</h1>
   </div>
   
   <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
@@ -148,7 +148,7 @@ export async function sendWelcomeEmail(email: string): Promise<boolean> {
     
     <p>Hallo,</p>
     
-    <p>Herzlich willkommen bei <strong>Familien-Lokal</strong> – deiner Plattform für Familienaktivitäten in Karlsruhe und Umgebung!</p>
+    <p>Herzlich willkommen bei <strong>Kiezling</strong> – deiner Plattform für Familienaktivitäten in Karlsruhe und Umgebung!</p>
     
     <p>Mit deinem Konto kannst du:</p>
     
@@ -176,7 +176,7 @@ export async function sendWelcomeEmail(email: string): Promise<boolean> {
   </div>
   
   <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
-    <p>&copy; ${new Date().getFullYear()} Familien-Lokal. Alle Rechte vorbehalten.</p>
+    <p>&copy; ${new Date().getFullYear()} Kiezling. Alle Rechte vorbehalten.</p>
     <p>
       <a href="${FRONTEND_URL}/datenschutz" style="color: #9ca3af;">Datenschutz</a> |
       <a href="${FRONTEND_URL}/impressum" style="color: #9ca3af;">Impressum</a>
@@ -188,7 +188,7 @@ export async function sendWelcomeEmail(email: string): Promise<boolean> {
 
   return sendEmail({
     to: email,
-    subject: 'Willkommen bei Familien-Lokal!',
+    subject: 'Willkommen bei Kiezling!',
     html,
   });
 }
@@ -212,7 +212,7 @@ export async function sendVerificationEmail(
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Familien-Lokal</h1>
+    <h1 style="color: white; margin: 0; font-size: 24px;">Kiezling</h1>
   </div>
   
   <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
@@ -220,7 +220,7 @@ export async function sendVerificationEmail(
     
     <p>Hallo,</p>
     
-    <p>Vielen Dank für deine Registrierung bei Familien-Lokal! Bitte bestätige deine E-Mail-Adresse, indem du auf den Button unten klickst:</p>
+    <p>Vielen Dank für deine Registrierung bei Kiezling! Bitte bestätige deine E-Mail-Adresse, indem du auf den Button unten klickst:</p>
     
     <div style="text-align: center; margin: 30px 0;">
       <a href="${verifyUrl}" style="display: inline-block; background: #10b981; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
@@ -233,7 +233,7 @@ export async function sendVerificationEmail(
     </p>
     
     <p style="color: #6b7280; font-size: 14px;">
-      Falls du dich nicht bei Familien-Lokal registriert hast, kannst du diese E-Mail ignorieren.
+      Falls du dich nicht bei Kiezling registriert hast, kannst du diese E-Mail ignorieren.
     </p>
     
     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
@@ -245,7 +245,7 @@ export async function sendVerificationEmail(
   </div>
   
   <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
-    <p>&copy; ${new Date().getFullYear()} Familien-Lokal. Alle Rechte vorbehalten.</p>
+    <p>&copy; ${new Date().getFullYear()} Kiezling. Alle Rechte vorbehalten.</p>
     <p>
       <a href="${FRONTEND_URL}/datenschutz" style="color: #9ca3af;">Datenschutz</a> |
       <a href="${FRONTEND_URL}/impressum" style="color: #9ca3af;">Impressum</a>
@@ -257,7 +257,7 @@ export async function sendVerificationEmail(
 
   return sendEmail({
     to: email,
-    subject: 'E-Mail bestätigen - Familien-Lokal',
+    subject: 'E-Mail bestätigen - Kiezling',
     html,
   });
 }

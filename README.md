@@ -1,6 +1,6 @@
-# Familien-Lokal Plattform
+# kiezling
 
-Eine Plattform für Familien in Karlsruhe, die lokale Events, Kurse und Ferienangebote findet, bewertet und buchbar macht.
+Eine Plattform für Familien in Karlsruhe, die lokale Events, Kurse und Ferienangebote findet, bewertet und buchbar macht (kiezling.com).
 
 ## USP
 

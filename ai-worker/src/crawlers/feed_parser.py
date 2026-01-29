@@ -32,7 +32,7 @@ class FeedParser:
             timeout=30.0,
             follow_redirects=True,
             headers={
-                "User-Agent": "FamilienLokal/1.0 (Event Aggregator)"
+                "User-Agent": "Kiezling/1.0 (Event Aggregator)"
             }
         )
     

@@ -2,7 +2,7 @@
   "name": "kiezling",
   "version": "0.1.0",
   "private": true,
-  "description": "Familienplattform für lokale Events, Kurse und Ferienangebote in Karlsruhe",
+  "description": "kiezling – Plattform für lokale Events, Kurse und Ferienangebote in Karlsruhe",
   "workspaces": [
     "frontend",
     "backend",

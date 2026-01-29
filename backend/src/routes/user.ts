@@ -255,7 +255,7 @@ router.get('/plans', requireAuth, async (req: Request, res: Response, next: Next
  * Generate iCal content for an event
  */
 function generateICalEvent(event: any): string {
-  const uid = `${event.id}@familienlokal.de`;
+  const uid = `${event.id}@kiezling.com`;
   
   // Format dates for iCal (YYYYMMDDTHHMMSSZ format)
   const formatICalDate = (date: Date): string => {
@@ -345,16 +345,16 @@ router.get('/saved-events.ics', requireAuth, async (req: Request, res: Response,
     
     const icalContent = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//FamilienLokal//Merkliste//DE
+PRODID:-//Kiezling//Merkliste//DE
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
-X-WR-CALNAME:familienlokal Merkliste
+X-WR-CALNAME:kiezling Merkliste
 X-WR-TIMEZONE:Europe/Berlin
 ${icalEvents}
 END:VCALENDAR`;
     
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="familienlokal-merkliste.ics"');
+    res.setHeader('Content-Disposition', 'attachment; filename="kiezling-merkliste.ics"');
     res.send(icalContent);
   } catch (error) {
     next(error);

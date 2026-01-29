@@ -1,4 +1,4 @@
-// Shared TypeScript types for Familien-Lokal Platform
+// Shared TypeScript types for kiezling
 
 // ============================================
 // ENUMS

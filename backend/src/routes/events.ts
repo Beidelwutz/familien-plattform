@@ -1361,7 +1361,7 @@ router.get('/:id/similar', async (req: Request, res: Response, next: NextFunctio
  */
 function generateICalEvent(event: any): string {
   const now = new Date();
-  const uid = `${event.id}@familienlokal.de`;
+  const uid = `${event.id}@kiezling.com`;
   
   // Format dates for iCal (YYYYMMDDTHHMMSSZ format)
   const formatICalDate = (date: Date): string => {
@@ -1387,17 +1387,17 @@ function generateICalEvent(event: any): string {
   const title = escapeIcal(event.title);
   const description = escapeIcal(event.description_short || event.description_long || '');
   const location = escapeIcal(event.location_address || '');
-  const url = event.booking_url || `https://familienlokal.de/event/${event.id}`;
+  const url = event.booking_url || `https://kiezling.com/event/${event.id}`;
   
   // Build categories
   const categories = event.categories?.map((c: any) => c.category?.name_de || c.category?.slug).join(',') || '';
   
   let ical = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//FamilienLokal//Event//DE
+PRODID:-//Kiezling//Event//DE
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
-X-WR-CALNAME:FamilienLokal Event
+X-WR-CALNAME:Kiezling Event
 BEGIN:VEVENT
 UID:${uid}
 DTSTAMP:${dtstamp}

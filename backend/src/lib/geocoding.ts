@@ -59,7 +59,7 @@ async function geocodeWithNominatim(address: string): Promise<GeocodingResult | 
   await waitForRateLimit();
 
   const nominatimUrl = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
-  const userAgent = 'FamilienLokal/1.0 (Event Aggregator for Families)';
+  const userAgent = 'Kiezling/1.0 (Event Aggregator for Families)';
 
   try {
     const params = new URLSearchParams({

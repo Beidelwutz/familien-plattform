@@ -36,7 +36,7 @@ const categories = [
 ];
 ---
 
-<BaseLayout title="Tagesplan erstellen - familienlokal Karlsruhe">
+<BaseLayout title="Tagesplan erstellen - kiezling Karlsruhe">
   <StickyHeader />
   
   <main class="min-h-screen bg-gradient-to-b from-primary-50 to-white py-8 md:py-12">
@@ -623,7 +623,7 @@ const categories = [
     for (const slot of slots) {
       const e = slot.event;
       icalEvents += `BEGIN:VEVENT
-UID:plan-${Date.now()}-${e.id}@familienlokal.de
+UID:plan-${Date.now()}-${e.id}@kiezling.com
 DTSTAMP:${formatICalDate(new Date())}
 DTSTART:${formatICalDate(slot.start_time)}
 DTEND:${formatICalDate(slot.end_time)}
@@ -636,7 +636,7 @@ END:VEVENT
 
     const icalContent = `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//FamilienLokal//Tagesplan//DE
+PRODID:-//Kiezling//Tagesplan//DE
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 X-WR-CALNAME:Familientag ${currentPlanData.date}
@@ -648,7 +648,7 @@ ${icalEvents}END:VCALENDAR`;
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `familientag-${currentPlanData.date}.ics`;
+    a.download = `kiezling-tag-${currentPlanData.date}.ics`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

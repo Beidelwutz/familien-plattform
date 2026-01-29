@@ -314,7 +314,7 @@ router.post('/save', optionalAuth, [
     const plan = await prisma.plan.create({
       data: {
         user_id: userId,
-        title: title || `Familientag am ${new Date(date).toLocaleDateString('de-DE')}`,
+        title: title || `Kiezling-Tag am ${new Date(date).toLocaleDateString('de-DE')}`,
         date: new Date(date),
         children_ages,
         budget: budget || null,
