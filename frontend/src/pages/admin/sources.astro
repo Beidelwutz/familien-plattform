@@ -93,8 +93,17 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             </div>
           </div>
 
+          <!-- Import Status -->
+          <div id="panel-run-status" class="hidden px-4 py-3 bg-gray-50 border-t">
+            <div class="flex items-center gap-2">
+              <span id="panel-run-indicator" class="animate-pulse text-blue-500">●</span>
+              <span id="panel-run-label" class="text-sm font-medium">Import läuft...</span>
+            </div>
+            <div id="panel-run-counts" class="text-xs text-gray-500 mt-1 hidden"></div>
+          </div>
+
           <div class="p-4 border-t flex flex-wrap gap-2">
-            <button id="trigger-btn" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+            <button id="trigger-btn" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed">
               🔄 Jetzt abrufen
             </button>
             <button id="toggle-btn" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -110,6 +119,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 <script define:vars={{ API_URL }}>
   let sources = [];
   let currentSourceId = null;
+  let activePolling = {}; // Track active polling intervals by source ID
   const token = localStorage.getItem('auth_token');
 
   // Auth check
@@ -134,6 +144,21 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
     return res.json();
   }
+
+  // Status display helpers
+  const runStatusLabels = {
+    running: 'Läuft...',
+    success: 'Erfolgreich',
+    partial: 'Teilweise erfolgreich',
+    failed: 'Fehlgeschlagen',
+  };
+
+  const runStatusColors = {
+    running: 'bg-blue-100 text-blue-700',
+    success: 'bg-green-100 text-green-700',
+    partial: 'bg-yellow-100 text-yellow-700',
+    failed: 'bg-red-100 text-red-700',
+  };
 
   // Load sources
   async function loadSources() {
@@ -281,22 +306,126 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     currentSourceId = null;
   }
 
-  // Trigger fetch
+  // Show run status in UI
+  function showRunStatus(sourceId, runData) {
+    const statusEl = document.getElementById(`run-status-${sourceId}`);
+    if (!statusEl) return;
+
+    const status = runData.status || 'running';
+    const label = runStatusLabels[status] || status;
+    const colorClass = runStatusColors[status] || 'bg-gray-100 text-gray-700';
+
+    let content = `<span class="px-2 py-1 text-xs rounded-full ${colorClass}">${label}</span>`;
+    
+    if (status === 'running') {
+      content += ' <span class="animate-pulse">●</span>';
+    } else {
+      // Show counts
+      const counts = [];
+      if (runData.events_created > 0) counts.push(`${runData.events_created} neu`);
+      if (runData.events_updated > 0) counts.push(`${runData.events_updated} aktualisiert`);
+      if (runData.events_skipped > 0) counts.push(`${runData.events_skipped} übersprungen`);
+      if (counts.length > 0) {
+        content += ` <span class="text-xs text-gray-500">(${counts.join(', ')})</span>`;
+      }
+      if (runData.error_message) {
+        content += ` <span class="text-xs text-red-500" title="${runData.error_message}">⚠️</span>`;
+      }
+    }
+
+    statusEl.innerHTML = content;
+    statusEl.classList.remove('hidden');
+  }
+
+  // Poll for run status
+  async function pollRunStatus(sourceId, runId) {
+    // Clear any existing polling for this source
+    if (activePolling[sourceId]) {
+      clearInterval(activePolling[sourceId]);
+    }
+
+    // Create status element if it doesn't exist
+    let statusEl = document.getElementById(`run-status-${sourceId}`);
+    if (!statusEl) {
+      const row = document.querySelector(`tr[data-id="${sourceId}"]`);
+      if (row) {
+        const actionsCell = row.querySelector('td:last-child');
+        if (actionsCell) {
+          statusEl = document.createElement('div');
+          statusEl.id = `run-status-${sourceId}`;
+          statusEl.className = 'mt-1 text-xs';
+          actionsCell.appendChild(statusEl);
+        }
+      }
+    }
+
+    // Initial status
+    showRunStatus(sourceId, { status: 'running' });
+
+    // Poll every 2 seconds
+    let pollCount = 0;
+    const maxPolls = 60; // Max 2 minutes
+
+    activePolling[sourceId] = setInterval(async () => {
+      pollCount++;
+      
+      if (pollCount > maxPolls) {
+        clearInterval(activePolling[sourceId]);
+        delete activePolling[sourceId];
+        showRunStatus(sourceId, { status: 'unknown', error_message: 'Timeout - prüfen Sie die Runs-Seite' });
+        return;
+      }
+
+      try {
+        const data = await apiFetch(`/api/admin/ingest-runs/${runId}`);
+        const run = data.data;
+        
+        showRunStatus(sourceId, run);
+
+        // Stop polling if run is complete
+        if (['success', 'partial', 'failed'].includes(run.status)) {
+          clearInterval(activePolling[sourceId]);
+          delete activePolling[sourceId];
+          
+          // Reload sources to update health status
+          setTimeout(() => loadSources(), 1000);
+        }
+      } catch (e) {
+        console.error('Poll error:', e);
+        // Continue polling even on error
+      }
+    }, 2000);
+  }
+
+  // Trigger fetch with confirmation and live feedback
   async function triggerFetch(id, btn) {
-    if (!confirm('Fetch jetzt starten?')) return;
+    const source = sources.find(s => s.id === id);
+    const sourceName = source?.name || 'diese Quelle';
+    
+    if (!confirm(`Import für "${sourceName}" jetzt starten?\n\nDies crawlt die Quelle und importiert neue Events.`)) {
+      return;
+    }
     
     const originalText = btn?.innerHTML;
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '...';
+      btn.innerHTML = '<span class="animate-spin inline-block">⏳</span>';
     }
 
     try {
-      await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
-      alert('Fetch gestartet');
-      loadSources();
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
+      
+      if (response.success && response.data?.ingest_run_id) {
+        // Start polling for status
+        pollRunStatus(id, response.data.ingest_run_id);
+      } else {
+        alert('Import gestartet, aber keine Run-ID erhalten.');
+      }
     } catch (e) {
-      alert('Fehler: ' + e.message);
+      alert('Fehler beim Starten: ' + e.message);
+      // Clear any status display
+      const statusEl = document.getElementById(`run-status-${id}`);
+      if (statusEl) statusEl.classList.add('hidden');
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -332,15 +461,162 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
+  // Update panel run status display
+  function updatePanelRunStatus(runData) {
+    const statusSection = document.getElementById('panel-run-status');
+    const indicator = document.getElementById('panel-run-indicator');
+    const label = document.getElementById('panel-run-label');
+    const counts = document.getElementById('panel-run-counts');
+    const triggerBtn = document.getElementById('trigger-btn');
+
+    if (!runData) {
+      statusSection.classList.add('hidden');
+      triggerBtn.disabled = false;
+      return;
+    }
+
+    statusSection.classList.remove('hidden');
+    const status = runData.status || 'running';
+
+    // Update indicator and label
+    if (status === 'running') {
+      indicator.className = 'animate-pulse text-blue-500';
+      indicator.textContent = '●';
+      label.textContent = 'Import läuft...';
+      label.className = 'text-sm font-medium text-blue-700';
+      counts.classList.add('hidden');
+      triggerBtn.disabled = true;
+    } else {
+      indicator.className = '';
+      triggerBtn.disabled = false;
+      
+      if (status === 'success') {
+        indicator.textContent = '✓';
+        indicator.className = 'text-green-500';
+        label.textContent = 'Import erfolgreich';
+        label.className = 'text-sm font-medium text-green-700';
+      } else if (status === 'partial') {
+        indicator.textContent = '⚠';
+        indicator.className = 'text-yellow-500';
+        label.textContent = 'Teilweise erfolgreich';
+        label.className = 'text-sm font-medium text-yellow-700';
+      } else if (status === 'failed') {
+        indicator.textContent = '✕';
+        indicator.className = 'text-red-500';
+        label.textContent = runData.error_message || 'Import fehlgeschlagen';
+        label.className = 'text-sm font-medium text-red-700';
+      }
+
+      // Show counts
+      const countParts = [];
+      if (runData.events_found > 0) countParts.push(`${runData.events_found} gefunden`);
+      if (runData.events_created > 0) countParts.push(`${runData.events_created} neu`);
+      if (runData.events_updated > 0) countParts.push(`${runData.events_updated} aktualisiert`);
+      if (runData.events_skipped > 0) countParts.push(`${runData.events_skipped} übersprungen`);
+      
+      if (countParts.length > 0) {
+        counts.textContent = countParts.join(' | ');
+        counts.classList.remove('hidden');
+      } else {
+        counts.classList.add('hidden');
+      }
+    }
+  }
+
+  // Poll for panel run status
+  let panelPollingInterval = null;
+  
+  async function pollPanelRunStatus(runId) {
+    if (panelPollingInterval) {
+      clearInterval(panelPollingInterval);
+    }
+
+    updatePanelRunStatus({ status: 'running' });
+
+    let pollCount = 0;
+    const maxPolls = 60;
+
+    panelPollingInterval = setInterval(async () => {
+      pollCount++;
+      
+      if (pollCount > maxPolls) {
+        clearInterval(panelPollingInterval);
+        panelPollingInterval = null;
+        updatePanelRunStatus({ status: 'failed', error_message: 'Timeout' });
+        return;
+      }
+
+      try {
+        const data = await apiFetch(`/api/admin/ingest-runs/${runId}`);
+        const run = data.data;
+        
+        updatePanelRunStatus(run);
+
+        if (['success', 'partial', 'failed'].includes(run.status)) {
+          clearInterval(panelPollingInterval);
+          panelPollingInterval = null;
+          setTimeout(() => loadSources(), 1000);
+        }
+      } catch (e) {
+        console.error('Panel poll error:', e);
+      }
+    }, 2000);
+  }
+
+  // Trigger from panel with enhanced feedback
+  async function triggerFromPanel() {
+    if (!currentSourceId) return;
+    
+    const source = sources.find(s => s.id === currentSourceId);
+    const sourceName = source?.name || 'diese Quelle';
+    
+    if (!confirm(`Import für "${sourceName}" jetzt starten?\n\nDies crawlt die Quelle und importiert neue Events.`)) {
+      return;
+    }
+
+    const triggerBtn = document.getElementById('trigger-btn');
+    const originalText = triggerBtn.innerHTML;
+    triggerBtn.disabled = true;
+    triggerBtn.innerHTML = '<span class="animate-spin inline-block">⏳</span> Wird gestartet...';
+
+    try {
+      const response = await apiFetch(`/api/sources/${currentSourceId}/trigger`, { method: 'POST' });
+      
+      if (response.success && response.data?.ingest_run_id) {
+        pollPanelRunStatus(response.data.ingest_run_id);
+        // Also poll in table view
+        pollRunStatus(currentSourceId, response.data.ingest_run_id);
+      } else {
+        triggerBtn.disabled = false;
+        alert('Import gestartet, aber keine Run-ID erhalten.');
+      }
+    } catch (e) {
+      triggerBtn.disabled = false;
+      alert('Fehler beim Starten: ' + e.message);
+      updatePanelRunStatus(null);
+    }
+    
+    triggerBtn.innerHTML = originalText;
+  }
+
   // Event listeners
   document.getElementById('panel-close').addEventListener('click', closePanel);
   document.getElementById('detail-overlay').addEventListener('click', (e) => {
     if (e.target.id === 'detail-overlay') closePanel();
   });
-  document.getElementById('trigger-btn').addEventListener('click', () => {
-    if (currentSourceId) triggerFetch(currentSourceId);
-  });
+  document.getElementById('trigger-btn').addEventListener('click', triggerFromPanel);
   document.getElementById('toggle-btn').addEventListener('click', toggleActive);
+
+  // Clear panel polling when closing
+  const originalClosePanel = closePanel;
+  closePanel = function() {
+    if (panelPollingInterval) {
+      clearInterval(panelPollingInterval);
+      panelPollingInterval = null;
+    }
+    updatePanelRunStatus(null);
+    originalClosePanel();
+  };
 
   // Initial load
   loadSources();

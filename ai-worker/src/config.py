@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     port: int = 5000
     debug: bool = True
     
+    # Backend API
+    backend_url: str = "http://localhost:4000"
+    service_token: str = ""  # JWT token for service-to-service auth
+    
     # AI APIs
     openai_api_key: str = ""
     anthropic_api_key: str = ""

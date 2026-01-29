@@ -3,8 +3,13 @@ import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
+import cronParser from 'cron-parser';
 
 const router = Router();
+
+const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
+const CRON_SECRET = process.env.CRON_SECRET || '';
 
 // GET /api/sources - List all sources (admin)
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
@@ -118,6 +123,10 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       throw createError('Source not found', 404, 'NOT_FOUND');
     }
 
+    if (!source.url) {
+      throw createError('Source has no URL configured', 400, 'VALIDATION_ERROR');
+    }
+
     // Create an ingest run entry
     const ingestRun = await prisma.ingestRun.create({
       data: {
@@ -133,7 +142,61 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       data: { last_fetch_at: new Date() }
     });
 
-    // TODO: Actually queue fetch job to Redis/worker
+    // Trigger AI-Worker crawl job
+    try {
+      const workerResponse = await fetch(`${AI_WORKER_URL}/crawl/trigger`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source_id: id,
+          source_url: source.url,
+          source_type: source.type,
+          ingest_run_id: ingestRun.id,
+        }),
+      });
+
+      if (!workerResponse.ok) {
+        const errorText = await workerResponse.text();
+        logger.error(`AI-Worker crawl trigger failed: ${errorText}`);
+        
+        // Update ingest run with error
+        await prisma.ingestRun.update({
+          where: { id: ingestRun.id },
+          data: {
+            status: 'failed',
+            finished_at: new Date(),
+            error_message: `AI-Worker error: ${workerResponse.status}`,
+            needs_attention: true,
+          }
+        });
+        
+        throw createError(`AI-Worker error: ${workerResponse.status}`, 502, 'WORKER_ERROR');
+      }
+
+      const workerData = await workerResponse.json();
+      logger.info(`Crawl job triggered for source ${id}: ${JSON.stringify(workerData)}`);
+    } catch (fetchError: any) {
+      if (fetchError.code === 'WORKER_ERROR') {
+        throw fetchError;
+      }
+      
+      logger.error(`Failed to reach AI-Worker: ${fetchError.message}`);
+      
+      // Update ingest run - worker unreachable
+      await prisma.ingestRun.update({
+        where: { id: ingestRun.id },
+        data: {
+          status: 'failed',
+          finished_at: new Date(),
+          error_message: `AI-Worker unreachable: ${fetchError.message}`,
+          needs_attention: true,
+        }
+      });
+      
+      throw createError('AI-Worker service unavailable', 503, 'WORKER_UNAVAILABLE');
+    }
     
     res.json({
       success: true,
@@ -261,11 +324,46 @@ router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response
   }
 });
 
-// PATCH /api/sources/:id - Partial update (alias for PUT)
+// PATCH /api/sources/:id - Partial update
 router.patch('/:id', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
-  // Delegate to PUT handler
-  req.method = 'PUT';
-  router.handle(req, res, next);
+  try {
+    const { id } = req.params;
+
+    const source = await prisma.source.findUnique({ where: { id } });
+    if (!source) {
+      throw createError('Source not found', 404, 'NOT_FOUND');
+    }
+
+    const allowedFields = [
+      'name', 'type', 'url', 'schedule_cron', 'priority',
+      'rate_limit_ms', 'expected_event_count_min', 'scrape_allowed',
+      'notes', 'is_active', 'health_status',
+    ];
+
+    const updateData: Record<string, any> = {};
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw createError('No fields to update', 400, 'VALIDATION_ERROR');
+    }
+
+    const updated = await prisma.source.update({
+      where: { id },
+      data: updateData,
+    });
+
+    res.json({
+      success: true,
+      message: 'Source updated',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // DELETE /api/sources/:id - Soft-delete a source (admin only)
@@ -355,6 +453,209 @@ router.put('/:id/compliance', requireAuth, requireAdmin, async (req: Request, re
       success: true,
       message: 'Compliance info updated',
       data: compliance,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// CRON ENDPOINTS
+// ============================================
+
+/**
+ * Helper function to trigger a source fetch (used by cron and manual trigger)
+ */
+async function triggerSourceFetchInternal(sourceId: string, source: { url: string | null; type: string }): Promise<{ ingestRunId: string; success: boolean; error?: string }> {
+  if (!source.url) {
+    return { ingestRunId: '', success: false, error: 'No URL configured' };
+  }
+
+  const ingestRun = await prisma.ingestRun.create({
+    data: {
+      correlation_id: `cron-${Date.now()}`,
+      source_id: sourceId,
+      status: 'running',
+    }
+  });
+
+  try {
+    const workerResponse = await fetch(`${AI_WORKER_URL}/crawl/trigger`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_id: sourceId,
+        source_url: source.url,
+        source_type: source.type,
+        ingest_run_id: ingestRun.id,
+      }),
+    });
+
+    if (!workerResponse.ok) {
+      await prisma.ingestRun.update({
+        where: { id: ingestRun.id },
+        data: {
+          status: 'failed',
+          finished_at: new Date(),
+          error_message: `AI-Worker error: ${workerResponse.status}`,
+          needs_attention: true,
+        }
+      });
+      return { ingestRunId: ingestRun.id, success: false, error: `Worker error: ${workerResponse.status}` };
+    }
+
+    return { ingestRunId: ingestRun.id, success: true };
+  } catch (error: any) {
+    await prisma.ingestRun.update({
+      where: { id: ingestRun.id },
+      data: {
+        status: 'failed',
+        finished_at: new Date(),
+        error_message: `AI-Worker unreachable: ${error.message}`,
+        needs_attention: true,
+      }
+    });
+    return { ingestRunId: ingestRun.id, success: false, error: error.message };
+  }
+}
+
+/**
+ * Calculate next fetch time based on cron expression
+ */
+function calculateNextFetch(cronExpression: string | null): Date {
+  if (!cronExpression) {
+    // Default: 6 hours from now
+    return new Date(Date.now() + 6 * 60 * 60 * 1000);
+  }
+  
+  try {
+    const interval = cronParser.parseExpression(cronExpression);
+    return interval.next().toDate();
+  } catch (error) {
+    // Invalid cron expression, default to 6 hours
+    return new Date(Date.now() + 6 * 60 * 60 * 1000);
+  }
+}
+
+// POST /api/sources/cron/check - Check and trigger due sources (called by Vercel cron)
+router.post('/cron/check', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Verify cron secret (Vercel sends this in Authorization header)
+    const authHeader = req.headers.authorization;
+    const providedSecret = authHeader?.replace('Bearer ', '') || req.query.secret;
+    
+    if (CRON_SECRET && providedSecret !== CRON_SECRET) {
+      throw createError('Invalid cron secret', 401, 'UNAUTHORIZED');
+    }
+
+    const now = new Date();
+    
+    // Find all active sources that are due for a fetch
+    const dueSources = await prisma.source.findMany({
+      where: {
+        is_active: true,
+        url: { not: null },
+        OR: [
+          { next_fetch_at: { lte: now } },
+          { next_fetch_at: null, last_fetch_at: null }, // Never fetched
+          { 
+            next_fetch_at: null, 
+            last_fetch_at: { lte: new Date(now.getTime() - 6 * 60 * 60 * 1000) } // >6h ago
+          },
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        type: true,
+        schedule_cron: true,
+      },
+      orderBy: { priority: 'asc' }, // Higher priority (lower number) first
+      take: 10, // Process max 10 per cron run to avoid timeout
+    });
+
+    logger.info(`Cron check: Found ${dueSources.length} sources due for fetch`);
+
+    const results: { sourceId: string; name: string; success: boolean; error?: string }[] = [];
+
+    for (const source of dueSources) {
+      const result = await triggerSourceFetchInternal(source.id, source);
+      
+      // Update next_fetch_at regardless of success
+      await prisma.source.update({
+        where: { id: source.id },
+        data: {
+          last_fetch_at: now,
+          next_fetch_at: calculateNextFetch(source.schedule_cron),
+        }
+      });
+
+      results.push({
+        sourceId: source.id,
+        name: source.name,
+        success: result.success,
+        error: result.error,
+      });
+
+      // Small delay between triggers to avoid overwhelming the worker
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    logger.info(`Cron check complete: ${successCount} triggered, ${failCount} failed`);
+
+    res.json({
+      success: true,
+      message: `Processed ${dueSources.length} sources`,
+      data: {
+        triggered: successCount,
+        failed: failCount,
+        results,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/sources/cron/status - Get cron status (admin only)
+router.get('/cron/status', requireAuth, requireAdmin, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const now = new Date();
+    
+    const [dueSources, recentRuns] = await Promise.all([
+      prisma.source.count({
+        where: {
+          is_active: true,
+          url: { not: null },
+          OR: [
+            { next_fetch_at: { lte: now } },
+            { next_fetch_at: null },
+          ]
+        }
+      }),
+      prisma.ingestRun.findMany({
+        where: {
+          correlation_id: { startsWith: 'cron-' },
+          started_at: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) }
+        },
+        orderBy: { started_at: 'desc' },
+        take: 20,
+        include: {
+          source: { select: { id: true, name: true } }
+        }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        due_sources: dueSources,
+        recent_cron_runs: recentRuns,
+      }
     });
   } catch (error) {
     next(error);
