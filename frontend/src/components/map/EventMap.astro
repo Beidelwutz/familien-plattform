@@ -68,7 +68,7 @@ const mapData = {
     }
 
     // Add event markers
-    const markers: maplibregl.Marker[] = [];
+    const markers = [];
     mapData.events.forEach((event) => {
       const el = document.createElement('div');
       el.className = 'event-marker';

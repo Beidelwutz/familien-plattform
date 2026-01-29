@@ -382,12 +382,11 @@ if (pagination && pagination.totalPages > 1) {
               <!-- Page Numbers -->
               {paginationPages.map((pageNum, idx) => {
                 if (pageNum === '...') {
-                  return <span key={`ellipsis-${idx}`} class="px-3 py-2 text-gray-400">...</span>;
+                  return <span class="px-3 py-2 text-gray-400">...</span>;
                 }
                 const isActive = pageNum === pagination.page;
                 return (
                   <a
-                    key={`page-${pageNum}`}
                     href={`?${new URLSearchParams({...Object.fromEntries(url.searchParams), page: String(pageNum)}).toString()}`}
                     class={`px-4 py-2 rounded-lg ${isActive ? 'bg-primary-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                   >
