@@ -1,0 +1,247 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="E-Mail bestätigen - familienlokal">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 flex items-center justify-center py-8 px-4">
+    <div class="w-full max-w-md">
+      <!-- Loading State -->
+      <div id="loading-state" class="bg-white rounded-2xl shadow-card p-8 text-center">
+        <div class="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">E-Mail wird bestätigt...</h1>
+        <p class="text-gray-500">Bitte warte einen Moment.</p>
+      </div>
+
+      <!-- Success State -->
+      <div id="success-state" class="hidden bg-white rounded-2xl shadow-card p-8 text-center">
+        <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">E-Mail bestätigt!</h1>
+        <p class="text-gray-500 mb-6">Deine E-Mail-Adresse wurde erfolgreich verifiziert. Du kannst jetzt alle Funktionen nutzen.</p>
+        <a href="/" class="btn-primary inline-block px-6 py-3">Zur Startseite</a>
+      </div>
+
+      <!-- Already Verified State -->
+      <div id="already-verified-state" class="hidden bg-white rounded-2xl shadow-card p-8 text-center">
+        <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">Bereits bestätigt</h1>
+        <p class="text-gray-500 mb-6">Deine E-Mail-Adresse wurde bereits verifiziert.</p>
+        <a href="/" class="btn-primary inline-block px-6 py-3">Zur Startseite</a>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="hidden bg-white rounded-2xl shadow-card p-8 text-center">
+        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">Bestätigung fehlgeschlagen</h1>
+        <p class="text-gray-500 mb-4" id="error-message">Der Bestätigungslink ist ungültig oder abgelaufen.</p>
+        <div class="space-y-3">
+          <a href="/login" class="btn-primary inline-block px-6 py-3 w-full">Zum Login</a>
+          <button id="resend-btn" class="w-full px-6 py-3 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors">
+            Neue Bestätigungs-E-Mail anfordern
+          </button>
+        </div>
+      </div>
+
+      <!-- No Token State -->
+      <div id="no-token-state" class="hidden bg-white rounded-2xl shadow-card p-8 text-center">
+        <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+          </svg>
+        </div>
+        <h1 class="text-xl font-bold text-gray-900 mb-2">E-Mail-Bestätigung</h1>
+        <p class="text-gray-500 mb-6">Du bist noch nicht eingeloggt oder hast keinen gültigen Bestätigungslink.</p>
+        <div class="space-y-3">
+          <a href="/login" class="btn-primary inline-block px-6 py-3 w-full">Zum Login</a>
+        </div>
+      </div>
+
+      <!-- Resend Form (shown after login if needed) -->
+      <div id="resend-form-state" class="hidden bg-white rounded-2xl shadow-card p-8">
+        <div class="text-center mb-6">
+          <div class="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+          <h1 class="text-xl font-bold text-gray-900 mb-2">Bestätigungs-E-Mail senden</h1>
+          <p class="text-gray-500">Klicke auf den Button, um eine neue Bestätigungs-E-Mail zu erhalten.</p>
+        </div>
+
+        <button id="send-verification-btn" class="btn-primary w-full py-3 mb-4">
+          Bestätigungs-E-Mail senden
+        </button>
+
+        <div id="resend-success" class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm text-center">
+          Bestätigungs-E-Mail wurde gesendet. Bitte prüfe dein Postfach.
+        </div>
+        <div id="resend-error" class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center"></div>
+
+        <p class="text-center text-sm text-gray-500 mt-4">
+          <a href="/" class="text-primary-500 hover:text-primary-600">Zurück zur Startseite</a>
+        </p>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_BASE }}>
+  const loadingState = document.getElementById('loading-state');
+  const successState = document.getElementById('success-state');
+  const alreadyVerifiedState = document.getElementById('already-verified-state');
+  const errorState = document.getElementById('error-state');
+  const noTokenState = document.getElementById('no-token-state');
+  const resendFormState = document.getElementById('resend-form-state');
+  const errorMessage = document.getElementById('error-message');
+
+  function hideAllStates() {
+    loadingState?.classList.add('hidden');
+    successState?.classList.add('hidden');
+    alreadyVerifiedState?.classList.add('hidden');
+    errorState?.classList.add('hidden');
+    noTokenState?.classList.add('hidden');
+    resendFormState?.classList.add('hidden');
+  }
+
+  async function verifyEmail() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    // If no token in URL, check if user wants to resend
+    if (!token) {
+      const authToken = localStorage.getItem('auth_token');
+      if (authToken) {
+        // User is logged in, show resend form
+        hideAllStates();
+        resendFormState?.classList.remove('hidden');
+      } else {
+        // No token, no auth - show no token state
+        hideAllStates();
+        noTokenState?.classList.remove('hidden');
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+
+      const data = await response.json();
+
+      hideAllStates();
+
+      if (response.ok) {
+        if (data.data?.already_verified) {
+          alreadyVerifiedState?.classList.remove('hidden');
+        } else {
+          // Update token if new one was returned
+          if (data.data?.token) {
+            localStorage.setItem('auth_token', data.data.token);
+          }
+          successState?.classList.remove('hidden');
+        }
+      } else {
+        if (errorMessage) {
+          const messages = {
+            'INVALID_TOKEN': 'Der Bestätigungslink ist ungültig oder abgelaufen.',
+            'NOT_FOUND': 'Benutzer nicht gefunden.'
+          };
+          errorMessage.textContent = messages[data.error?.code] || data.error?.message || 'Ein Fehler ist aufgetreten.';
+        }
+        errorState?.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      hideAllStates();
+      if (errorMessage) {
+        errorMessage.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+      }
+      errorState?.classList.remove('hidden');
+    }
+  }
+
+  // Send verification email
+  async function sendVerificationEmail() {
+    const authToken = localStorage.getItem('auth_token');
+    if (!authToken) {
+      window.location.href = '/login?redirect=/email-bestaetigen';
+      return;
+    }
+
+    const sendBtn = document.getElementById('send-verification-btn');
+    const resendSuccess = document.getElementById('resend-success');
+    const resendError = document.getElementById('resend-error');
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Wird gesendet...';
+    resendSuccess?.classList.add('hidden');
+    resendError?.classList.add('hidden');
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/send-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        resendSuccess?.classList.remove('hidden');
+      } else {
+        if (resendError) {
+          resendError.textContent = data.error?.message || 'Fehler beim Senden der E-Mail.';
+        }
+        resendError?.classList.remove('hidden');
+      }
+    } catch (error) {
+      if (resendError) {
+        resendError.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+      }
+      resendError?.classList.remove('hidden');
+    } finally {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Bestätigungs-E-Mail senden';
+    }
+  }
+
+  // Resend button in error state
+  document.getElementById('resend-btn')?.addEventListener('click', () => {
+    const authToken = localStorage.getItem('auth_token');
+    if (authToken) {
+      hideAllStates();
+      resendFormState?.classList.remove('hidden');
+    } else {
+      window.location.href = '/login?redirect=/email-bestaetigen';
+    }
+  });
+
+  // Send verification button
+  document.getElementById('send-verification-btn')?.addEventListener('click', sendVerificationEmail);
+
+  // Run verification on load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', verifyEmail);
+  } else {
+    verifyEmail();
+  }
+</script>

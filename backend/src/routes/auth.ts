@@ -4,7 +4,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { signToken, requireAuth, type AuthRequest } from '../middleware/auth.js';
-import { sendPasswordResetEmail, sendWelcomeEmail } from '../lib/email.js';
+import { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } from '../lib/email.js';
 
 const router = Router();
 
@@ -149,7 +149,7 @@ router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFun
     const authReq = req as AuthRequest;
     const user = await prisma.user.findUnique({
       where: { id: authReq.user!.sub },
-      select: { id: true, email: true, role: true, created_at: true }
+      select: { id: true, email: true, role: true, email_verified: true, created_at: true }
     });
     if (!user) {
       return next(createError('User not found', 404, 'NOT_FOUND'));
@@ -169,6 +169,75 @@ router.post('/logout', (_req: Request, res: Response) => {
     success: true,
     message: 'Logged out'
   });
+});
+
+// ============================================
+// PASSWORD CHANGE (AUTHENTICATED)
+// ============================================
+
+// PUT /api/auth/change-password - Change password while logged in
+router.put('/change-password', requireAuth, [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 8 }).withMessage('New password must be at least 8 characters'),
+], async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw createError('Validation error: ' + errors.array().map(e => e.msg).join(', '), 400, 'VALIDATION_ERROR');
+    }
+
+    const authReq = req as AuthRequest;
+    const { currentPassword, newPassword } = req.body;
+
+    // Get user with password hash
+    const user = await prisma.user.findUnique({
+      where: { id: authReq.user!.sub },
+      select: { id: true, email: true, password_hash: true, role: true }
+    });
+
+    if (!user) {
+      throw createError('User not found', 404, 'NOT_FOUND');
+    }
+
+    // Check if user has a password (OAuth users might not)
+    if (!user.password_hash) {
+      throw createError('Cannot change password for OAuth-only accounts. Please use password reset.', 400, 'NO_PASSWORD');
+    }
+
+    // Verify current password
+    const isValid = await verifyPassword(currentPassword, user.password_hash);
+    if (!isValid) {
+      throw createError('Current password is incorrect', 401, 'INVALID_PASSWORD');
+    }
+
+    // Check that new password is different
+    const isSamePassword = await verifyPassword(newPassword, user.password_hash);
+    if (isSamePassword) {
+      throw createError('New password must be different from current password', 400, 'SAME_PASSWORD');
+    }
+
+    // Update password
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { 
+        password_hash: await hashPassword(newPassword),
+        updated_at: new Date()
+      }
+    });
+
+    // Generate new token (invalidates old sessions)
+    const newToken = signToken({ sub: user.id, email: user.email, role: user.role });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+      data: {
+        token: newToken
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // ============================================
@@ -235,8 +304,8 @@ router.post('/reset-password', [
 
     // Verify token
     // In production, verify against DB-stored token hash
-    const { verifyToken } = await import('../middleware/auth.js');
-    const payload = verifyToken(token);
+    const { verifyLegacyToken } = await import('../middleware/auth.js');
+    const payload = verifyLegacyToken(token);
     
     if (!payload || payload.role !== 'password_reset') {
       throw createError('Invalid or expired reset token', 400, 'INVALID_TOKEN');
@@ -251,6 +320,142 @@ router.post('/reset-password', [
     res.json({
       success: true,
       message: 'Password has been reset successfully. You can now log in with your new password.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// EMAIL VERIFICATION
+// ============================================
+
+// POST /api/auth/send-verification - Send/resend verification email
+router.post('/send-verification', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authReq = req as AuthRequest;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: authReq.user!.sub },
+      select: { id: true, email: true, email_verified: true }
+    });
+
+    if (!user) {
+      throw createError('User not found', 404, 'NOT_FOUND');
+    }
+
+    if (user.email_verified) {
+      return res.json({
+        success: true,
+        message: 'Email is already verified.'
+      });
+    }
+
+    // Generate verification token (valid for 24 hours)
+    const verificationToken = signToken({
+      sub: user.id,
+      email: user.email,
+      role: 'email_verification'
+    });
+
+    // Send verification email
+    const emailSent = await sendVerificationEmail(user.email, verificationToken);
+
+    if (!emailSent) {
+      throw createError('Failed to send verification email. Please try again later.', 500, 'EMAIL_ERROR');
+    }
+
+    res.json({
+      success: true,
+      message: 'Verification email sent. Please check your inbox.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/auth/verify-email - Verify email with token
+router.post('/verify-email', [
+  body('token').notEmpty().withMessage('Verification token is required'),
+], async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw createError('Invalid input', 400, 'VALIDATION_ERROR');
+    }
+
+    const { token } = req.body;
+
+    // Verify token
+    const { verifyLegacyToken } = await import('../middleware/auth.js');
+    const payload = verifyLegacyToken(token);
+
+    if (!payload || payload.role !== 'email_verification') {
+      throw createError('Invalid or expired verification token', 400, 'INVALID_TOKEN');
+    }
+
+    // Check if user exists and is not already verified
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true, email_verified: true, role: true }
+    });
+
+    if (!user) {
+      throw createError('User not found', 404, 'NOT_FOUND');
+    }
+
+    if (user.email_verified) {
+      return res.json({
+        success: true,
+        message: 'Email is already verified.',
+        data: { already_verified: true }
+      });
+    }
+
+    // Mark email as verified
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        email_verified: true,
+        email_verified_at: new Date()
+      }
+    });
+
+    // Generate new token with verified status
+    const newToken = signToken({ sub: user.id, email: user.email, role: user.role });
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully!',
+      data: {
+        token: newToken
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/auth/verification-status - Check email verification status
+router.get('/verification-status', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const authReq = req as AuthRequest;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: authReq.user!.sub },
+      select: { email_verified: true, email_verified_at: true }
+    });
+
+    if (!user) {
+      throw createError('User not found', 404, 'NOT_FOUND');
+    }
+
+    res.json({
+      success: true,
+      data: {
+        email_verified: user.email_verified,
+        verified_at: user.email_verified_at
+      }
     });
   } catch (error) {
     next(error);

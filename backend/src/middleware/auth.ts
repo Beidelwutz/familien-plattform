@@ -155,7 +155,7 @@ export function requireAdmin(req: AuthRequest, _res: Response, next: NextFunctio
 /**
  * Require service token (for internal service-to-service calls)
  */
-export function requireServiceToken(req: Request, _res: Response, next: NextFunction): void {
+export async function requireServiceToken(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
   const serviceToken = process.env.SERVICE_TOKEN;
@@ -172,11 +172,10 @@ export function requireServiceToken(req: Request, _res: Response, next: NextFunc
   }
   
   // Also allow valid auth tokens (from admin users)
-  verifyToken(token || '').then(payload => {
-    if (payload && payload.role === 'admin') {
-      next();
-    } else {
-      next(createError('Service authentication required', 401, 'UNAUTHORIZED'));
-    }
-  });
+  const payload = await verifyToken(token || '');
+  if (payload && payload.role === 'admin') {
+    next();
+  } else {
+    next(createError('Service authentication required', 401, 'UNAUTHORIZED'));
+  }
 }

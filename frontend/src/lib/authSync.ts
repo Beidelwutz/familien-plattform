@@ -4,7 +4,7 @@
  * This prevents redirect loops when navigating directly to admin pages.
  */
 
-import { getSession } from './supabase';
+import { getSession, signOut } from './supabase';
 
 let syncPromise: Promise<string | null> | null = null;
 
@@ -61,13 +61,54 @@ export async function getAuthToken(): Promise<string | null> {
 }
 
 /**
- * Clear the auth token and Supabase session.
+ * Clear the auth token from localStorage only.
+ * For full logout, use logout() instead.
  */
 export function clearAuthToken(): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('auth_token');
   }
   syncPromise = null;
+}
+
+/**
+ * Full logout: clears localStorage and Supabase session.
+ * Optionally redirects to a specified URL.
+ * @param redirectUrl - URL to redirect to after logout (default: '/')
+ */
+export async function logout(redirectUrl: string = '/'): Promise<void> {
+  if (typeof localStorage === 'undefined' || typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    // Clear localStorage token
+    localStorage.removeItem('auth_token');
+    syncPromise = null;
+
+    // Sign out from Supabase (clears session)
+    await signOut();
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Still clear local token even if Supabase signout fails
+    localStorage.removeItem('auth_token');
+  }
+
+  // Redirect
+  if (redirectUrl) {
+    window.location.href = redirectUrl;
+  }
+}
+
+/**
+ * Check if user is currently authenticated.
+ * Does not verify the token, just checks if one exists.
+ */
+export function isAuthenticated(): boolean {
+  if (typeof localStorage === 'undefined') {
+    return false;
+  }
+  return !!localStorage.getItem('auth_token');
 }
 
 // Auto-sync on module load (for pages that import this module)

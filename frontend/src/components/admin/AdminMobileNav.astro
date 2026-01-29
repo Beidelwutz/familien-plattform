@@ -167,8 +167,19 @@ const navItems = [
   });
 
   // Logout
-  logoutBtn?.addEventListener('click', () => {
-    localStorage.removeItem('auth_token');
-    window.location.href = '/login';
+  logoutBtn?.addEventListener('click', async () => {
+    try {
+      localStorage.removeItem('auth_token');
+      
+      // Try to sign out from Supabase if available
+      if (typeof window !== 'undefined' && window.supabase?.auth) {
+        await window.supabase.auth.signOut();
+      }
+      
+      window.location.href = '/login';
+    } catch (error) {
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    }
   });
 </script>

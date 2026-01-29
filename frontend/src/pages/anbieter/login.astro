@@ -138,7 +138,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       if (response.ok) {
         // Check if user has provider role or provider profile
-        localStorage.setItem('token', data.data.token);
+        localStorage.setItem('auth_token', data.data.token);
         
         // Redirect to provider dashboard
         window.location.href = '/anbieter/dashboard';

@@ -194,6 +194,75 @@ export async function sendWelcomeEmail(email: string): Promise<boolean> {
 }
 
 /**
+ * Send email verification email
+ */
+export async function sendVerificationEmail(
+  email: string,
+  verificationToken: string
+): Promise<boolean> {
+  const verifyUrl = `${FRONTEND_URL}/email-bestaetigen?token=${verificationToken}`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Mail bestätigen</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Familien-Lokal</h1>
+  </div>
+  
+  <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 12px 12px;">
+    <h2 style="color: #1f2937; margin-top: 0;">Bestätige deine E-Mail-Adresse</h2>
+    
+    <p>Hallo,</p>
+    
+    <p>Vielen Dank für deine Registrierung bei Familien-Lokal! Bitte bestätige deine E-Mail-Adresse, indem du auf den Button unten klickst:</p>
+    
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${verifyUrl}" style="display: inline-block; background: #10b981; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+        E-Mail bestätigen
+      </a>
+    </div>
+    
+    <p style="color: #6b7280; font-size: 14px;">
+      Dieser Link ist <strong>24 Stunden</strong> gültig.
+    </p>
+    
+    <p style="color: #6b7280; font-size: 14px;">
+      Falls du dich nicht bei Familien-Lokal registriert hast, kannst du diese E-Mail ignorieren.
+    </p>
+    
+    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+    
+    <p style="color: #9ca3af; font-size: 12px; margin-bottom: 0;">
+      Falls der Button nicht funktioniert, kopiere diesen Link in deinen Browser:<br>
+      <a href="${verifyUrl}" style="color: #6366f1; word-break: break-all;">${verifyUrl}</a>
+    </p>
+  </div>
+  
+  <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+    <p>&copy; ${new Date().getFullYear()} Familien-Lokal. Alle Rechte vorbehalten.</p>
+    <p>
+      <a href="${FRONTEND_URL}/datenschutz" style="color: #9ca3af;">Datenschutz</a> |
+      <a href="${FRONTEND_URL}/impressum" style="color: #9ca3af;">Impressum</a>
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  return sendEmail({
+    to: email,
+    subject: 'E-Mail bestätigen - Familien-Lokal',
+    html,
+  });
+}
+
+/**
  * Simple HTML to text converter
  */
 function stripHtml(html: string): string {
