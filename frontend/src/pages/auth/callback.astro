@@ -74,7 +74,6 @@
       const errorEl = document.getElementById('error') as HTMLElement | null;
 
       try {
-        // Get the code from URL (Supabase PKCE flow)
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const queryParams = new URLSearchParams(window.location.search);
         
@@ -86,46 +85,54 @@
           throw new Error(errorDescription || error);
         }
 
-        // Exchange code for session (Supabase handles this automatically via detectSessionInUrl)
+        // Debug logging
+        console.log('[Callback] URL:', window.location.href);
+        console.log('[Callback] Code param:', queryParams.get('code') ? 'exists' : 'none');
+        console.log('[Callback] Hash:', window.location.hash ? 'exists' : 'none');
+
+        // PKCE Flow: Exchange code for session first
+        const code = queryParams.get('code');
+        if (code) {
+          console.log('[Callback] Exchanging code for session...');
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            console.error('[Callback] Exchange error:', exchangeError);
+            throw exchangeError;
+          }
+          console.log('[Callback] Code exchanged successfully');
+        }
+
+        // Now get the session (should exist after exchange or from hash)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('[Callback] Session exists:', !!session);
         
         if (sessionError) {
           throw sessionError;
         }
 
         if (!session) {
-          // Try to get session from URL hash (for implicit flow)
-          const code = queryParams.get('code');
-          if (code) {
-            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-            if (exchangeError) {
-              throw exchangeError;
-            }
-          }
+          throw new Error('Keine Session nach OAuth-Callback erhalten');
         }
 
-        // Success - update UI
+        // Success - store token
+        localStorage.setItem('auth_token', session.access_token);
+        console.log('[Callback] Token stored, redirecting...');
+
+        // Update UI
         if (titleEl) titleEl.textContent = 'Anmeldung erfolgreich!';
         if (messageEl) messageEl.textContent = 'Sie werden weitergeleitet...';
         if (spinnerEl) spinnerEl.style.borderTopColor = '#10b981';
 
-        // Store token for API calls
-        const { data: { session: finalSession } } = await supabase.auth.getSession();
-        if (finalSession?.access_token) {
-          localStorage.setItem('auth_token', finalSession.access_token);
-        }
-
-        // Get redirect URL from localStorage or default to home
+        // Redirect
         const redirectTo = localStorage.getItem('auth_redirect') || '/';
         localStorage.removeItem('auth_redirect');
 
-        // Short delay for UX
         setTimeout(() => {
           window.location.href = redirectTo;
         }, 1000);
 
       } catch (err) {
-        console.error('Auth callback error:', err);
+        console.error('[Callback] Error:', err);
         
         if (spinnerEl) spinnerEl.style.display = 'none';
         if (titleEl) titleEl.textContent = 'Anmeldung fehlgeschlagen';
