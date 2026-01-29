@@ -340,7 +340,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
       
       // Try to sign out from Supabase dynamically
       try {
-        const { supabase } = await import('../lib/supabase');
+        const { supabase } = await import('../../lib/supabase');
         await supabase.auth.signOut();
       } catch {
         // Supabase not available, continue
