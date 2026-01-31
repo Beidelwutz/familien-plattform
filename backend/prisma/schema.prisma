@@ -89,6 +89,17 @@ model CanonicalEvent {
   // Field locking (prevents AI/scraper from overwriting)
   locked_fields     Json?     @default("[]")
   
+  // Field-level provenance (tracks which source set each field)
+  // Format: {"title": "partner", "price_min": "rss", "lat": "api"}
+  field_provenance  Json?     @default("{}")
+  
+  // Field-level timestamps (when each field was last updated)
+  // Format: {"title": "2026-01-15T...", "price_min": "2026-01-20T..."}
+  field_updated_at  Json?     @default("{}")
+  
+  // Original timezone from source (for display purposes)
+  timezone_original String?   @db.VarChar(50)
+  
   // Timestamps
   created_at        DateTime    @default(now()) @db.Timestamptz
   updated_at        DateTime    @updatedAt @db.Timestamptz
@@ -103,6 +114,7 @@ model CanonicalEvent {
   revisions         EventRevision[]
   dup_candidates_a  DupCandidate[] @relation("DupCandidateA")
   dup_candidates_b  DupCandidate[] @relation("DupCandidateB")
+  raw_event_items   RawEventItem[]
   
   @@index([status, start_datetime])
   @@index([start_datetime])
@@ -208,6 +220,14 @@ model Source {
   rate_limit_ms         Int          @default(5000)
   priority              Int          @default(3) // 1=partner, 2=api, 3=feed, 4=scraper
   
+  // Scraper configuration (for type='scraper')
+  // Contains: selectors, dateFormat, pagination, etc.
+  scraper_config        Json?
+  
+  // HTTP caching (for conditional requests)
+  source_etag           String?      @db.VarChar(255)
+  source_last_modified  DateTime?    @db.Timestamptz
+  
   notes                 String?      @db.Text
   
   created_at            DateTime     @default(now()) @db.Timestamptz
@@ -218,6 +238,7 @@ model Source {
   fetch_logs            SourceFetchLog[]
   compliance            SourceCompliance?
   ingest_runs           IngestRun[]
+  raw_event_items       RawEventItem[]
   
   @@map("sources")
 }
@@ -693,12 +714,21 @@ model IngestRun {
   events_created  Int      @default(0)
   events_updated  Int      @default(0)
   events_skipped  Int      @default(0)
+  events_unchanged Int     @default(0)
+  events_ignored  Int      @default(0)
+  
+  // Merge statistics for debugging
+  merge_stats     Json?    // { "top_reasons": [...], "field_updates": {...} }
   
   error_message   String?  @db.Text
   error_details   Json?
   
   retry_count     Int      @default(0)
   needs_attention Boolean  @default(false)
+  acknowledged_at DateTime? @db.Timestamptz
+  
+  // Relations
+  raw_event_items RawEventItem[]
   
   @@index([status])
   @@index([needs_attention])
@@ -711,6 +741,59 @@ enum IngestStatus {
   success
   partial
   failed
+}
+
+// ============================================
+// RAW EVENT ITEMS (for Reprocessing & Audit)
+// ============================================
+
+model RawEventItem {
+  id                 String   @id @default(uuid())
+  
+  // Source identification
+  source_id          String
+  source             Source   @relation(fields: [source_id], references: [id])
+  run_id             String
+  run                IngestRun @relation(fields: [run_id], references: [id])
+  
+  // Raw data
+  raw_hash           String   @db.VarChar(64)   // SHA256 hash of extracted fields
+  raw_payload        Json?                       // Optional: original HTML/JSON
+  extracted_fields   Json                        // Normalized snapshot
+  source_url         String   @db.VarChar(500)
+  external_id        String?  @db.VarChar(255)
+  fingerprint        String   @db.VarChar(32)
+  
+  // Versioning for reprocessing
+  parser_version     String   @db.VarChar(20)
+  normalizer_version String   @db.VarChar(20)
+  
+  // AI suggestions (if applied before ingest)
+  ai_suggestions     Json?    // { classification, scores, geocode }
+  
+  // Link to canonical event (after merge)
+  canonical_event_id String?
+  canonical_event    CanonicalEvent? @relation(fields: [canonical_event_id], references: [id])
+  
+  // Ingest result
+  ingest_status      String?  @db.VarChar(20)   // created/updated/unchanged/ignored
+  ingest_result      Json?    // { applied_fields, ignored_fields, merge_reasons }
+  
+  // Tracking for deduplication analytics
+  first_seen_at      DateTime @default(now()) @db.Timestamptz
+  last_seen_at       DateTime @default(now()) @db.Timestamptz
+  seen_count         Int      @default(1)
+  
+  // Timestamps
+  fetched_at         DateTime @db.Timestamptz
+  created_at         DateTime @default(now()) @db.Timestamptz
+  
+  @@unique([source_id, raw_hash])
+  @@index([run_id])
+  @@index([source_id, fetched_at])
+  @@index([fingerprint])
+  @@index([canonical_event_id])
+  @@map("raw_event_items")
 }
 
 // ============================================

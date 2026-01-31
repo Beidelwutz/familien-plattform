@@ -106,12 +106,12 @@ async function main() {
     {
       name: 'karlsruhe.de Veranstaltungen',
       type: SourceType.rss,
-      url: 'https://www.karlsruhe.de/veranstaltungen',
+      url: 'https://kalender.karlsruhe.de/db/termine/rss',
       schedule_cron: '0 */6 * * *', // Every 6 hours
       health_status: HealthStatus.unknown,
       priority: 2,
       expected_event_count_min: 20,
-      notes: 'Offizielle Stadt-Website',
+      notes: 'Offizieller Veranstaltungskalender der Stadt Karlsruhe (RSS-Feed)',
     },
     {
       name: 'Badisches Landesmuseum',

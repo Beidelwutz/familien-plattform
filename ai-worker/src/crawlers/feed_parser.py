@@ -1,13 +1,23 @@
-"""Feed parser for RSS, ICS, and other structured formats."""
+"""Feed parser for RSS, ICS, and other structured formats.
+
+Supports:
+- RSS/Atom feeds
+- ICS calendar feeds
+- Conditional requests (ETag, Last-Modified)
+- Fingerprint computation for deduplication
+"""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 from datetime import datetime
 import hashlib
+import logging
 import httpx
 import feedparser
 from icalendar import Calendar
 from dateutil import parser as date_parser
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -24,24 +34,103 @@ class ParsedEvent:
     fingerprint: str
 
 
+@dataclass
+class FetchResult:
+    """Result of a conditional fetch."""
+    content: Optional[str]
+    etag: Optional[str]
+    last_modified: Optional[str]
+    was_modified: bool  # False if 304 Not Modified
+
+
 class FeedParser:
-    """Parser for RSS and ICS feeds."""
+    """Parser for RSS and ICS feeds with conditional request support."""
     
     def __init__(self):
         self.client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
             headers={
-                "User-Agent": "Kiezling/1.0 (Event Aggregator)"
+                "User-Agent": "Kiezling/1.0 (Event Aggregator; +https://kiezling.com/bot)"
             }
         )
     
-    async def parse_rss(self, url: str) -> list[ParsedEvent]:
-        """Parse RSS/Atom feed."""
-        response = await self.client.get(url)
+    async def fetch_with_conditional(
+        self,
+        url: str,
+        etag: Optional[str] = None,
+        last_modified: Optional[str] = None
+    ) -> FetchResult:
+        """
+        Fetch URL with conditional request headers.
+        
+        Uses ETag and Last-Modified to avoid re-downloading unchanged content.
+        
+        Args:
+            url: URL to fetch
+            etag: Previous ETag header value
+            last_modified: Previous Last-Modified header value
+            
+        Returns:
+            FetchResult with content (None if 304), new headers, and was_modified flag
+        """
+        headers = {}
+        
+        if etag:
+            headers["If-None-Match"] = etag
+        if last_modified:
+            headers["If-Modified-Since"] = last_modified
+        
+        response = await self.client.get(url, headers=headers)
+        
+        # Check for 304 Not Modified
+        if response.status_code == 304:
+            logger.info(f"Feed not modified: {url}")
+            return FetchResult(
+                content=None,
+                etag=etag,
+                last_modified=last_modified,
+                was_modified=False
+            )
+        
         response.raise_for_status()
         
-        feed = feedparser.parse(response.text)
+        # Get new cache headers
+        new_etag = response.headers.get("ETag")
+        new_last_modified = response.headers.get("Last-Modified")
+        
+        logger.debug(f"Feed fetched: {url}, ETag: {new_etag}, Last-Modified: {new_last_modified}")
+        
+        return FetchResult(
+            content=response.text,
+            etag=new_etag,
+            last_modified=new_last_modified,
+            was_modified=True
+        )
+    
+    async def parse_rss(
+        self, 
+        url: str,
+        etag: Optional[str] = None,
+        last_modified: Optional[str] = None
+    ) -> Tuple[list[ParsedEvent], Optional[str], Optional[str], bool]:
+        """
+        Parse RSS/Atom feed with conditional request support.
+        
+        Args:
+            url: Feed URL
+            etag: Previous ETag value
+            last_modified: Previous Last-Modified value
+            
+        Returns:
+            Tuple of (events, new_etag, new_last_modified, was_modified)
+        """
+        fetch_result = await self.fetch_with_conditional(url, etag, last_modified)
+        
+        if not fetch_result.was_modified:
+            return [], fetch_result.etag, fetch_result.last_modified, False
+        
+        feed = feedparser.parse(fetch_result.content)
         events = []
         
         for entry in feed.entries:
@@ -50,9 +139,14 @@ class FeedParser:
                 if event:
                     events.append(event)
             except Exception as e:
-                print(f"Error parsing RSS entry: {e}")
+                logger.warning(f"Error parsing RSS entry: {e}")
                 continue
         
+        return events, fetch_result.etag, fetch_result.last_modified, True
+    
+    async def parse_rss_simple(self, url: str) -> list[ParsedEvent]:
+        """Parse RSS/Atom feed without conditional request (backwards compatible)."""
+        events, _, _, _ = await self.parse_rss(url)
         return events
     
     def _parse_rss_entry(self, entry: dict, source_url: str) -> Optional[ParsedEvent]:
@@ -99,12 +193,29 @@ class FeedParser:
             fingerprint=fingerprint
         )
     
-    async def parse_ics(self, url: str) -> list[ParsedEvent]:
-        """Parse ICS calendar feed."""
-        response = await self.client.get(url)
-        response.raise_for_status()
+    async def parse_ics(
+        self,
+        url: str,
+        etag: Optional[str] = None,
+        last_modified: Optional[str] = None
+    ) -> Tuple[list[ParsedEvent], Optional[str], Optional[str], bool]:
+        """
+        Parse ICS calendar feed with conditional request support.
         
-        cal = Calendar.from_ical(response.text)
+        Args:
+            url: Feed URL
+            etag: Previous ETag value
+            last_modified: Previous Last-Modified value
+            
+        Returns:
+            Tuple of (events, new_etag, new_last_modified, was_modified)
+        """
+        fetch_result = await self.fetch_with_conditional(url, etag, last_modified)
+        
+        if not fetch_result.was_modified:
+            return [], fetch_result.etag, fetch_result.last_modified, False
+        
+        cal = Calendar.from_ical(fetch_result.content)
         events = []
         
         for component in cal.walk():
@@ -114,9 +225,14 @@ class FeedParser:
                     if event:
                         events.append(event)
                 except Exception as e:
-                    print(f"Error parsing ICS event: {e}")
+                    logger.warning(f"Error parsing ICS event: {e}")
                     continue
         
+        return events, fetch_result.etag, fetch_result.last_modified, True
+    
+    async def parse_ics_simple(self, url: str) -> list[ParsedEvent]:
+        """Parse ICS calendar feed without conditional request (backwards compatible)."""
+        events, _, _, _ = await self.parse_ics(url)
         return events
     
     def _parse_ics_event(self, component, source_url: str) -> Optional[ParsedEvent]:

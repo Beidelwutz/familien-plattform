@@ -33,6 +33,20 @@ export function createRateLimiter(options: RateLimitOptions) {
   }, windowMs);
 
   return (req: Request, res: Response, next: NextFunction) => {
+    // Skip rate limiting for service tokens
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.slice(7);
+        const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        if (decoded.role === 'service' || decoded.role === 'admin') {
+          return next();
+        }
+      } catch {
+        // Invalid token, continue with rate limiting
+      }
+    }
+    
     const key = keyGenerator ? keyGenerator(req) : req.ip || 'unknown';
     const now = Date.now();
 

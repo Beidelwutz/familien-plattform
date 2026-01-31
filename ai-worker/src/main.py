@@ -6,13 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import get_settings
 from src.routes import health, classify, plan, crawl
+from src.routes.metrics import router as metrics_router
 
+# Configure logging based on settings
 settings = get_settings()
 
+if settings.log_format == "json":
+    from src.lib.json_logger import setup_json_logging
+    setup_json_logging(level=settings.log_level, redact_pii=True)
+
 app = FastAPI(
-    title="Familien-Lokal AI Worker",
+    title="Kiezling AI Worker",
     description="AI service for event classification, scoring, and plan generation",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 # CORS middleware
@@ -29,6 +35,7 @@ app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(classify.router, prefix="/classify", tags=["Classification"])
 app.include_router(plan.router, prefix="/plan", tags=["Plan Generator"])
 app.include_router(crawl.router, prefix="/crawl", tags=["Crawler"])
+app.include_router(metrics_router, tags=["Metrics"])
 
 
 @app.get("/")

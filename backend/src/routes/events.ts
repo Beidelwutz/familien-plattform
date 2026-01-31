@@ -989,6 +989,81 @@ router.post('/ingest', validateIngestPayload, async (req: Request, res: Response
 });
 
 // ============================================
+// BATCH INGEST ENDPOINT (for AI-Worker)
+// ============================================
+
+import { processBatch, type CanonicalCandidate } from '../lib/merge.js';
+
+interface IngestBatchRequest {
+  run_id?: string;
+  source_id: string;
+  candidates: CanonicalCandidate[];
+}
+
+// POST /api/events/ingest/batch - Batch ingest events from AI-Worker
+router.post('/ingest/batch', async (req: Request, res: Response, next: NextFunction) => {
+  const correlationId = req.headers['x-correlation-id'] as string || crypto.randomUUID().substring(0, 8);
+  
+  try {
+    const { run_id, source_id, candidates } = req.body as IngestBatchRequest;
+    
+    if (!source_id) {
+      throw createError('source_id is required', 400, 'VALIDATION_ERROR');
+    }
+    
+    if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+      throw createError('candidates array is required and must not be empty', 400, 'VALIDATION_ERROR');
+    }
+    
+    // Verify source exists
+    const source = await prisma.source.findUnique({ where: { id: source_id } });
+    if (!source) {
+      throw createError('Source not found', 404, 'SOURCE_NOT_FOUND');
+    }
+    
+    // Create or use existing IngestRun
+    let ingestRunId = run_id;
+    if (!ingestRunId) {
+      const ingestRun = await prisma.ingestRun.create({
+        data: {
+          correlation_id: correlationId,
+          source_id: source_id,
+          status: 'running',
+        }
+      });
+      ingestRunId = ingestRun.id;
+    }
+    
+    // Process batch
+    const { results, summary } = await processBatch(candidates, source_id, ingestRunId);
+    
+    // Update source health on success
+    if (summary.created > 0 || summary.updated > 0) {
+      await prisma.source.update({
+        where: { id: source_id },
+        data: {
+          last_success_at: new Date(),
+          last_fetch_at: new Date(),
+          health_status: 'healthy',
+          consecutive_failures: 0,
+          avg_events_per_fetch: candidates.length,
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      run_id: ingestRunId,
+      correlation_id: correlationId,
+      results,
+      summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
 // CANCEL / RESCHEDULE ENDPOINTS
 // ============================================
 

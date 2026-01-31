@@ -18,6 +18,7 @@ class CrawlRequest(BaseModel):
     source_url: Optional[str] = None
     source_type: str = "rss"
     force: bool = False
+    enable_ai: bool = False  # Enable AI classification/scoring
 
 
 class CrawlStatus(BaseModel):
@@ -38,6 +39,7 @@ async def trigger_crawl(request: CrawlRequest, queue: JobQueue = Depends(get_que
     Trigger a crawl for a specific source.
     
     The crawl runs in the background and results can be checked via /status.
+    Uses batch ingest to send events to backend.
     """
     try:
         job = await queue.enqueue(
@@ -46,7 +48,8 @@ async def trigger_crawl(request: CrawlRequest, queue: JobQueue = Depends(get_que
                 "source_id": request.source_id,
                 "source_url": request.source_url,
                 "source_type": request.source_type,
-                "force": request.force
+                "force": request.force,
+                "enable_ai": request.enable_ai,
             },
             queue=QUEUE_CRAWL
         )

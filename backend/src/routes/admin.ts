@@ -695,7 +695,10 @@ router.post('/ingest-runs/:id/acknowledge', async (req: Request, res: Response, 
 
     await prisma.ingestRun.update({
       where: { id },
-      data: { needs_attention: false }
+      data: { 
+        needs_attention: false,
+        acknowledged_at: new Date(),
+      }
     });
 
     res.json({
@@ -707,7 +710,88 @@ router.post('/ingest-runs/:id/acknowledge', async (req: Request, res: Response, 
   }
 });
 
-// GET /api/admin/ingest-runs/:id - Get single ingest run details
+// GET /api/admin/ingest-runs/stats - Get aggregated statistics
+router.get('/ingest-runs/stats', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Get stats for last 24 hours
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    const [
+      totalRuns,
+      successRuns,
+      failedRuns,
+      totalCreated,
+      totalUpdated,
+      totalUnchanged,
+      totalIgnored,
+      topSources,
+    ] = await Promise.all([
+      prisma.ingestRun.count({ where: { started_at: { gte: since } } }),
+      prisma.ingestRun.count({ where: { started_at: { gte: since }, status: 'success' } }),
+      prisma.ingestRun.count({ where: { started_at: { gte: since }, status: 'failed' } }),
+      prisma.ingestRun.aggregate({
+        where: { started_at: { gte: since } },
+        _sum: { events_created: true }
+      }),
+      prisma.ingestRun.aggregate({
+        where: { started_at: { gte: since } },
+        _sum: { events_updated: true }
+      }),
+      prisma.ingestRun.aggregate({
+        where: { started_at: { gte: since } },
+        _sum: { events_unchanged: true }
+      }),
+      prisma.ingestRun.aggregate({
+        where: { started_at: { gte: since } },
+        _sum: { events_ignored: true }
+      }),
+      prisma.ingestRun.groupBy({
+        by: ['source_id'],
+        where: { started_at: { gte: since }, source_id: { not: null } },
+        _count: true,
+        _sum: { events_created: true },
+        orderBy: { _sum: { events_created: 'desc' } },
+        take: 5,
+      }),
+    ]);
+    
+    // Get source names for top sources
+    const sourceIds = topSources.map(s => s.source_id).filter(Boolean) as string[];
+    const sources = await prisma.source.findMany({
+      where: { id: { in: sourceIds } },
+      select: { id: true, name: true }
+    });
+    const sourceMap = new Map(sources.map(s => [s.id, s.name]));
+    
+    res.json({
+      success: true,
+      data: {
+        period: '24h',
+        runs: {
+          total: totalRuns,
+          success: successRuns,
+          failed: failedRuns,
+        },
+        events: {
+          created: totalCreated._sum.events_created || 0,
+          updated: totalUpdated._sum.events_updated || 0,
+          unchanged: totalUnchanged._sum.events_unchanged || 0,
+          ignored: totalIgnored._sum.events_ignored || 0,
+        },
+        top_sources: topSources.map(s => ({
+          source_id: s.source_id,
+          source_name: sourceMap.get(s.source_id!) || 'Unknown',
+          run_count: s._count,
+          events_created: s._sum.events_created || 0,
+        })),
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/ingest-runs/:id - Get single ingest run details with merge statistics
 router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -724,10 +808,53 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
     if (!run) {
       throw createError('Ingest run not found', 404, 'NOT_FOUND');
     }
+    
+    // Get summary of raw event items for this run
+    const itemStats = await prisma.rawEventItem.groupBy({
+      by: ['ingest_status'],
+      where: { run_id: id },
+      _count: true,
+    });
+    
+    const itemStatusMap: Record<string, number> = {};
+    for (const stat of itemStats) {
+      if (stat.ingest_status) {
+        itemStatusMap[stat.ingest_status] = stat._count;
+      }
+    }
+    
+    // Get items that need attention (conflicts, errors)
+    const problemItems = await prisma.rawEventItem.findMany({
+      where: {
+        run_id: id,
+        OR: [
+          { ingest_status: 'ignored' },
+          { ingest_status: 'conflict' },
+        ]
+      },
+      take: 10,
+      select: {
+        id: true,
+        fingerprint: true,
+        ingest_status: true,
+        ingest_result: true,
+        extracted_fields: true,
+      }
+    });
 
     res.json({
       success: true,
-      data: run
+      data: {
+        ...run,
+        item_stats: itemStatusMap,
+        problem_items: problemItems.map(item => ({
+          id: item.id,
+          fingerprint: item.fingerprint,
+          status: item.ingest_status,
+          title: (item.extracted_fields as any)?.title || 'Unknown',
+          merge_reasons: (item.ingest_result as any)?.merge_reasons || [],
+        })),
+      }
     });
   } catch (error) {
     next(error);
@@ -845,6 +972,97 @@ router.patch('/ingest-runs/:id', async (req: Request, res: Response, next: NextF
       success: true,
       message: 'Ingest run updated',
       data: run
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// SERVICE TOKEN GENERATION
+// ============================================
+
+import jwt from 'jsonwebtoken';
+
+// POST /api/admin/service-token - Generate a service token for AI-Worker
+router.post('/service-token', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { name = 'ai-worker', scopes = ['ingest', 'crawl'], expires_in_days = 90 } = req.body;
+    
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      throw createError('JWT_SECRET not configured', 500, 'CONFIG_ERROR');
+    }
+    
+    // Create service token with limited scopes
+    const payload = {
+      sub: `service:${name}`,
+      name,
+      role: 'service',
+      scopes,
+      iat: Math.floor(Date.now() / 1000),
+    };
+    
+    const expiresInSeconds = expires_in_days * 24 * 60 * 60;
+    const token = jwt.sign(payload, secret, { expiresIn: expiresInSeconds });
+    
+    // Calculate expiration date
+    const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
+    
+    res.json({
+      success: true,
+      message: 'Service token generated',
+      data: {
+        token,
+        name,
+        scopes,
+        expires_at: expiresAt.toISOString(),
+        expires_in_days,
+        usage: {
+          header: 'Authorization: Bearer <token>',
+          env_var: 'SERVICE_TOKEN=<token>',
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/ingest-runs/:id/items - Get raw event items for a run
+router.get('/ingest-runs/:id/items', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { status, limit = 50, offset = 0 } = req.query;
+    
+    const where: any = { run_id: id };
+    if (status) {
+      where.ingest_status = status;
+    }
+    
+    const [items, total] = await Promise.all([
+      prisma.rawEventItem.findMany({
+        where,
+        take: Number(limit),
+        skip: Number(offset),
+        orderBy: { created_at: 'desc' },
+        include: {
+          canonical_event: {
+            select: { id: true, title: true, status: true }
+          }
+        }
+      }),
+      prisma.rawEventItem.count({ where })
+    ]);
+    
+    res.json({
+      success: true,
+      data: items,
+      pagination: {
+        total,
+        limit: Number(limit),
+        offset: Number(offset),
+      }
     });
   } catch (error) {
     next(error);
