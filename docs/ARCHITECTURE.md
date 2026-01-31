@@ -217,6 +217,46 @@ ai-worker/
 
 ## Authentifizierung
 
+Die Plattform unterstützt zwei Authentifizierungsmethoden:
+1. **Email/Passwort** (direkt via Backend)
+2. **OAuth (Google)** (via Supabase Auth)
+
+### OAuth Flow (Google)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Supabase OAuth Flow                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. User klickt "Mit Google anmelden"                       │
+│     Frontend → Supabase Auth                                │
+│                                                             │
+│  2. Supabase leitet zu Google weiter                        │
+│     Google OAuth Consent Screen                             │
+│                                                             │
+│  3. Google leitet zurück zu Supabase                        │
+│     https://xxx.supabase.co/auth/v1/callback                │
+│                                                             │
+│  4. Supabase erstellt User und leitet zum Frontend          │
+│     /auth/callback?code=...                                 │
+│                                                             │
+│  5. Frontend tauscht Code gegen Session                     │
+│     supabase.auth.exchangeCodeForSession(code)              │
+│                                                             │
+│  6. Frontend synct User zum Backend                         │
+│     POST /api/auth/sync (Bearer Token)                      │
+│                                                             │
+│  7. Backend erstellt/findet Prisma-User                     │
+│     - Prüft ob User existiert (ID oder Email)               │
+│     - Erstellt FamilyProfile                                │
+│                                                             │
+│  8. User ist eingeloggt                                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Email/Passwort Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    JWT Authentication Flow                   │
@@ -229,11 +269,12 @@ ai-worker/
 │  2. Server validates credentials                            │
 │     - Check user exists                                     │
 │     - Verify password (bcrypt)                              │
+│     - Check account lockout                                 │
 │                                                             │
 │  3. Server returns JWT                                      │
 │     { token: "eyJhbG..." }                                  │
 │                                                             │
-│  4. Client stores token (localStorage)                      │
+│  4. Client stores token (localStorage/sessionStorage)       │
 │                                                             │
 │  5. Subsequent requests include token                       │
 │     Authorization: Bearer <token>                           │
@@ -245,6 +286,18 @@ ai-worker/
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Wichtig: Konsistente Supabase-Konfiguration
+
+Alle Komponenten müssen auf das **gleiche** Supabase-Projekt zeigen:
+
+| Komponente | Variable | Wert |
+|------------|----------|------|
+| Backend | `DATABASE_URL` | `postgresql://...@db.XXX.supabase.co` |
+| Backend | `SUPABASE_URL` | `https://XXX.supabase.co` |
+| Frontend | `PUBLIC_SUPABASE_URL` | `https://XXX.supabase.co` |
+
+Wenn die URLs auf verschiedene Projekte zeigen, schlägt der User-Sync fehl!
 
 **Token-Payload:**
 ```json
@@ -315,10 +368,15 @@ ai-worker/
 ┌─────────────────────────────────────────────────────────────┐
 │                         User                                │
 ├─────────────────────────────────────────────────────────────┤
-│ id              UUID (PK)                                   │
-│ email           VARCHAR(255) UNIQUE                         │
-│ password_hash   VARCHAR(255)                                │
-│ role            ENUM (parent, provider, admin)              │
+│ id                    UUID (PK)                             │
+│ email                 VARCHAR(255) UNIQUE                   │
+│ password_hash         VARCHAR(255) -- NULL für OAuth        │
+│ role                  ENUM (parent, provider, admin)        │
+│ email_verified        BOOLEAN                               │
+│ email_verified_at     TIMESTAMPTZ                           │
+│ failed_login_attempts INT -- Account Lockout                │
+│ locked_until          TIMESTAMPTZ                           │
+│ last_login_at         TIMESTAMPTZ                           │
 └─────────────────────────────────────────────────────────────┘
          │
          │ 1:1
@@ -330,6 +388,16 @@ ai-worker/
 │ children_ages        JSONB                                  │
 │ preferred_radius_km  INT                                    │
 │ home_lat/lng         DECIMAL                                │
+└─────────────────────────────────────────────────────────────┘
+         │
+┌─────────────────────────────────────────────────────────────┐
+│                 PasswordResetToken                          │
+├─────────────────────────────────────────────────────────────┤
+│ id          UUID (PK)                                       │
+│ user_id     UUID (FK)                                       │
+│ token_hash  VARCHAR(255) -- SHA256 Hash                     │
+│ expires_at  TIMESTAMPTZ                                     │
+│ used_at     TIMESTAMPTZ                                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 

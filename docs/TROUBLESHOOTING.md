@@ -7,6 +7,7 @@ Häufige Probleme und deren Lösungen.
 - [Server-Probleme](#server-probleme)
 - [Datenbank-Probleme](#datenbank-probleme)
 - [Authentifizierung](#authentifizierung)
+  - [Konto konnte nicht angelegt werden](#konto-konnte-nicht-angelegt-werden)
   - [Google-Anmeldung erstellt keinen Account](#google-anmeldung-erstellt-keinen-account-in-supabase)
   - [401 Unauthorized](#401-unauthorized)
   - [403 Forbidden (Admin)](#403-forbidden-admin-endpoints)
@@ -163,6 +164,88 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 ---
 
 ## Authentifizierung
+
+### Konto konnte nicht angelegt werden
+
+**Symptom:**
+```
+Konto konnte nicht angelegt werden
+Failed to sync user account
+Dein Konto konnte nicht in der Datenbank angelegt werden.
+```
+
+**Ursache:** Der `/api/auth/sync`-Endpoint schlägt fehl, nachdem die Supabase-Authentifizierung erfolgreich war.
+
+**Häufigste Ursachen und Lösungen:**
+
+#### 1. Inkonsistente Supabase-Konfiguration (häufigste Ursache)
+
+Frontend und Backend zeigen auf verschiedene Supabase-Projekte.
+
+**Prüfen:**
+```bash
+# Backend .env
+cat backend/.env | grep SUPABASE
+cat backend/.env | grep DATABASE_URL
+
+# Frontend .env.local
+cat frontend/.env.local | grep SUPABASE
+```
+
+**Alle müssen auf das gleiche Projekt zeigen:**
+| Variable | Projekt-Ref |
+|----------|-------------|
+| `DATABASE_URL` | `db.XXX.supabase.co` |
+| `SUPABASE_URL` | `https://XXX.supabase.co` |
+| `PUBLIC_SUPABASE_URL` | `https://XXX.supabase.co` |
+
+**Lösung:** Alle URLs auf das gleiche Supabase-Projekt setzen.
+
+#### 2. Fehlende Prisma-Migrationen
+
+**Prüfen:**
+```bash
+cd backend
+npx prisma migrate status
+```
+
+**Lösung:**
+```bash
+npx prisma db push
+# Oder für Production:
+npx prisma migrate deploy
+```
+
+#### 3. Supabase Service Role Key fehlt/falsch
+
+**Prüfen:**
+```bash
+cat backend/.env | grep SUPABASE_SERVICE_ROLE_KEY
+```
+
+**Lösung:**
+1. Supabase Dashboard öffnen
+2. Settings → API
+3. `service_role` Key kopieren (NICHT `anon`!)
+4. In `backend/.env` eintragen
+
+#### 4. Datenbank nicht erreichbar
+
+**Prüfen:**
+```bash
+cd backend
+npx prisma db pull
+```
+
+**Backend-Logs prüfen auf:**
+- `P1001` / `P1002`: Datenbank nicht erreichbar
+- `P2024`: Connection timeout
+
+**Lösung:**
+- Supabase Dashboard → Database → Connection info prüfen
+- IP-Allowlist prüfen (falls aktiviert)
+
+---
 
 ### Google-Anmeldung erstellt keinen Account in Supabase
 

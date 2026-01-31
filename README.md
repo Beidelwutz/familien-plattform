@@ -158,21 +158,30 @@ Für automatische Trending-Berechnung, `vercel.json` erweitern:
 | Variable | Erforderlich | Beschreibung | Beispiel |
 |----------|--------------|--------------|----------|
 | `DATABASE_URL` | ✅ Ja | PostgreSQL Connection String | `postgresql://user:pass@host:5432/db` |
-| `REDIS_URL` | ✅ Ja | Redis Connection String | `redis://localhost:6379` |
+| `DIRECT_URL` | ✅ Ja | Direct PostgreSQL URL (für Migrationen) | `postgresql://user:pass@host:5432/db` |
+| `REDIS_URL` | Nein | Redis Connection String (optional) | `redis://localhost:6379` |
 | `PORT` | Nein | Server Port (default: 4000) | `4000` |
 | `NODE_ENV` | Nein | Environment | `production` |
 | `CORS_ORIGIN` | ✅ Ja | Erlaubte Origins (kommasepariert) | `https://www.kiezling.com` |
 | `JWT_SECRET` | ✅ Prod | JWT Signing Secret (min. 32 Zeichen) | `your-super-secret-key-here` |
 | `JWT_EXPIRES_IN` | Nein | Token Ablaufzeit (default: 7d) | `7d` |
+| `SUPABASE_URL` | ✅ Ja | Supabase Project URL | `https://xxx.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ Ja | Supabase Service Role Key | `eyJ...` |
 | `AI_WORKER_URL` | Nein | AI Worker Service URL | `http://localhost:5000` |
 | `NOMINATIM_URL` | Nein | Geocoding Service URL | `https://nominatim.openstreetmap.org` |
 | `CRON_SECRET` | ✅ Prod | Secret für Cron-Jobs | `your-cron-secret-here` |
+
+**Wichtig:** `DATABASE_URL` und `SUPABASE_URL` müssen auf das **gleiche** Supabase-Projekt zeigen!
 
 ### Frontend (`frontend/.env`)
 
 | Variable | Erforderlich | Beschreibung | Beispiel |
 |----------|--------------|--------------|----------|
 | `PUBLIC_API_URL` | ✅ Ja | Backend API URL | `http://localhost:4000` |
+| `PUBLIC_SUPABASE_URL` | ✅ Ja | Supabase Project URL | `https://xxx.supabase.co` |
+| `PUBLIC_SUPABASE_ANON_KEY` | ✅ Ja | Supabase Anon/Public Key | `eyJ...` |
+
+**Wichtig:** `PUBLIC_SUPABASE_URL` muss mit dem Backend `SUPABASE_URL` übereinstimmen!
 
 ### AI Worker (`ai-worker/.env`)
 

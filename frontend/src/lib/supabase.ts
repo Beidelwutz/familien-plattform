@@ -5,26 +5,27 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Production: always use nsrfzjxrtlrujxgixmdr (env may be stale in Vercel)
-const supabaseUrl = import.meta.env.PROD
-  ? 'https://nsrfzjxrtlrujxgixmdr.supabase.co'
-  : (import.meta.env.PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co');
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+// Supabase configuration from environment variables
+// WICHTIG: Alle Umgebungen (Dev, Prod) müssen auf das gleiche Supabase-Projekt zeigen!
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || '';
 
 // Track if Supabase is properly configured
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && 
+  supabaseUrl !== 'https://placeholder.supabase.co' && 
+  supabaseAnonKey !== 'placeholder-key');
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key',
-  {
-    auth: {
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true,
-    },
-  }
-);
+// Fallback values for when Supabase is not configured (prevents crashes)
+const clientUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const clientKey = supabaseAnonKey || 'placeholder-key';
+
+export const supabase = createClient(clientUrl, clientKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
+});
 
 /**
  * Helper to check if Supabase is configured before auth operations

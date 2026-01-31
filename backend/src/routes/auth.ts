@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { signToken, requireAuth, type AuthRequest } from '../middleware/auth.js';
-import { verifyToken as verifySupabaseToken } from '../lib/supabase.js';
+import { verifyToken as verifySupabaseToken, isSupabaseConfigured } from '../lib/supabase.js';
 import { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } from '../lib/email.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 
@@ -371,18 +371,39 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
     // Check for specific Prisma errors
     let errorMessage = 'Failed to sync user account';
     let errorCode = 'ACCOUNT_SYNC_FAILED';
+    let statusCode = 500;
     
     if (err.code === 'P2002') {
       // Unique constraint violation
       errorMessage = 'Ein Konto mit dieser E-Mail existiert bereits';
       errorCode = 'EMAIL_EXISTS';
+      statusCode = 409;
     } else if (err.code === 'P2025') {
       // Record not found
       errorMessage = 'Datensatz nicht gefunden';
       errorCode = 'NOT_FOUND';
+      statusCode = 404;
+    } else if (err.code === 'P2024') {
+      // Database connection timeout
+      errorMessage = 'Datenbankverbindung fehlgeschlagen. Bitte versuche es erneut.';
+      errorCode = 'DB_CONNECTION_ERROR';
+      statusCode = 503;
+    } else if (err.code === 'P1001' || err.code === 'P1002') {
+      // Database unreachable
+      errorMessage = 'Datenbank nicht erreichbar. Bitte versuche es später erneut.';
+      errorCode = 'DB_UNAVAILABLE';
+      statusCode = 503;
+    } else if (err.message?.includes('Supabase not configured')) {
+      errorMessage = 'Authentifizierungsdienst nicht konfiguriert';
+      errorCode = 'SERVICE_UNAVAILABLE';
+      statusCode = 503;
+    } else if (err.message?.includes('Invalid UUID')) {
+      errorMessage = 'Ungültige Benutzer-ID';
+      errorCode = 'INVALID_USER_ID';
+      statusCode = 400;
     }
     
-    return res.status(500).json({ 
+    return res.status(statusCode).json({ 
       success: false, 
       error: { code: errorCode, message: errorMessage } 
     });
