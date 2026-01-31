@@ -101,7 +101,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </div>
 </BaseLayout>
 
-<script define:vars={{ API_URL }}>
+<script is:inline define:vars={{ API_URL }}>
   let amenities = [];
   let unconfirmed = [];
   let currentTab = 'all';

@@ -405,18 +405,19 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
         // Status badge
         const statusBadge = document.getElementById('health-status-badge');
         if (statusBadge) {
-          const statusStyles = {
+          const statusStyles: Record<string, string> = {
             ok: 'bg-green-100 text-green-700',
             degraded: 'bg-yellow-100 text-yellow-700',
             error: 'bg-red-100 text-red-700',
           };
-          const statusLabels = {
+          const statusLabels: Record<string, string> = {
             ok: 'Alles OK',
             degraded: 'Eingeschränkt',
             error: 'Fehler',
           };
-          statusBadge.className = `px-3 py-1 text-xs font-medium rounded-full ${statusStyles[health.status] || 'bg-gray-100 text-gray-500'}`;
-          statusBadge.textContent = statusLabels[health.status] || health.status;
+          const statusKey = String(health.status ?? '');
+          statusBadge.className = `px-3 py-1 text-xs font-medium rounded-full ${statusStyles[statusKey] || 'bg-gray-100 text-gray-500'}`;
+          statusBadge.textContent = statusLabels[statusKey] || statusKey || 'Unbekannt';
         }
 
         // Database indicator

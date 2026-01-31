@@ -244,7 +244,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
+<script is:inline define:vars={{ API_BASE }}>
   async function init() {
     const loadingState = document.getElementById('loading-state');
     const authRequired = document.getElementById('auth-required');

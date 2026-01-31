@@ -99,7 +99,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
+<script is:inline define:vars={{ API_BASE }}>
   const loadingState = document.getElementById('loading-state');
   const successState = document.getElementById('success-state');
   const alreadyVerifiedState = document.getElementById('already-verified-state');

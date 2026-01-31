@@ -222,7 +222,7 @@ const { id } = Astro.params;
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE, id }}>
+<script is:inline define:vars={{ API_BASE, id }}>
   let eventData = null;
   let eventStatus = null;
 

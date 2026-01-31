@@ -204,7 +204,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
+<script is:inline define:vars={{ API_BASE }}>
   const form = document.getElementById('register-form');
   const step1 = document.getElementById('step1');
   const step2 = document.getElementById('step2');

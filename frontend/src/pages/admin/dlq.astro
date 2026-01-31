@@ -70,7 +70,7 @@ const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:500
     </div>
   </main>
 
-  <script define:vars={{ API_URL, WORKER_URL }}>
+  <script is:inline define:vars={{ API_URL, WORKER_URL }}>
     const workerUrl = WORKER_URL;
 
     async function loadDLQJobs() {

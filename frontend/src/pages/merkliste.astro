@@ -112,7 +112,7 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script define:vars={{ API_BASE }}>
+<script is:inline define:vars={{ API_BASE }}>
   function getLocalSavedEvents() {
     try {
       return JSON.parse(localStorage.getItem('saved_events') || '[]');

@@ -143,7 +143,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 </BaseLayout>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script define:vars={{ API_URL }}>
+<script is:inline define:vars={{ API_URL }}>
   const token = localStorage.getItem('auth_token');
   if (!token) {
     window.location.href = '/login?redirect=/admin/ai-usage';
