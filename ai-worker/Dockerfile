@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
@@ -23,12 +24,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY ai-worker/ .
 
-# Expose port
-EXPOSE 5000
+# Expose port (Railway sets $PORT dynamically, this is for documentation)
+EXPOSE ${PORT}
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:5000/health/ready', timeout=5)" || exit 1
+# Health check - uses $PORT from environment
+# Note: Railway uses its own healthcheck via railway.toml, this is a fallback
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health/ready || exit 1
 
-# Run the application
-CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "5000"]
+# Run the application with dynamic port from environment
+CMD ["sh", "-c", "python -m uvicorn src.main:app --host 0.0.0.0 --port ${PORT}"]

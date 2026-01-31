@@ -6,7 +6,6 @@
     "watchPatterns": ["ai-worker/**"]
   },
   "deploy": {
-    "startCommand": "cd ai-worker && python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT",
     "healthcheckPath": "/health/ready",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
