@@ -1,0 +1,15 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "ai-worker/Dockerfile",
+    "watchPatterns": ["ai-worker/**"]
+  },
+  "deploy": {
+    "startCommand": "cd ai-worker && python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT",
+    "healthcheckPath": "/health/ready",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
