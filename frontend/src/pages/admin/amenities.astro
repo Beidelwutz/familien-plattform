@@ -2,8 +2,6 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
 import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
-
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Ausstattung verwalten - Admin - kiezling">
@@ -101,11 +99,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </div>
 </BaseLayout>
 
-<script is:inline define:vars={{ API_URL }}>
-  let amenities = [];
-  let unconfirmed = [];
+<script>
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  
+  let amenities: any[] = [];
+  let unconfirmed: any[] = [];
   let currentTab = 'all';
-  let deleteTargetId = null;
+  let deleteTargetId: string | null = null;
 
   const token = localStorage.getItem('auth_token');
   if (!token) {

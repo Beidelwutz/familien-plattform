@@ -2,8 +2,6 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
 import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
-
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="AI Usage Monitor - Admin - kiezling">
@@ -143,13 +141,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 </BaseLayout>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script is:inline define:vars={{ API_URL }}>
+<script>
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  
   const token = localStorage.getItem('auth_token');
   if (!token) {
     window.location.href = '/login?redirect=/admin/ai-usage';
   }
 
-  let costChart = null;
+  let costChart: any = null;
 
   async function loadData() {
     document.getElementById('loading-state').classList.remove('hidden');

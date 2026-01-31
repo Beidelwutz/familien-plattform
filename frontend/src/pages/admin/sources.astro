@@ -1,8 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
-
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Quellen-Status - Admin - kiezling">
@@ -116,10 +114,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script is:inline define:vars={{ API_URL }}>
-  let sources = [];
-  let currentSourceId = null;
-  let activePolling = {}; // Track active polling intervals by source ID
+<script>
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  
+  let sources: any[] = [];
+  let currentSourceId: string | null = null;
+  let activePolling: Record<string, any> = {}; // Track active polling intervals by source ID
   const token = localStorage.getItem('auth_token');
 
   // Auth check

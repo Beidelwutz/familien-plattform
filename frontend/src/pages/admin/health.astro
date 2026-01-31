@@ -1,9 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import StickyHeader from "../../components/layout/StickyHeader.astro";
-
-const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
-const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:5000";
 ---
 
 <BaseLayout title="System Health - Admin - kiezling">
@@ -116,7 +113,10 @@ const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:500
     </div>
   </main>
 
-  <script is:inline define:vars={{ API_URL, WORKER_URL }}>
+  <script>
+    const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+    const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || 'http://localhost:5000';
+    
     const workerUrl = WORKER_URL;
 
     function setStatus(elementId, status) {

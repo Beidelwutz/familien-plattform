@@ -1,8 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
-
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Duplikate - Admin - kiezling">
@@ -47,8 +45,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   </main>
 </BaseLayout>
 
-<script is:inline define:vars={{ API_URL }}>
-  let duplicates = [];
+<script>
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  
+  let duplicates: any[] = [];
   const token = localStorage.getItem('auth_token');
 
   // Auth check
