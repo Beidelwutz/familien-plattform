@@ -5,7 +5,8 @@ import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth.js';
 import { approveRevision, rejectRevision } from '../lib/eventRevision.js';
 import { sendEventApprovedEmail, sendEventRejectedEmail } from '../lib/email.js';
-import { AI_THRESHOLDS } from '../lib/eventCompleteness.js';
+import { AI_THRESHOLDS, calculateCompleteness } from '../lib/eventCompleteness.js';
+import { canPublish } from '../lib/eventQuery.js';
 import { logger } from '../lib/logger.js';
 import { redis, isRedisAvailable } from '../lib/redis.js';
 
@@ -220,12 +221,53 @@ router.post('/review/:id/approve', async (req: Request, res: Response, next: Nex
   try {
     const { id } = req.params;
 
+    // First fetch the event to validate
+    const existingEvent = await prisma.canonicalEvent.findUnique({
+      where: { id },
+      include: {
+        provider: {
+          include: {
+            user: { select: { email: true } }
+          }
+        }
+      }
+    });
+
+    if (!existingEvent) {
+      throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    // Validate publishability
+    const publishCheck = canPublish({
+      title: existingEvent.title,
+      start_datetime: existingEvent.start_datetime,
+      location_address: existingEvent.location_address,
+      location_lat: existingEvent.location_lat ? Number(existingEvent.location_lat) : null,
+      location_lng: existingEvent.location_lng ? Number(existingEvent.location_lng) : null,
+      is_cancelled: existingEvent.is_cancelled,
+      age_rating: existingEvent.age_rating,
+    });
+
+    if (!publishCheck.valid) {
+      throw createError(
+        `Kann nicht veröffentlicht werden: ${publishCheck.reason}`,
+        400,
+        'PUBLISH_VALIDATION_FAILED'
+      );
+    }
+
+    // Recompute completeness score
+    const completeness = calculateCompleteness(existingEvent);
+
     const event = await prisma.canonicalEvent.update({
       where: { id },
       data: {
         status: 'published',
         is_verified: true,
-        last_verified_at: new Date()
+        is_complete: true,
+        last_verified_at: new Date(),
+        published_by: 'human_review',
+        completeness_score: completeness.score,
       },
       include: {
         provider: {
@@ -244,6 +286,8 @@ router.post('/review/:id/approve', async (req: Request, res: Response, next: Nex
         console.error('Failed to send event approved email:', err);
       });
     }
+
+    logger.info(`Event ${id} approved by human review, completeness: ${completeness.score}%`);
 
     res.json({
       success: true,
@@ -309,10 +353,39 @@ router.post('/review/:id/quick-edit', async (req: Request, res: Response, next: 
     const { id } = req.params;
     const { title, start_datetime, end_datetime, location_address, locked_fields } = req.body;
 
+    // First fetch the event
+    const existingEvent = await prisma.canonicalEvent.findUnique({ where: { id } });
+    if (!existingEvent) {
+      throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    // Merge with updates for validation
+    const mergedEvent = {
+      title: title ?? existingEvent.title,
+      start_datetime: start_datetime ? new Date(start_datetime) : existingEvent.start_datetime,
+      location_address: location_address ?? existingEvent.location_address,
+      location_lat: existingEvent.location_lat ? Number(existingEvent.location_lat) : null,
+      location_lng: existingEvent.location_lng ? Number(existingEvent.location_lng) : null,
+      is_cancelled: existingEvent.is_cancelled,
+      age_rating: existingEvent.age_rating,
+    };
+
+    // Validate publishability
+    const publishCheck = canPublish(mergedEvent);
+    if (!publishCheck.valid) {
+      throw createError(
+        `Kann nicht veröffentlicht werden: ${publishCheck.reason}`,
+        400,
+        'PUBLISH_VALIDATION_FAILED'
+      );
+    }
+
     const updateData: any = {
       status: 'published',
       is_verified: true,
+      is_complete: true,
       last_verified_at: new Date(),
+      published_by: 'human_review',
     };
 
     // Only update provided fields
@@ -327,10 +400,19 @@ router.post('/review/:id/quick-edit', async (req: Request, res: Response, next: 
       data: updateData,
     });
 
+    // Recompute completeness after update
+    const completeness = calculateCompleteness(event);
+    await prisma.canonicalEvent.update({
+      where: { id },
+      data: { completeness_score: completeness.score }
+    });
+
+    logger.info(`Event ${id} quick-edited and approved, completeness: ${completeness.score}%`);
+
     res.json({
       success: true,
       message: 'Event edited and approved',
-      data: event,
+      data: { ...event, completeness_score: completeness.score },
     });
   } catch (error) {
     next(error);

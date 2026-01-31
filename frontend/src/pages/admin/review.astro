@@ -149,6 +149,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               <div id="detail-info" class="grid grid-cols-2 gap-3"></div>
             </div>
             <div>
+              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Beschreibungen</h3>
+              <div id="detail-descriptions" class="space-y-4"></div>
+            </div>
+            <div>
               <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">AI-Scores</h3>
               <div id="detail-scores" class="bg-gray-50 rounded-lg p-4"></div>
             </div>
@@ -404,6 +408,31 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       <div class="bg-gray-50 p-3 rounded-lg col-span-2"><span class="text-xs text-gray-500 block">Adresse</span><span class="font-medium">${event.location_address || '-'}</span></div>
       <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Preis</span><span class="font-medium">${event.price_type || '-'}</span></div>
       <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Alter</span><span class="font-medium">${event.age_min || '?'} - ${event.age_max || '?'} Jahre</span></div>
+    `;
+
+    // Descriptions: KI-Zusammenfassung + Original-Beschreibung
+    document.getElementById('detail-descriptions').innerHTML = `
+      <!-- KI-generierte Beschreibung -->
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs font-medium text-primary-600">✨ KI-Zusammenfassung</span>
+        </div>
+        <div class="bg-primary-50 border border-primary-100 p-3 rounded-lg text-sm text-gray-700">
+          ${event.ai_summary_short ? `
+            <p class="mb-2">${event.ai_summary_short}</p>
+            ${event.ai_fit_blurb ? `<p class="text-primary-600 text-xs font-medium">💡 ${event.ai_fit_blurb}</p>` : ''}
+          ` : '<em class="text-gray-400">Keine KI-Zusammenfassung vorhanden</em>'}
+        </div>
+      </div>
+      <!-- Original-Beschreibung aus RSS/Quelle -->
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs font-medium text-gray-600">📄 Original-Beschreibung (Quelle)</span>
+        </div>
+        <div class="bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm text-gray-700 max-h-48 overflow-y-auto">
+          ${event.description_long || event.description_short || '<em class="text-gray-400">Keine Beschreibung aus Quelle</em>'}
+        </div>
+      </div>
     `;
 
     // Enhanced scores display with confidence

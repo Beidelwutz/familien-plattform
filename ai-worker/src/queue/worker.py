@@ -119,11 +119,13 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
     
     for candidate in candidates:
         try:
-            # Prepare event data for classifier
+            # Prepare event data for classifier/scorer
+            # Note: Classifier/Scorer expect 'location_address', not 'location'
             event_data = {
                 'title': candidate.data.title,
                 'description': candidate.data.description,
-                'location': candidate.data.address,
+                'location_address': candidate.data.address,
+                'price_type': candidate.data.price_type,
             }
             
             # Classification

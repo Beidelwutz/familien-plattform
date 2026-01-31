@@ -14,10 +14,10 @@ except ImportError:
     ValidationError = Exception
 
 
-# Schema for event classification results
+# Schema for event classification results (v3.0)
 CLASSIFICATION_SCHEMA = {
     "type": "object",
-    "required": ["categories", "is_family_friendly"],
+    "required": ["categories"],
     "properties": {
         "categories": {
             "type": "array",
@@ -30,13 +30,40 @@ CLASSIFICATION_SCHEMA = {
         "age_max": {"type": ["integer", "null"], "minimum": 0, "maximum": 99},
         "is_indoor": {"type": ["boolean", "null"]},
         "is_outdoor": {"type": ["boolean", "null"]},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        # New v3.0 fields
+        "age_rating": {"type": "string", "enum": ["0+", "3+", "6+", "10+", "13+", "16+", "18+"]},
+        "age_fit_buckets": {
+            "type": "object",
+            "properties": {
+                "0_2": {"type": "integer", "minimum": 0, "maximum": 100},
+                "3_5": {"type": "integer", "minimum": 0, "maximum": 100},
+                "6_9": {"type": "integer", "minimum": 0, "maximum": 100},
+                "10_12": {"type": "integer", "minimum": 0, "maximum": 100},
+                "13_15": {"type": "integer", "minimum": 0, "maximum": 100}
+            }
+        },
+        "ai_summary_short": {"type": ["string", "null"], "maxLength": 300},
+        "ai_summary_highlights": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": 5
+        },
+        "ai_fit_blurb": {"type": ["string", "null"], "maxLength": 150},
+        "summary_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "flags": {
+            "type": "object",
+            "properties": {
+                "sensitive_content": {"type": "boolean"},
+                "needs_escalation": {"type": "boolean"}
+            }
+        }
     },
     "additionalProperties": True
 }
 
 
-# Schema for event scoring results
+# Schema for event scoring results (v2.1)
 SCORING_SCHEMA = {
     "type": "object",
     "required": ["relevance_score", "quality_score", "family_fit_score"],
@@ -45,7 +72,8 @@ SCORING_SCHEMA = {
         "quality_score": {"type": "integer", "minimum": 0, "maximum": 100},
         "family_fit_score": {"type": "integer", "minimum": 0, "maximum": 100},
         "stressfree_score": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
-        "reasoning": {"type": ["string", "null"]}
+        "fun_score": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+        "reasoning": {"type": ["object", "string", "null"]}
     },
     "additionalProperties": True
 }

@@ -27,13 +27,14 @@ class ScoringResult:
     quality_score: int  # 0-100
     family_fit_score: int  # 0-100
     stressfree_score: int  # 0-100
+    fun_score: int  # 0-100 - How fun/engaging for kids
     confidence: float
     reasoning: dict
     # Tracking metadata
     model: str = "unknown"
     temperature: float = 0.3
-    prompt_version: str = "2.0.0"
-    schema_version: str = "1.0.0"
+    prompt_version: str = "2.1.0"
+    schema_version: str = "1.1.0"
     raw_response: Optional[str] = None
     parse_error: Optional[str] = None
     retry_count: int = 0
@@ -85,18 +86,26 @@ BEWERTUNGSSKALA (0-100):
    - Wickelmöglichkeiten/Toiletten?
    - Essen vor Ort?
 
+5. fun_score: Wie viel Spaß macht es Kindern?
+   - 90-100: Abenteuer, Action, Spannung - Kinder werden begeistert sein
+   - 70-89: Unterhaltsam und interessant für die meisten Kinder
+   - 50-69: Kann Spaß machen, hängt von Interessen ab
+   - 0-49: Eher langweilig für Kinder
+
 Antworte NUR mit diesem JSON:
 {{
   "relevance_score": 85,
   "quality_score": 70,
   "family_fit_score": 90,
   "stressfree_score": 75,
+  "fun_score": 80,
   "confidence": 0.8,
   "reasoning": {{
     "relevance": "Kurze Begründung",
     "quality": "Kurze Begründung",
     "family_fit": "Kurze Begründung",
-    "stressfree": "Kurze Begründung"
+    "stressfree": "Kurze Begründung",
+    "fun": "Kurze Begründung"
   }}
 }}"""
 
@@ -111,12 +120,14 @@ Bitte antworte NUR mit validem JSON:
   "quality_score": 70,
   "family_fit_score": 90,
   "stressfree_score": 75,
+  "fun_score": 80,
   "confidence": 0.8,
   "reasoning": {{
     "relevance": "Begründung",
     "quality": "Begründung",
     "family_fit": "Begründung",
-    "stressfree": "Begründung"
+    "stressfree": "Begründung",
+    "fun": "Begründung"
   }}
 }}"""
 
@@ -331,6 +342,7 @@ class EventScorer:
             quality_score=data.get("quality_score", 50),
             family_fit_score=data.get("family_fit_score", 50),
             stressfree_score=data.get("stressfree_score", 50),
+            fun_score=data.get("fun_score", 50),
             confidence=data.get("confidence", 0.7),
             reasoning=data.get("reasoning", {}),
             model=model,
@@ -354,6 +366,7 @@ class EventScorer:
             quality_score=quality_score,
             family_fit_score=60,
             stressfree_score=50,
+            fun_score=60,
             confidence=0.3,
             reasoning={"note": "Default scoring - AI unavailable"},
             model="fallback",

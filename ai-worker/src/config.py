@@ -40,15 +40,19 @@ class Settings(BaseSettings):
     ai_monthly_limit_usd: float = 200.0
     
     # AI Model Configuration
-    openai_model: str = "gpt-4o-mini"
-    openai_model_low_cost: str = "gpt-4o-mini"
+    openai_model: str = "gpt-4o"  # Strong model for escalation
+    openai_model_low_cost: str = "gpt-4o-mini"  # Default model
     anthropic_model: str = "claude-3-haiku-20240307"
     ai_temperature: float = 0.3
-    ai_max_tokens: int = 500
+    ai_max_tokens: int = 800  # Increased for longer outputs
+    
+    # Model Escalation (when confidence in gray zone)
+    escalate_confidence_min: float = 0.60
+    escalate_confidence_max: float = 0.78
     
     # Prompt Versions (for tracking)
-    classifier_prompt_version: str = "2.0.0"
-    scorer_prompt_version: str = "2.0.0"
+    classifier_prompt_version: str = "3.0.0"
+    scorer_prompt_version: str = "2.1.0"
     planner_prompt_version: str = "1.0.0"
     
     # Geocoding

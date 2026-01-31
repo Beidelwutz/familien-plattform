@@ -73,6 +73,25 @@ model CanonicalEvent {
   completeness_score Int?       @db.SmallInt // 0-100
   last_verified_at  DateTime?   @db.Timestamptz
   
+  // AI Publishing Decision
+  age_rating            String?        @db.VarChar(10)  // "0+", "3+", "6+", "10+", "13+", "16+", "18+"
+  published_by          PublishMethod?
+  decision_reason       String?        @db.VarChar(255)
+  ai_flags              Json?          @default("{}")
+  
+  // AI Summary
+  ai_summary_short      String?        @db.VarChar(300)
+  ai_summary_highlights Json?          @default("[]")
+  ai_fit_blurb          String?        @db.VarChar(150)
+  ai_summary_confidence Decimal?       @db.Decimal(3, 2)
+  
+  // Age Fit Buckets (0-100 score per bucket)
+  age_fit_0_2           Int?           @db.SmallInt
+  age_fit_3_5           Int?           @db.SmallInt
+  age_fit_6_9           Int?           @db.SmallInt
+  age_fit_10_12         Int?           @db.SmallInt
+  age_fit_13_15         Int?           @db.SmallInt
+  
   // Engagement Tracking
   view_count        Int         @default(0)
   save_count        Int         @default(0)
@@ -120,6 +139,7 @@ model CanonicalEvent {
   @@index([start_datetime])
   @@index([provider_id])
   @@index([is_cancelled])
+  @@index([age_rating])
   @@map("canonical_events")
 }
 
@@ -142,6 +162,12 @@ enum PriceType {
   unknown
 }
 
+enum PublishMethod {
+  ai_auto
+  human_review
+  provider_direct
+}
+
 // Event Scores from AI
 model EventScore {
   event_id          String   @id
@@ -151,6 +177,7 @@ model EventScore {
   quality_score     Int?     @db.SmallInt // 0-100
   family_fit_score  Int?     @db.SmallInt // 0-100
   stressfree_score  Int?     @db.SmallInt // 0-100
+  fun_score         Int?     @db.SmallInt // 0-100
   confidence        Decimal? @db.Decimal(3, 2) // 0.00-1.00
   
   ai_model_version  String?  @db.VarChar(50)

@@ -25,6 +25,7 @@ import {
   createEventRevision 
 } from '../lib/eventRevision.js';
 import { searchEventsWithinRadius, addDistanceToEvents } from '../lib/geo.js';
+import { whereDisplayable, whereDisplayableWith, RESTRICTED_AGE_RATINGS } from '../lib/eventQuery.js';
 import { optionalAuth, requireAuth, type AuthRequest } from '../middleware/auth.js';
 import crypto from 'crypto';
 import { sendEventSubmittedEmail } from '../lib/email.js';
@@ -87,14 +88,16 @@ router.get('/', validateSearchParams, async (req: Request, res: Response, next: 
     // Parse pagination
     const { page, limit, skip } = parsePaginationParams(req.query);
 
-    // Build where clause
+    // Build where clause - start with displayable base filter
+    const now = new Date();
+    const baseFilter = whereDisplayable(now);
     const where: any = {
-      status: 'published',
+      ...baseFilter,
+      // Override is_cancelled if includeCancelled is set
       is_cancelled: includeCancelled === 'true' ? undefined : false,
     };
 
     // Tab-based filtering
-    const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -320,12 +323,8 @@ router.get('/top-picks', async (req: Request, res: Response, next: NextFunction)
   try {
     const { page, limit, skip } = parsePaginationParams(req.query);
     
-    const where = {
-      status: 'published' as const,
-      start_datetime: { gte: new Date() },
-      is_complete: true,
-      is_cancelled: false,
-    };
+    // Use central displayable filter (no is_complete filter!)
+    const where = whereDisplayable();
 
     const [events, total] = await Promise.all([
       prisma.canonicalEvent.findMany({
@@ -374,15 +373,10 @@ router.get('/available', async (req: Request, res: Response, next: NextFunction)
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const where = {
-      status: 'published' as const,
-      start_datetime: { 
-        gte: today,
-        lt: tomorrow 
-      },
-      is_complete: true,
-      is_cancelled: false,
-    };
+    // Use central displayable filter + today filter
+    const where = whereDisplayableWith(today, {
+      start_datetime: { lt: tomorrow }
+    });
 
     const [events, total] = await Promise.all([
       prisma.canonicalEvent.findMany({
@@ -422,12 +416,10 @@ router.get('/new', async (req: Request, res: Response, next: NextFunction) => {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    const where = {
-      status: 'published' as const,
-      start_datetime: { gte: new Date() },
+    // Use central displayable filter + created_at filter
+    const where = whereDisplayableWith(new Date(), {
       created_at: { gte: oneWeekAgo },
-      is_cancelled: false,
-    };
+    });
 
     const [events, total] = await Promise.all([
       prisma.canonicalEvent.findMany({
@@ -464,12 +456,8 @@ router.get('/trending', async (req: Request, res: Response, next: NextFunction) 
   try {
     const { page, limit, skip } = parsePaginationParams(req.query);
     
-    const where = {
-      status: 'published' as const,
-      start_datetime: { gte: new Date() },
-      is_complete: true,
-      is_cancelled: false,
-    };
+    // Use central displayable filter (no is_complete filter!)
+    const where = whereDisplayable();
 
     const [events, total] = await Promise.all([
       prisma.canonicalEvent.findMany({
@@ -509,12 +497,8 @@ router.get('/featured', async (req: Request, res: Response, next: NextFunction) 
   try {
     const { page, limit, skip } = parsePaginationParams({ ...req.query, limit: req.query.limit || '6' });
     
-    const where = {
-      status: 'published' as const,
-      start_datetime: { gte: new Date() },
-      is_complete: true,
-      is_cancelled: false,
-    };
+    // Use central displayable filter (no is_complete filter!)
+    const where = whereDisplayable();
 
     const [events, total] = await Promise.all([
       prisma.canonicalEvent.findMany({
