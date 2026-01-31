@@ -1,167 +1,126 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import AdminMobileNav from "../../components/admin/AdminMobileNav.astro";
-import { adminGuard } from "../../lib/adminGuard";
+import StickyHeader from "../../components/layout/StickyHeader.astro";
 
-const { redirect } = await adminGuard(Astro);
-if (redirect) return redirect;
-
-const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000";
+const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
 ---
 
-<BaseLayout title="System Health - Admin">
-  <div class="flex min-h-screen bg-gray-100">
-    <!-- Sidebar -->
-    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white shadow-sm">
-      <div class="flex flex-col flex-1 pt-5 pb-4 overflow-y-auto">
-        <div class="flex items-center flex-shrink-0 px-4">
-          <a href="/" class="text-xl font-bold text-indigo-600">Kiezling</a>
+<BaseLayout title="System Health - Admin - kiezling">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6 flex justify-between items-start">
+        <div>
+          <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+          <h1 class="text-2xl font-bold text-gray-900">System Health</h1>
+          <p class="text-gray-500">Übersicht aller Systemkomponenten</p>
         </div>
-        <nav class="mt-8 flex-1 px-2 space-y-1">
-          <a href="/admin" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Dashboard</a>
-          <a href="/admin/runs" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Ingest Runs</a>
-          <a href="/admin/sources" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Sources</a>
-          <a href="/admin/health" class="bg-indigo-50 text-indigo-600 group flex items-center px-2 py-2 text-sm font-medium rounded-md">System Health</a>
-          <a href="/admin/dlq" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">DLQ Manager</a>
-          <a href="/admin/ai-usage" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">AI Usage</a>
-        </nav>
-      </div>
-    </aside>
+        <button id="refresh-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium">
+          Aktualisieren
+        </button>
+      </header>
 
-    <!-- Mobile Nav -->
-    <AdminMobileNav />
-
-    <!-- Main Content -->
-    <main class="lg:pl-64 flex flex-col flex-1">
-      <div class="py-6 px-4 sm:px-6 lg:px-8">
-        <div class="mb-8 flex justify-between items-center">
+      <!-- Overall Status -->
+      <div id="overall-status" class="mb-6 bg-white rounded-lg shadow p-6">
+        <div class="flex items-center gap-4">
+          <div id="status-indicator" class="w-4 h-4 rounded-full bg-gray-400"></div>
           <div>
-            <h1 class="text-2xl font-bold text-gray-900">System Health</h1>
-            <p class="mt-1 text-sm text-gray-500">Übersicht über alle Systemkomponenten</p>
-          </div>
-          <button id="refresh-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition">
-            Aktualisieren
-          </button>
-        </div>
-
-        <!-- Overall Status -->
-        <div id="overall-status" class="mb-8 bg-white rounded-lg shadow p-6">
-          <div class="flex items-center gap-4">
-            <div id="status-indicator" class="w-4 h-4 rounded-full bg-gray-400"></div>
-            <div>
-              <div id="status-text" class="text-lg font-semibold">Prüfe Status...</div>
-              <div id="status-time" class="text-sm text-gray-500">-</div>
-            </div>
-          </div>
-          <div id="status-issues" class="mt-4 hidden">
-            <div class="text-sm font-medium text-gray-700 mb-2">Probleme:</div>
-            <ul id="issues-list" class="list-disc list-inside text-sm text-red-600"></ul>
+            <div id="status-text" class="text-lg font-semibold">Prüfe Status...</div>
+            <div id="status-time" class="text-sm text-gray-500">-</div>
           </div>
         </div>
-
-        <!-- Service Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <!-- Backend -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">Backend API</h3>
-              <div id="backend-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-            </div>
-            <div id="backend-info" class="text-sm text-gray-600">Prüfe...</div>
-            <div id="backend-details" class="mt-2 text-xs text-gray-500"></div>
-          </div>
-
-          <!-- AI Worker -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">AI Worker</h3>
-              <div id="worker-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-            </div>
-            <div id="worker-info" class="text-sm text-gray-600">Prüfe...</div>
-            <div id="worker-details" class="mt-2 text-xs text-gray-500"></div>
-          </div>
-
-          <!-- Redis -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">Redis Queue</h3>
-              <div id="redis-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-            </div>
-            <div id="redis-info" class="text-sm text-gray-600">Prüfe...</div>
-            <div id="redis-details" class="mt-2 text-xs text-gray-500"></div>
-          </div>
-
-          <!-- Database -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">Database</h3>
-              <div id="db-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-            </div>
-            <div id="db-info" class="text-sm text-gray-600">Prüfe...</div>
-            <div id="db-details" class="mt-2 text-xs text-gray-500"></div>
-          </div>
-
-          <!-- OpenAI -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">OpenAI API</h3>
-              <div id="openai-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-            </div>
-            <div id="openai-info" class="text-sm text-gray-600">Prüfe...</div>
-            <div id="openai-details" class="mt-2 text-xs text-gray-500"></div>
-          </div>
-
-          <!-- AI Budget -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">AI Budget</h3>
-              <div id="budget-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-            </div>
-            <div id="budget-info" class="text-sm text-gray-600">Prüfe...</div>
-            <div id="budget-details" class="mt-2 text-xs text-gray-500"></div>
-          </div>
-        </div>
-
-        <!-- Queue Stats -->
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
-          <h3 class="font-semibold text-gray-900 mb-4">Queue Status</h3>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="queue-crawl" class="text-2xl font-bold text-gray-900">-</div>
-              <div class="text-sm text-gray-500">Crawl</div>
-            </div>
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="queue-classify" class="text-2xl font-bold text-gray-900">-</div>
-              <div class="text-sm text-gray-500">Classify</div>
-            </div>
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="queue-score" class="text-2xl font-bold text-gray-900">-</div>
-              <div class="text-sm text-gray-500">Score</div>
-            </div>
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="queue-geocode" class="text-2xl font-bold text-gray-900">-</div>
-              <div class="text-sm text-gray-500">Geocode</div>
-            </div>
-            <div class="text-center p-4 bg-red-50 rounded">
-              <div id="queue-dlq" class="text-2xl font-bold text-red-600">-</div>
-              <div class="text-sm text-gray-500">DLQ</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Last Updated -->
-        <div class="text-center text-sm text-gray-500">
-          Zuletzt aktualisiert: <span id="last-updated">-</span>
+        <div id="status-issues" class="mt-4 hidden">
+          <div class="text-sm font-medium text-gray-700 mb-2">Probleme:</div>
+          <ul id="issues-list" class="list-disc list-inside text-sm text-red-600"></ul>
         </div>
       </div>
-    </main>
-  </div>
 
-  <script define:vars={{ backendUrl }}>
+      <!-- Service Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900">Backend API</h3>
+            <div id="backend-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+          </div>
+          <div id="backend-info" class="text-sm text-gray-600">Prüfe...</div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900">AI Worker</h3>
+            <div id="worker-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+          </div>
+          <div id="worker-info" class="text-sm text-gray-600">Prüfe...</div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900">Redis Queue</h3>
+            <div id="redis-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+          </div>
+          <div id="redis-info" class="text-sm text-gray-600">Prüfe...</div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900">Database</h3>
+            <div id="db-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+          </div>
+          <div id="db-info" class="text-sm text-gray-600">Prüfe...</div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900">OpenAI API</h3>
+            <div id="openai-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+          </div>
+          <div id="openai-info" class="text-sm text-gray-600">Prüfe...</div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold text-gray-900">AI Budget</h3>
+            <div id="budget-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+          </div>
+          <div id="budget-info" class="text-sm text-gray-600">Prüfe...</div>
+        </div>
+      </div>
+
+      <!-- Queue Stats -->
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="font-semibold text-gray-900 mb-4">Queue Status</h3>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div class="text-center p-4 bg-gray-50 rounded">
+            <div id="queue-crawl" class="text-2xl font-bold text-gray-900">-</div>
+            <div class="text-sm text-gray-500">Crawl</div>
+          </div>
+          <div class="text-center p-4 bg-gray-50 rounded">
+            <div id="queue-classify" class="text-2xl font-bold text-gray-900">-</div>
+            <div class="text-sm text-gray-500">Classify</div>
+          </div>
+          <div class="text-center p-4 bg-gray-50 rounded">
+            <div id="queue-score" class="text-2xl font-bold text-gray-900">-</div>
+            <div class="text-sm text-gray-500">Score</div>
+          </div>
+          <div class="text-center p-4 bg-gray-50 rounded">
+            <div id="queue-geocode" class="text-2xl font-bold text-gray-900">-</div>
+            <div class="text-sm text-gray-500">Geocode</div>
+          </div>
+          <div class="text-center p-4 bg-red-50 rounded">
+            <div id="queue-dlq" class="text-2xl font-bold text-red-600">-</div>
+            <div class="text-sm text-gray-500">DLQ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script define:vars={{ API_URL }}>
     const workerUrl = 'http://localhost:5000';
 
     function setStatus(elementId, status) {
       const el = document.getElementById(elementId);
+      if (!el) return;
       el.className = 'w-3 h-3 rounded-full';
       switch (status) {
         case 'ok': el.classList.add('bg-green-500'); break;
@@ -177,14 +136,12 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
 
       // Check Backend
       try {
-        const backendRes = await fetch(`${backendUrl}/api/health`);
+        const backendRes = await fetch(`${API_URL}/api/health`);
         const backendData = await backendRes.json();
         
         setStatus('backend-status', backendData.status === 'ok' ? 'ok' : 'warning');
         document.getElementById('backend-info').textContent = backendData.status === 'ok' ? 'Online' : 'Probleme';
-        document.getElementById('backend-details').textContent = `Uptime: ${Math.floor(backendData.uptime / 60)}min`;
         
-        // DB status from backend
         if (backendData.services?.database?.status === 'ok') {
           setStatus('db-status', 'ok');
           document.getElementById('db-info').textContent = 'Verbunden';
@@ -217,16 +174,14 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
           overallStatus = 'degraded';
         }
         
-        // Redis from worker
         if (workerData.checks?.redis?.status === 'ok') {
           setStatus('redis-status', 'ok');
           document.getElementById('redis-info').textContent = 'Verbunden';
         } else {
           setStatus('redis-status', 'warning');
-          document.getElementById('redis-info').textContent = workerData.checks?.redis?.error || 'Nicht verbunden';
+          document.getElementById('redis-info').textContent = 'Nicht verbunden';
         }
         
-        // OpenAI from worker
         if (workerData.checks?.openai?.status === 'ok') {
           setStatus('openai-status', 'ok');
           document.getElementById('openai-info').textContent = 'Verbunden';
@@ -240,7 +195,6 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
       } catch (e) {
         setStatus('worker-status', 'error');
         document.getElementById('worker-info').textContent = 'Nicht erreichbar';
-        document.getElementById('worker-details').textContent = 'Starte den Worker mit start.bat';
         setStatus('redis-status', 'error');
         document.getElementById('redis-info').textContent = 'Unbekannt';
         setStatus('openai-status', 'error');
@@ -249,12 +203,11 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
         overallStatus = 'unhealthy';
       }
 
-      // Check Metrics / Budget
+      // Check Metrics
       try {
         const metricsRes = await fetch(`${workerUrl}/metrics`);
         const metrics = await metricsRes.json();
         
-        // Queue stats
         document.getElementById('queue-crawl').textContent = metrics.queues?.depths?.crawl ?? '-';
         document.getElementById('queue-classify').textContent = metrics.queues?.depths?.classify ?? '-';
         document.getElementById('queue-score').textContent = metrics.queues?.depths?.score ?? '-';
@@ -266,23 +219,20 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
           overallStatus = 'degraded';
         }
         
-        // Budget
         if (metrics.budget) {
           const budgetStatus = metrics.budget.status;
           if (budgetStatus === 'ok') {
             setStatus('budget-status', 'ok');
-            document.getElementById('budget-info').textContent = `${metrics.budget.daily.percent_used}% täglich verbraucht`;
-          } else if (budgetStatus === 'warning') {
-            setStatus('budget-status', 'warning');
-            document.getElementById('budget-info').textContent = `${metrics.budget.daily.percent_used}% verbraucht (Warning)`;
-          } else if (budgetStatus === 'critical' || budgetStatus === 'exceeded') {
+            document.getElementById('budget-info').textContent = `${metrics.budget.daily?.percent_used || 0}% verbraucht`;
+          } else if (budgetStatus === 'exceeded') {
             setStatus('budget-status', 'error');
             document.getElementById('budget-info').textContent = 'Budget überschritten!';
-            issues.push('AI Budget kritisch/überschritten');
+            issues.push('AI Budget überschritten');
             overallStatus = 'degraded';
+          } else {
+            setStatus('budget-status', 'warning');
+            document.getElementById('budget-info').textContent = 'Budget kritisch';
           }
-          document.getElementById('budget-details').textContent = 
-            `$${metrics.budget.daily.used_usd.toFixed(2)} / $${metrics.budget.daily.limit_usd} heute`;
         }
       } catch (e) {
         // Metrics not available
@@ -292,39 +242,37 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
       const statusIndicator = document.getElementById('status-indicator');
       const statusText = document.getElementById('status-text');
       
-      statusIndicator.className = 'w-4 h-4 rounded-full';
-      if (overallStatus === 'healthy') {
-        statusIndicator.classList.add('bg-green-500');
-        statusText.textContent = 'Alle Systeme operational';
-        statusText.className = 'text-lg font-semibold text-green-600';
-      } else if (overallStatus === 'degraded') {
-        statusIndicator.classList.add('bg-yellow-500');
-        statusText.textContent = 'System eingeschränkt';
-        statusText.className = 'text-lg font-semibold text-yellow-600';
-      } else {
-        statusIndicator.classList.add('bg-red-500');
-        statusText.textContent = 'System nicht verfügbar';
-        statusText.className = 'text-lg font-semibold text-red-600';
+      if (statusIndicator) {
+        statusIndicator.className = 'w-4 h-4 rounded-full';
+        if (overallStatus === 'healthy') {
+          statusIndicator.classList.add('bg-green-500');
+          statusText.textContent = 'Alle Systeme operational';
+          statusText.className = 'text-lg font-semibold text-green-600';
+        } else if (overallStatus === 'degraded') {
+          statusIndicator.classList.add('bg-yellow-500');
+          statusText.textContent = 'System eingeschränkt';
+          statusText.className = 'text-lg font-semibold text-yellow-600';
+        } else {
+          statusIndicator.classList.add('bg-red-500');
+          statusText.textContent = 'System nicht verfügbar';
+          statusText.className = 'text-lg font-semibold text-red-600';
+        }
       }
 
-      // Show issues
-      if (issues.length > 0) {
-        document.getElementById('status-issues').classList.remove('hidden');
-        document.getElementById('issues-list').innerHTML = issues.map(i => `<li>${i}</li>`).join('');
-      } else {
-        document.getElementById('status-issues').classList.add('hidden');
+      const issuesSection = document.getElementById('status-issues');
+      const issuesList = document.getElementById('issues-list');
+      if (issues.length > 0 && issuesSection && issuesList) {
+        issuesSection.classList.remove('hidden');
+        issuesList.innerHTML = issues.map(i => `<li>${i}</li>`).join('');
+      } else if (issuesSection) {
+        issuesSection.classList.add('hidden');
       }
 
       document.getElementById('status-time').textContent = new Date().toLocaleTimeString('de-DE');
-      document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('de-DE');
     }
 
-    document.getElementById('refresh-btn').addEventListener('click', checkHealth);
-
-    // Initial check
+    document.getElementById('refresh-btn')?.addEventListener('click', checkHealth);
     checkHealth();
-
-    // Auto-refresh every 15 seconds
     setInterval(checkHealth, 15000);
   </script>
 </BaseLayout>

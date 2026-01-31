@@ -1,154 +1,125 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import AdminMobileNav from "../../components/admin/AdminMobileNav.astro";
-import { adminGuard } from "../../lib/adminGuard";
+import StickyHeader from "../../components/layout/StickyHeader.astro";
 
-const { redirect } = await adminGuard(Astro);
-if (redirect) return redirect;
-
-const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000";
+const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
 ---
 
-<BaseLayout title="Test Crawl - Admin">
-  <div class="flex min-h-screen bg-gray-100">
-    <!-- Sidebar -->
-    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white shadow-sm">
-      <div class="flex flex-col flex-1 pt-5 pb-4 overflow-y-auto">
-        <div class="flex items-center flex-shrink-0 px-4">
-          <a href="/" class="text-xl font-bold text-indigo-600">Kiezling</a>
+<BaseLayout title="Test Crawl - Admin - kiezling">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">Test Crawl</h1>
+        <p class="text-gray-500">URL-Parsing und Datenextraktion testen</p>
+      </header>
+
+      <!-- Input Section -->
+      <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-2">URL zum Testen</label>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input 
+              type="url" 
+              id="test-url" 
+              placeholder="https://example.com/events.rss"
+              class="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
+            />
+            <select id="feed-type" class="px-4 py-2 border-2 border-gray-200 rounded-lg bg-white">
+              <option value="auto">Auto-Detect</option>
+              <option value="rss">RSS Feed</option>
+              <option value="ics">ICS Calendar</option>
+              <option value="scrape">HTML Scrape</option>
+            </select>
+          </div>
         </div>
-        <nav class="mt-8 flex-1 px-2 space-y-1">
-          <a href="/admin" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Dashboard</a>
-          <a href="/admin/sources" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Sources</a>
-          <a href="/admin/health" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">System Health</a>
-          <a href="/admin/test-crawl" class="bg-indigo-50 text-indigo-600 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Test Crawl</a>
-        </nav>
+
+        <div class="flex flex-wrap gap-3">
+          <button id="test-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium">
+            Testen
+          </button>
+          <button id="test-ai-btn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium">
+            Mit AI analysieren
+          </button>
+        </div>
       </div>
-    </aside>
 
-    <!-- Mobile Nav -->
-    <AdminMobileNav />
-
-    <!-- Main Content -->
-    <main class="lg:pl-64 flex flex-col flex-1">
-      <div class="py-6 px-4 sm:px-6 lg:px-8">
-        <div class="mb-8">
-          <h1 class="text-2xl font-bold text-gray-900">Test Crawl Tool</h1>
-          <p class="mt-1 text-sm text-gray-500">Teste URL-Parsing und Datenextraktion</p>
+      <!-- Quick Examples -->
+      <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 class="font-semibold text-gray-900 mb-4">Beispiel-URLs</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button class="example-url text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition" data-url="https://www.karlsruhe.de/index.php?type=1568705400&id=34">
+            <div class="font-medium text-sm">Karlsruhe Events RSS</div>
+            <div class="text-xs text-gray-500">RSS Feed</div>
+          </button>
+          <button class="example-url text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition" data-url="https://zkm.de/de/veranstaltungen">
+            <div class="font-medium text-sm">ZKM Veranstaltungen</div>
+            <div class="text-xs text-gray-500">HTML Scrape</div>
+          </button>
         </div>
+      </div>
 
-        <!-- Input Section -->
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
+      <!-- Results Section -->
+      <div id="results-section" class="hidden">
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold text-gray-900">Ergebnis</h3>
+            <div id="result-status" class="text-sm px-3 py-1 rounded-full bg-gray-100">-</div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="text-center p-4 bg-gray-50 rounded">
+              <div id="events-count" class="text-2xl font-bold text-primary-600">0</div>
+              <div class="text-sm text-gray-500">Events gefunden</div>
+            </div>
+            <div class="text-center p-4 bg-gray-50 rounded">
+              <div id="parse-time" class="text-2xl font-bold text-gray-900">-</div>
+              <div class="text-sm text-gray-500">Parse-Zeit</div>
+            </div>
+            <div class="text-center p-4 bg-gray-50 rounded">
+              <div id="detected-type" class="text-2xl font-bold text-gray-900">-</div>
+              <div class="text-sm text-gray-500">Erkannter Typ</div>
+            </div>
+          </div>
+
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">URL zum Testen</label>
-            <div class="flex gap-4">
-              <input 
-                type="url" 
-                id="test-url" 
-                placeholder="https://example.com/events.rss"
-                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              />
-              <select id="feed-type" class="rounded-md border-gray-300 shadow-sm">
-                <option value="auto">Auto-Detect</option>
-                <option value="rss">RSS Feed</option>
-                <option value="ics">ICS Calendar</option>
-                <option value="scrape">HTML Scrape</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="flex gap-4">
-            <button id="test-btn" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 transition">
-              Testen
-            </button>
-            <button id="test-ai-btn" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition">
-              Mit AI analysieren
-            </button>
+            <h4 class="font-medium text-gray-700 mb-2">Gefundene Events (Vorschau)</h4>
+            <div id="events-preview" class="max-h-96 overflow-y-auto border rounded-lg"></div>
           </div>
         </div>
 
-        <!-- Quick Examples -->
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
-          <h3 class="font-semibold text-gray-900 mb-4">Beispiel-URLs</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button class="example-url text-left p-3 bg-gray-50 rounded hover:bg-gray-100 transition" data-url="https://www.karlsruhe.de/kultur/stadtgeschichte/stadtmuseum/veranstaltungen?type=9818&tx_solr%5Bfilter%5D%5B0%5D=dateRange%3A%5BNOW%2FDAY%20TO%20NOW%2FDAY%2B3MONTHS%5D&tx_solr%5Bsort%5D=startDate%20asc">
-              <div class="font-medium text-sm">Stadtmuseum Karlsruhe</div>
-              <div class="text-xs text-gray-500">HTML Scrape</div>
-            </button>
-            <button class="example-url text-left p-3 bg-gray-50 rounded hover:bg-gray-100 transition" data-url="https://www.karlsruhe.de/index.php?type=1568705400&id=34">
-              <div class="font-medium text-sm">Karlsruhe Events RSS</div>
-              <div class="text-xs text-gray-500">RSS Feed</div>
-            </button>
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold text-gray-900">Raw Data</h3>
+            <button id="copy-json" class="text-sm text-primary-600 hover:text-primary-800">JSON kopieren</button>
           </div>
-        </div>
-
-        <!-- Results Section -->
-        <div id="results-section" class="hidden">
-          <div class="bg-white rounded-lg shadow p-6 mb-8">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="font-semibold text-gray-900">Ergebnis</h3>
-              <div id="result-status" class="text-sm px-3 py-1 rounded-full bg-gray-100">-</div>
-            </div>
-
-            <!-- Stats -->
-            <div class="grid grid-cols-3 gap-4 mb-6">
-              <div class="text-center p-4 bg-gray-50 rounded">
-                <div id="events-count" class="text-2xl font-bold text-indigo-600">0</div>
-                <div class="text-sm text-gray-500">Events gefunden</div>
-              </div>
-              <div class="text-center p-4 bg-gray-50 rounded">
-                <div id="parse-time" class="text-2xl font-bold text-gray-900">-</div>
-                <div class="text-sm text-gray-500">Parse-Zeit</div>
-              </div>
-              <div class="text-center p-4 bg-gray-50 rounded">
-                <div id="detected-type" class="text-2xl font-bold text-gray-900">-</div>
-                <div class="text-sm text-gray-500">Erkannter Typ</div>
-              </div>
-            </div>
-
-            <!-- Events Preview -->
-            <div class="mb-4">
-              <h4 class="font-medium text-gray-700 mb-2">Gefundene Events (Vorschau)</h4>
-              <div id="events-preview" class="max-h-96 overflow-y-auto border rounded-lg">
-                <!-- Events will be rendered here -->
-              </div>
-            </div>
-          </div>
-
-          <!-- Raw Data -->
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="font-semibold text-gray-900">Raw Data</h3>
-              <button id="copy-json" class="text-sm text-indigo-600 hover:text-indigo-800">JSON kopieren</button>
-            </div>
-            <pre id="raw-data" class="bg-gray-100 p-4 rounded text-xs overflow-x-auto max-h-96"></pre>
-          </div>
-        </div>
-
-        <!-- Loading State -->
-        <div id="loading" class="hidden">
-          <div class="bg-white rounded-lg shadow p-12 text-center">
-            <div class="animate-spin h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <div class="text-gray-600">Crawle URL...</div>
-          </div>
-        </div>
-
-        <!-- Error State -->
-        <div id="error-section" class="hidden">
-          <div class="bg-red-50 border border-red-200 rounded-lg p-6">
-            <div class="text-red-800 font-semibold mb-2">Fehler beim Crawlen</div>
-            <div id="error-message" class="text-red-600 text-sm"></div>
-          </div>
+          <pre id="raw-data" class="bg-gray-100 p-4 rounded text-xs overflow-x-auto max-h-96"></pre>
         </div>
       </div>
-    </main>
-  </div>
 
-  <script define:vars={{ backendUrl }}>
+      <!-- Loading State -->
+      <div id="loading" class="hidden">
+        <div class="bg-white rounded-lg shadow p-12 text-center">
+          <div class="animate-spin h-8 w-8 border-4 border-primary-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <div class="text-gray-600">Crawle URL...</div>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-section" class="hidden">
+        <div class="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div class="text-red-800 font-semibold mb-2">Fehler beim Crawlen</div>
+          <div id="error-message" class="text-red-600 text-sm"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script define:vars={{ API_URL }}>
     const workerUrl = 'http://localhost:5000';
     let lastResult = null;
 
-    // Example URL buttons
     document.querySelectorAll('.example-url').forEach(btn => {
       btn.addEventListener('click', () => {
         document.getElementById('test-url').value = btn.dataset.url;
@@ -164,7 +135,6 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
         return;
       }
 
-      // Show loading
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('results-section').classList.add('hidden');
       document.getElementById('error-section').classList.add('hidden');
@@ -172,15 +142,10 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
       try {
         const startTime = Date.now();
         
-        // Call worker test endpoint (would need to be implemented)
         const response = await fetch(`${workerUrl}/crawl/test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            url, 
-            type: feedType,
-            with_ai: withAI 
-          })
+          body: JSON.stringify({ url, type: feedType, with_ai: withAI })
         });
 
         const parseTime = Date.now() - startTime;
@@ -192,16 +157,13 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
         const data = await response.json();
         lastResult = data;
 
-        // Show results
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('results-section').classList.remove('hidden');
 
-        // Update stats
         document.getElementById('events-count').textContent = data.events?.length || 0;
         document.getElementById('parse-time').textContent = `${parseTime}ms`;
         document.getElementById('detected-type').textContent = data.detected_type || feedType;
         
-        // Status badge
         const statusEl = document.getElementById('result-status');
         if (data.events?.length > 0) {
           statusEl.textContent = 'Erfolgreich';
@@ -211,7 +173,6 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
           statusEl.className = 'text-sm px-3 py-1 rounded-full bg-yellow-100 text-yellow-800';
         }
 
-        // Render events preview
         const previewEl = document.getElementById('events-preview');
         if (data.events?.length > 0) {
           previewEl.innerHTML = data.events.slice(0, 10).map((event, i) => `
@@ -219,27 +180,13 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
               <div class="font-medium text-gray-900">${i + 1}. ${event.title || 'Kein Titel'}</div>
               <div class="text-sm text-gray-500 mt-1">
                 ${event.start_datetime ? new Date(event.start_datetime).toLocaleDateString('de-DE') : 'Kein Datum'}
-                ${event.location_address ? ` | ${event.location_address}` : ''}
               </div>
-              ${event.description ? `<div class="text-sm text-gray-600 mt-2 line-clamp-2">${event.description.substring(0, 200)}...</div>` : ''}
-              ${withAI && event.ai_classification ? `
-                <div class="mt-2 text-xs">
-                  <span class="bg-indigo-100 text-indigo-700 px-2 py-1 rounded">
-                    AI: ${event.ai_classification.categories?.join(', ') || 'N/A'}
-                  </span>
-                </div>
-              ` : ''}
             </div>
           `).join('');
-          
-          if (data.events.length > 10) {
-            previewEl.innerHTML += `<div class="p-4 text-center text-gray-500">... und ${data.events.length - 10} weitere</div>`;
-          }
         } else {
           previewEl.innerHTML = '<div class="p-4 text-gray-500 text-center">Keine Events gefunden</div>';
         }
 
-        // Raw data
         document.getElementById('raw-data').textContent = JSON.stringify(data, null, 2);
 
       } catch (error) {
@@ -249,10 +196,10 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
       }
     }
 
-    document.getElementById('test-btn').addEventListener('click', () => runTest(false));
-    document.getElementById('test-ai-btn').addEventListener('click', () => runTest(true));
+    document.getElementById('test-btn')?.addEventListener('click', () => runTest(false));
+    document.getElementById('test-ai-btn')?.addEventListener('click', () => runTest(true));
 
-    document.getElementById('copy-json').addEventListener('click', () => {
+    document.getElementById('copy-json')?.addEventListener('click', () => {
       if (lastResult) {
         navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
         alert('JSON kopiert!');

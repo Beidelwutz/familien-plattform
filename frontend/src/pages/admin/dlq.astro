@@ -1,124 +1,88 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import AdminMobileNav from "../../components/admin/AdminMobileNav.astro";
-import { adminGuard } from "../../lib/adminGuard";
+import StickyHeader from "../../components/layout/StickyHeader.astro";
 
-const { redirect } = await adminGuard(Astro);
-if (redirect) return redirect;
-
-const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000";
+const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
 ---
 
-<BaseLayout title="DLQ Manager - Admin">
-  <div class="flex min-h-screen bg-gray-100">
-    <!-- Sidebar -->
-    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white shadow-sm">
-      <div class="flex flex-col flex-1 pt-5 pb-4 overflow-y-auto">
-        <div class="flex items-center flex-shrink-0 px-4">
-          <a href="/" class="text-xl font-bold text-indigo-600">Kiezling</a>
+<BaseLayout title="DLQ Manager - Admin - kiezling">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">Dead Letter Queue</h1>
+        <p class="text-gray-500">Jobs die nach mehrfachen Versuchen fehlgeschlagen sind</p>
+      </header>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="text-sm text-gray-500">DLQ Jobs</div>
+          <div class="text-3xl font-bold text-red-600" id="dlq-count">-</div>
         </div>
-        <nav class="mt-8 flex-1 px-2 space-y-1">
-          <a href="/admin" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Dashboard</a>
-          <a href="/admin/runs" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Ingest Runs</a>
-          <a href="/admin/sources" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Sources</a>
-          <a href="/admin/dlq" class="bg-indigo-50 text-indigo-600 group flex items-center px-2 py-2 text-sm font-medium rounded-md">DLQ Manager</a>
-          <a href="/admin/review" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">Review Queue</a>
-          <a href="/admin/ai-usage" class="text-gray-600 hover:bg-gray-50 group flex items-center px-2 py-2 text-sm font-medium rounded-md">AI Usage</a>
-        </nav>
-      </div>
-    </aside>
-
-    <!-- Mobile Nav -->
-    <AdminMobileNav />
-
-    <!-- Main Content -->
-    <main class="lg:pl-64 flex flex-col flex-1">
-      <div class="py-6 px-4 sm:px-6 lg:px-8">
-        <div class="mb-8">
-          <h1 class="text-2xl font-bold text-gray-900">Dead Letter Queue Manager</h1>
-          <p class="mt-1 text-sm text-gray-500">Jobs die nach mehrfachen Versuchen fehlgeschlagen sind</p>
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="text-sm text-gray-500">Ältester Job</div>
+          <div class="text-xl font-semibold text-gray-900" id="oldest-job">-</div>
         </div>
-
-        <!-- Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="text-sm text-gray-500">DLQ Jobs</div>
-            <div class="text-3xl font-bold text-red-600" id="dlq-count">-</div>
-          </div>
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="text-sm text-gray-500">Ältester Job</div>
-            <div class="text-xl font-semibold text-gray-900" id="oldest-job">-</div>
-          </div>
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="text-sm text-gray-500">Häufigster Fehler</div>
-            <div class="text-xl font-semibold text-gray-900 truncate" id="common-error">-</div>
-          </div>
-        </div>
-
-        <!-- Actions -->
-        <div class="mb-6 flex gap-4">
-          <button id="refresh-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition">
-            Aktualisieren
-          </button>
-          <button id="retry-all-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition">
-            Alle erneut versuchen
-          </button>
-          <button id="clear-btn" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition">
-            DLQ leeren
-          </button>
-        </div>
-
-        <!-- Job List -->
-        <div class="bg-white shadow rounded-lg overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job ID</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Versuche</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Letzter Fehler</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zeitpunkt</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktionen</th>
-                </tr>
-              </thead>
-              <tbody id="dlq-table" class="bg-white divide-y divide-gray-200">
-                <tr>
-                  <td colspan="6" class="px-6 py-4 text-center text-gray-500">Laden...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Error Detail Modal -->
-        <div id="error-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-            <h3 class="text-lg font-semibold mb-4">Fehlerdetails</h3>
-            <pre id="error-detail" class="bg-gray-100 p-4 rounded text-sm overflow-x-auto"></pre>
-            <button id="close-modal" class="mt-4 bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">Schließen</button>
-          </div>
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="text-sm text-gray-500">Häufigster Fehler</div>
+          <div class="text-xl font-semibold text-gray-900 truncate" id="common-error">-</div>
         </div>
       </div>
-    </main>
-  </div>
 
-  <script define:vars={{ backendUrl }}>
+      <!-- Actions -->
+      <div class="mb-6 flex flex-wrap gap-3">
+        <button id="refresh-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium">
+          Aktualisieren
+        </button>
+        <button id="retry-all-btn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium">
+          Alle erneut versuchen
+        </button>
+        <button id="clear-btn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-medium">
+          DLQ leeren
+        </button>
+      </div>
+
+      <!-- Job List -->
+      <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job ID</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Versuche</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Letzter Fehler</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zeitpunkt</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="dlq-table" class="bg-white divide-y divide-gray-200">
+              <tr>
+                <td colspan="6" class="px-6 py-4 text-center text-gray-500">Laden...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script define:vars={{ API_URL }}>
     const workerUrl = 'http://localhost:5000';
-    let dlqJobs = [];
 
     async function loadDLQJobs() {
       try {
-        const response = await fetch(`${workerUrl}/crawl/queue-stats`);
-        if (!response.ok) throw new Error('Worker not available');
+        const response = await fetch(`${workerUrl}/metrics`);
+        if (!response.ok) throw new Error('Worker nicht erreichbar');
         
         const data = await response.json();
+        const dlqCount = data.dlq?.count ?? 0;
         
-        // Note: DLQ jobs would need a dedicated endpoint in the worker
-        // For now, show queue stats
-        document.getElementById('dlq-count').textContent = data.dlq_count || 0;
+        document.getElementById('dlq-count').textContent = dlqCount;
         
-        if (data.dlq_count === 0) {
+        if (dlqCount === 0) {
           document.getElementById('dlq-table').innerHTML = `
             <tr>
               <td colspan="6" class="px-6 py-8 text-center text-gray-500">
@@ -130,11 +94,10 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
           document.getElementById('oldest-job').textContent = '-';
           document.getElementById('common-error').textContent = '-';
         } else {
-          // Would load actual DLQ jobs from worker endpoint
           document.getElementById('dlq-table').innerHTML = `
             <tr>
               <td colspan="6" class="px-6 py-4 text-center text-gray-500">
-                DLQ Endpoint nicht implementiert. ${data.dlq_count} Jobs in der Queue.
+                ${dlqCount} Jobs in der DLQ. Details-Endpoint in Entwicklung.
               </td>
             </tr>
           `;
@@ -145,33 +108,26 @@ const backendUrl = import.meta.env.PUBLIC_BACKEND_URL || "http://localhost:4000"
         document.getElementById('dlq-table').innerHTML = `
           <tr>
             <td colspan="6" class="px-6 py-4 text-center text-red-500">
-              Fehler beim Laden: ${error.message}
+              Fehler: ${error.message}
             </td>
           </tr>
         `;
       }
     }
 
-    document.getElementById('refresh-btn').addEventListener('click', loadDLQJobs);
+    document.getElementById('refresh-btn')?.addEventListener('click', loadDLQJobs);
     
-    document.getElementById('retry-all-btn').addEventListener('click', async () => {
+    document.getElementById('retry-all-btn')?.addEventListener('click', () => {
       if (!confirm('Alle DLQ Jobs erneut versuchen?')) return;
       alert('Funktion noch nicht implementiert');
     });
     
-    document.getElementById('clear-btn').addEventListener('click', async () => {
-      if (!confirm('DLQ wirklich leeren? Diese Aktion kann nicht rückgängig gemacht werden.')) return;
+    document.getElementById('clear-btn')?.addEventListener('click', () => {
+      if (!confirm('DLQ wirklich leeren?')) return;
       alert('Funktion noch nicht implementiert');
     });
 
-    document.getElementById('close-modal').addEventListener('click', () => {
-      document.getElementById('error-modal').classList.add('hidden');
-    });
-
-    // Initial load
     loadDLQJobs();
-    
-    // Auto-refresh every 30 seconds
     setInterval(loadDLQJobs, 30000);
   </script>
 </BaseLayout>
