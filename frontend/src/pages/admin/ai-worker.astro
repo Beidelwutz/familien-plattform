@@ -61,9 +61,75 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </div>
         </div>
 
-        <!-- Processing Result -->
+        <!-- Processing Progress (shown during processing) -->
+        <div id="progress-card" class="hidden bg-white rounded-2xl shadow-card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">AI-Klassifizierung läuft...</h3>
+            <button id="cancel-btn" class="text-sm text-gray-500 hover:text-red-500 transition-colors">
+              Abbrechen
+            </button>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div class="mb-4">
+            <div class="flex justify-between text-sm text-gray-600 mb-1">
+              <span id="progress-text">0 von 0</span>
+              <span id="progress-percent">0%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+              <div id="progress-bar" class="bg-primary-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+          
+          <!-- Current Event -->
+          <div class="flex items-center gap-2 text-sm text-gray-600 mb-2">
+            <span class="animate-pulse">▸</span>
+            <span>Aktuell:</span>
+            <span id="current-event" class="font-medium text-gray-900 truncate">-</span>
+          </div>
+          
+          <!-- Estimated Time -->
+          <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
+            <span>⏱</span>
+            <span>Geschätzt:</span>
+            <span id="estimated-time">Berechne...</span>
+          </div>
+          
+          <!-- Live Results Summary -->
+          <div class="grid grid-cols-4 gap-2 mb-4">
+            <div class="bg-green-50 rounded-lg p-2 text-center">
+              <span id="live-published" class="text-lg font-bold text-green-600">0</span>
+              <span class="block text-xs text-green-600">Veröff.</span>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-2 text-center">
+              <span id="live-review" class="text-lg font-bold text-amber-600">0</span>
+              <span class="block text-xs text-amber-600">Review</span>
+            </div>
+            <div class="bg-red-50 rounded-lg p-2 text-center">
+              <span id="live-rejected" class="text-lg font-bold text-red-600">0</span>
+              <span class="block text-xs text-red-600">Abgel.</span>
+            </div>
+            <div class="bg-gray-100 rounded-lg p-2 text-center">
+              <span id="live-failed" class="text-lg font-bold text-gray-600">0</span>
+              <span class="block text-xs text-gray-600">Fehler</span>
+            </div>
+          </div>
+          
+          <!-- Live Results List -->
+          <div class="border-t border-gray-100 pt-4">
+            <h4 class="text-sm font-medium text-gray-700 mb-2">Bisherige Ergebnisse:</h4>
+            <div id="live-result-list" class="max-h-48 overflow-y-auto space-y-1 text-sm">
+              <p class="text-gray-400 text-center py-4">Noch keine Ergebnisse...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Processing Result (shown after completion) -->
         <div id="result-card" class="hidden bg-white rounded-2xl shadow-card p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Ergebnis der Verarbeitung</h3>
+          <div class="flex items-center gap-2 mb-4">
+            <span class="text-2xl">✅</span>
+            <h3 class="text-lg font-semibold text-gray-900">Verarbeitung abgeschlossen</h3>
+          </div>
           
           <!-- Result Summary -->
           <div id="result-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
@@ -136,6 +202,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   }
 
   let isProcessing = false;
+  let currentJobId = null;
+  let pollInterval = null;
 
   async function loadData() {
     document.getElementById('loading-state').classList.remove('hidden');
@@ -205,7 +273,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     isProcessing = true;
     btn.disabled = true;
     btnIcon.textContent = '⏳';
-    btnText.textContent = 'Verarbeite...';
+    btnText.textContent = 'Startet...';
+
+    // Hide result card if visible
+    document.getElementById('result-card').classList.add('hidden');
 
     try {
       const res = await fetch(`${API_URL}/api/admin/process-pending-ai?limit=${limit}`, {
@@ -222,10 +293,188 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         throw new Error(data.error || 'Processing failed');
       }
 
-      // Show results
-      showResults(data);
+      // Check if we got a jobId (async processing) or direct results (no events)
+      if (data.jobId) {
+        currentJobId = data.jobId;
+        showProgressUI(data.total);
+        startPolling();
+      } else {
+        // No events to process or synchronous response
+        showResults({ summary: data.summary, results: [] });
+        resetButton();
+      }
 
-      // Reload pending count
+    } catch (e) {
+      console.error('Processing error:', e);
+      alert('Fehler bei der Verarbeitung: ' + e.message);
+      resetButton();
+    }
+  }
+
+  function showProgressUI(total) {
+    const progressCard = document.getElementById('progress-card');
+    progressCard.classList.remove('hidden');
+    
+    // Reset progress UI
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-text').textContent = `0 von ${total}`;
+    document.getElementById('progress-percent').textContent = '0%';
+    document.getElementById('current-event').textContent = 'Starte...';
+    document.getElementById('estimated-time').textContent = 'Berechne...';
+    document.getElementById('live-published').textContent = '0';
+    document.getElementById('live-review').textContent = '0';
+    document.getElementById('live-rejected').textContent = '0';
+    document.getElementById('live-failed').textContent = '0';
+    document.getElementById('live-result-list').innerHTML = '<p class="text-gray-400 text-center py-4">Noch keine Ergebnisse...</p>';
+    
+    // Update button
+    document.getElementById('btn-text').textContent = 'Verarbeite...';
+    
+    // Scroll to progress
+    progressCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    
+    // Poll every 1.5 seconds
+    pollInterval = setInterval(pollJobStatus, 1500);
+    
+    // Also poll immediately
+    pollJobStatus();
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+
+  async function pollJobStatus() {
+    if (!currentJobId) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ai-job-status/${currentJobId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        console.error('Failed to poll job status');
+        return;
+      }
+
+      const { data } = await res.json();
+      
+      if (!data) return;
+
+      updateProgressUI(data);
+
+      // Check if job is completed or failed
+      if (data.status === 'completed' || data.status === 'failed') {
+        stopPolling();
+        onJobComplete(data);
+      }
+
+    } catch (e) {
+      console.error('Polling error:', e);
+    }
+  }
+
+  function updateProgressUI(data) {
+    const percent = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
+    
+    // Update progress bar
+    document.getElementById('progress-bar').style.width = `${percent}%`;
+    document.getElementById('progress-text').textContent = `${data.processed} von ${data.total}`;
+    document.getElementById('progress-percent').textContent = `${percent}%`;
+    
+    // Update current event
+    if (data.currentEvent) {
+      document.getElementById('current-event').textContent = data.currentEvent.title || data.currentEvent.id;
+    } else if (data.status === 'completed') {
+      document.getElementById('current-event').textContent = 'Fertig!';
+    }
+    
+    // Update estimated time
+    if (data.estimatedSecondsRemaining !== null && data.estimatedSecondsRemaining > 0) {
+      const mins = Math.floor(data.estimatedSecondsRemaining / 60);
+      const secs = data.estimatedSecondsRemaining % 60;
+      if (mins > 0) {
+        document.getElementById('estimated-time').textContent = `~${mins} Min ${secs} Sek verbleibend`;
+      } else {
+        document.getElementById('estimated-time').textContent = `~${secs} Sek verbleibend`;
+      }
+    } else if (data.status === 'completed') {
+      document.getElementById('estimated-time').textContent = 'Abgeschlossen';
+    }
+    
+    // Update live summary
+    if (data.summary) {
+      document.getElementById('live-published').textContent = data.summary.published || 0;
+      document.getElementById('live-review').textContent = data.summary.pending_review || 0;
+      document.getElementById('live-rejected').textContent = data.summary.rejected || 0;
+      document.getElementById('live-failed').textContent = data.summary.failed || 0;
+    }
+    
+    // Update live results list
+    if (data.results && data.results.length > 0) {
+      const listEl = document.getElementById('live-result-list');
+      listEl.innerHTML = data.results.slice(-10).reverse().map(r => {
+        let statusIcon = '❓';
+        let statusClass = 'text-gray-500';
+        
+        if (r.status === 'published') {
+          statusIcon = '✅';
+          statusClass = 'text-green-600';
+        } else if (r.status === 'pending_review') {
+          statusIcon = '👁️';
+          statusClass = 'text-amber-600';
+        } else if (r.status === 'rejected') {
+          statusIcon = '❌';
+          statusClass = 'text-red-600';
+        } else if (r.error) {
+          statusIcon = '⚠️';
+          statusClass = 'text-gray-500';
+        }
+
+        return `
+          <div class="flex items-center justify-between py-1 px-2 rounded ${r === data.results[data.results.length - 1] ? 'bg-primary-50' : ''}">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-xs">${statusIcon}</span>
+              <span class="truncate text-xs" title="${r.title}">${r.title}</span>
+            </div>
+            <span class="${statusClass} text-xs whitespace-nowrap ml-2">
+              ${r.error ? 'Fehler' : r.status}
+              ${r.familyFit ? `(${r.familyFit}%)` : ''}
+            </span>
+          </div>
+        `;
+      }).join('');
+      
+      // Show count if more than 10
+      if (data.results.length > 10) {
+        listEl.innerHTML += `<p class="text-xs text-gray-400 text-center mt-2">... und ${data.results.length - 10} weitere</p>`;
+      }
+    }
+  }
+
+  function onJobComplete(data) {
+    // Hide progress card
+    document.getElementById('progress-card').classList.add('hidden');
+    
+    // Show results
+    showResults(data);
+    
+    // Reset button and state
+    resetButton();
+    
+    // Reload pending count
+    reloadPendingCount();
+  }
+
+  async function reloadPendingCount() {
+    try {
       const pendingRes = await fetch(`${API_URL}/api/admin/pending-ai-count`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -233,16 +482,28 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         const pending = await pendingRes.json();
         document.getElementById('pending-ai-count').textContent = pending.data?.count || 0;
       }
-
     } catch (e) {
-      console.error('Processing error:', e);
-      alert('Fehler bei der Verarbeitung: ' + e.message);
-    } finally {
-      isProcessing = false;
-      btn.disabled = false;
-      btnIcon.textContent = '🚀';
-      btnText.textContent = 'Pending-AI verarbeiten';
+      console.error('Failed to reload pending count:', e);
     }
+  }
+
+  function resetButton() {
+    isProcessing = false;
+    currentJobId = null;
+    const btn = document.getElementById('process-btn');
+    btn.disabled = false;
+    document.getElementById('btn-icon').textContent = '🚀';
+    document.getElementById('btn-text').textContent = 'Pending-AI verarbeiten';
+  }
+
+  function cancelProcessing() {
+    // Note: This only stops polling, the backend job continues
+    stopPolling();
+    document.getElementById('progress-card').classList.add('hidden');
+    resetButton();
+    
+    // Reload to show current state
+    reloadPendingCount();
   }
 
   function showResults(data) {
@@ -293,6 +554,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </div>
         `;
       }).join('');
+    } else {
+      document.getElementById('result-details').classList.add('hidden');
     }
 
     // Scroll to results
@@ -301,6 +564,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // Event listeners
   document.getElementById('process-btn').addEventListener('click', processEvents);
+  document.getElementById('cancel-btn').addEventListener('click', cancelProcessing);
 
   // Initial load
   loadData();

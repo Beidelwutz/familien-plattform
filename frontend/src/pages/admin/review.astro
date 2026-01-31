@@ -18,11 +18,21 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       <!-- Filters -->
       <div class="flex flex-wrap gap-3 mb-6">
         <select id="status-filter" class="px-4 py-2 border-2 border-gray-200 rounded-lg bg-white text-sm">
-          <option value="pending_review">Ausstehend</option>
-          <option value="pending_ai">Warte auf AI</option>
-          <option value="incomplete">Unvollständig</option>
-          <option value="published">Veröffentlicht</option>
-          <option value="all">Alle (nicht veröffentlicht)</option>
+          <optgroup label="Aktiv">
+            <option value="pending_review">Ausstehend</option>
+            <option value="pending_ai">Warte auf AI</option>
+            <option value="incomplete">Unvollständig</option>
+          </optgroup>
+          <optgroup label="Entschieden">
+            <option value="published">Veröffentlicht</option>
+            <option value="rejected">Abgelehnt (AI/Manuell)</option>
+          </optgroup>
+          <optgroup label="Archiv">
+            <option value="archived">Archiviert</option>
+            <option value="cancelled">Abgesagt</option>
+            <option value="stale">Veraltet</option>
+          </optgroup>
+          <option value="all">Alle Events</option>
         </select>
         <button class="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-sm hover:bg-gray-50" id="refresh-btn">
           🔄 Aktualisieren
@@ -214,6 +224,63 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
+  // Helper to get status badge styling
+  function getStatusBadge(status) {
+    const styles = {
+      pending_review: 'bg-amber-100 text-amber-700',
+      pending_ai: 'bg-blue-100 text-blue-700',
+      incomplete: 'bg-gray-100 text-gray-600',
+      published: 'bg-green-100 text-green-700',
+      rejected: 'bg-red-100 text-red-700',
+      archived: 'bg-gray-100 text-gray-500',
+      cancelled: 'bg-orange-100 text-orange-700',
+      stale: 'bg-yellow-100 text-yellow-700',
+    };
+    const labels = {
+      pending_review: 'Ausstehend',
+      pending_ai: 'Warte auf AI',
+      incomplete: 'Unvollständig',
+      published: 'Veröffentlicht',
+      rejected: 'Abgelehnt',
+      archived: 'Archiviert',
+      cancelled: 'Abgesagt',
+      stale: 'Veraltet',
+    };
+    return { style: styles[status] || 'bg-gray-100 text-gray-600', label: labels[status] || status };
+  }
+
+  // Helper to get family fit score styling
+  function getFamilyFitStyle(score) {
+    if (score === null || score === undefined) return { style: 'bg-gray-100 text-gray-500', label: '-' };
+    if (score >= 70) return { style: 'bg-green-100 text-green-700', label: `${score}%` };
+    if (score >= 50) return { style: 'bg-yellow-100 text-yellow-700', label: `${score}%` };
+    if (score >= 30) return { style: 'bg-orange-100 text-orange-700', label: `${score}%` };
+    return { style: 'bg-red-100 text-red-700', label: `${score}%` };
+  }
+
+  // Helper to get review reason badge
+  function getReviewReasonBadge(event) {
+    if (event.status === 'rejected') {
+      // Show rejection reason
+      const label = event.rejection_label || 'Abgelehnt';
+      const isAI = event.rejection_type === 'AI_REJECTED';
+      return `<span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700" title="${label}">${isAI ? '🤖 AI: ' : ''}${label}</span>`;
+    }
+    if (event.status === 'pending_review' && event.review_reason_label) {
+      const reasonStyles = {
+        'AI unsicher': 'bg-yellow-100 text-yellow-700',
+        'Grenzfall Familie': 'bg-orange-100 text-orange-700',
+        'Unvollständig': 'bg-gray-100 text-gray-600',
+        'Manuelle Prüfung': 'bg-blue-100 text-blue-700',
+        'Keine Scores': 'bg-gray-100 text-gray-500',
+        'Warte auf AI': 'bg-blue-100 text-blue-700',
+      };
+      const style = reasonStyles[event.review_reason_label] || 'bg-gray-100 text-gray-600';
+      return `<span class="px-2 py-0.5 text-xs rounded-full ${style}">📋 ${event.review_reason_label}</span>`;
+    }
+    return '';
+  }
+
   // Render event list
   function renderEvents() {
     const list = document.getElementById('review-list');
@@ -222,7 +289,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
       });
       const sourceName = event.primary_source?.source?.name || 'Unbekannt';
-      const score = event.completeness_score || 0;
+      const completenessScore = event.completeness_score || 0;
+      const statusBadge = getStatusBadge(event.status);
+      
+      // AI Scores
+      const scores = event.scores || {};
+      const familyFit = getFamilyFitStyle(scores.family_fit_score);
+      const hasScores = scores.family_fit_score !== null && scores.family_fit_score !== undefined;
+      
+      // Review/Rejection reason badge
+      const reasonBadge = getReviewReasonBadge(event);
+      
+      // Show action buttons only for actionable statuses
+      const showActions = ['pending_review', 'pending_ai', 'incomplete'].includes(event.status);
       
       return `
         <div class="bg-white rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" data-id="${event.id}">
@@ -234,18 +313,43 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                 <span>📡 ${sourceName}</span>
                 ${event.location_address ? `<span class="truncate max-w-[200px]">📍 ${event.location_address}</span>` : ''}
               </div>
+              
+              <!-- Status & Scores Row -->
               <div class="flex flex-wrap gap-2 mt-2">
-                <span class="px-2 py-0.5 text-xs rounded-full ${score < 50 ? 'bg-red-100 text-red-700' : score < 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">
-                  Vollständigkeit: ${score}%
+                <span class="px-2 py-0.5 text-xs rounded-full ${statusBadge.style}">${statusBadge.label}</span>
+                ${hasScores ? `<span class="px-2 py-0.5 text-xs rounded-full ${familyFit.style}" title="Family Fit Score">👨‍👩‍👧 ${familyFit.label}</span>` : ''}
+                ${reasonBadge}
+              </div>
+              
+              <!-- Extended Scores (collapsed) -->
+              ${hasScores ? `
+              <div class="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
+                <span title="Relevanz">📊 ${scores.relevance_score || '-'}</span>
+                <span title="Qualität">⭐ ${scores.quality_score || '-'}</span>
+                <span title="Stressfrei">😌 ${scores.stressfree_score || '-'}</span>
+                <span title="Konfidenz">🎯 ${scores.confidence ? Math.round(Number(scores.confidence) * 100) + '%' : '-'}</span>
+              </div>
+              ` : ''}
+              
+              <!-- Completeness -->
+              <div class="mt-1">
+                <span class="text-xs ${completenessScore < 50 ? 'text-red-500' : completenessScore < 80 ? 'text-yellow-600' : 'text-green-600'}">
+                  Vollständigkeit: ${completenessScore}%
                 </span>
-                <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">${event.status}</span>
               </div>
             </div>
+            
+            ${showActions ? `
             <div class="flex gap-2 shrink-0">
               <button class="action-btn w-10 h-10 rounded-lg bg-green-100 text-green-600 hover:bg-green-200" data-action="approve" data-id="${event.id}" title="Genehmigen">✓</button>
               <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200" data-action="edit" data-id="${event.id}" title="Bearbeiten">✏️</button>
               <button class="action-btn w-10 h-10 rounded-lg bg-red-100 text-red-600 hover:bg-red-200" data-action="reject" data-id="${event.id}" title="Ablehnen">✗</button>
             </div>
+            ` : `
+            <div class="flex gap-2 shrink-0">
+              <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-400" data-action="view" data-id="${event.id}" title="Details">👁</button>
+            </div>
+            `}
           </div>
         </div>
       `;
@@ -268,6 +372,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         if (action === 'approve') handleApprove(id, btn);
         else if (action === 'edit') openEditModal(id);
         else if (action === 'reject') openRejectModal(id);
+        else if (action === 'view') openDetailModal(id);
       });
     });
   }
@@ -280,9 +385,16 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
     document.getElementById('detail-title').textContent = event.title;
     
+    const statusBadge = getStatusBadge(event.status);
+    const reasonBadge = getReviewReasonBadge(event);
+    const scores = event.scores || {};
+    const familyFit = getFamilyFitStyle(scores.family_fit_score);
+    
     document.getElementById('detail-badges').innerHTML = `
-      <span class="px-2 py-1 text-xs rounded-full bg-gray-100">${event.status}</span>
-      ${event.completeness_score ? `<span class="px-2 py-1 text-xs rounded-full ${event.completeness_score < 50 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}">Vollständigkeit: ${event.completeness_score}%</span>` : ''}
+      <span class="px-2 py-1 text-xs rounded-full ${statusBadge.style}">${statusBadge.label}</span>
+      ${scores.family_fit_score !== null && scores.family_fit_score !== undefined ? `<span class="px-2 py-1 text-xs rounded-full ${familyFit.style}">👨‍👩‍👧 Family Fit: ${familyFit.label}</span>` : ''}
+      ${event.completeness_score ? `<span class="px-2 py-1 text-xs rounded-full ${event.completeness_score < 50 ? 'bg-red-100 text-red-700' : event.completeness_score < 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">Vollständigkeit: ${event.completeness_score}%</span>` : ''}
+      ${reasonBadge}
     `;
 
     const formatDate = (d) => d ? new Date(d).toLocaleString('de-DE') : '-';
@@ -294,20 +406,38 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Alter</span><span class="font-medium">${event.age_min || '?'} - ${event.age_max || '?'} Jahre</span></div>
     `;
 
-    const scores = event.scores;
-    document.getElementById('detail-scores').innerHTML = scores ? `
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div>Relevanz: <strong>${scores.relevance_score || '-'}</strong></div>
-        <div>Qualität: <strong>${scores.quality_score || '-'}</strong></div>
-        <div>Family Fit: <strong>${scores.family_fit_score || '-'}</strong></div>
-        <div>Stressfrei: <strong>${scores.stressfree_score || '-'}</strong></div>
+    // Enhanced scores display with confidence
+    const confidence = scores.confidence ? Math.round(Number(scores.confidence) * 100) : null;
+    document.getElementById('detail-scores').innerHTML = scores && (scores.family_fit_score !== null || scores.relevance_score !== null) ? `
+      <div class="grid grid-cols-2 gap-3 text-sm">
+        <div class="p-2 rounded ${scores.family_fit_score >= 50 ? 'bg-green-50' : scores.family_fit_score >= 30 ? 'bg-yellow-50' : 'bg-red-50'}">
+          <span class="text-gray-500">Family Fit:</span> <strong>${scores.family_fit_score !== null ? scores.family_fit_score + '%' : '-'}</strong>
+        </div>
+        <div class="p-2 rounded bg-gray-50">
+          <span class="text-gray-500">Relevanz:</span> <strong>${scores.relevance_score !== null ? scores.relevance_score + '%' : '-'}</strong>
+        </div>
+        <div class="p-2 rounded bg-gray-50">
+          <span class="text-gray-500">Qualität:</span> <strong>${scores.quality_score !== null ? scores.quality_score + '%' : '-'}</strong>
+        </div>
+        <div class="p-2 rounded bg-gray-50">
+          <span class="text-gray-500">Stressfrei:</span> <strong>${scores.stressfree_score !== null ? scores.stressfree_score + '%' : '-'}</strong>
+        </div>
       </div>
+      ${confidence !== null ? `<div class="mt-2 text-xs text-gray-500">AI-Konfidenz: ${confidence}%</div>` : ''}
+      ${event.review_reason_label && event.status === 'pending_review' ? `<div class="mt-2 text-sm"><span class="text-amber-600">📋 Review-Grund:</span> ${event.review_reason_label}</div>` : ''}
+      ${event.rejection_label && event.status === 'rejected' ? `<div class="mt-2 text-sm"><span class="text-red-600">❌ Ablehnungsgrund:</span> ${event.rejection_label}</div>` : ''}
     ` : '<p class="text-sm text-gray-500">Keine Scores verfügbar</p>';
 
     document.getElementById('detail-source').innerHTML = event.primary_source?.source ? `
       <p><strong>${event.primary_source.source.name}</strong> (${event.primary_source.source.type})</p>
       ${event.primary_source.source_url ? `<a href="${event.primary_source.source_url}" target="_blank" class="text-primary-500 text-sm">Quelle öffnen →</a>` : ''}
     ` : '<p class="text-sm text-gray-500">Keine Quellinformation</p>';
+
+    // Show/hide action buttons based on status
+    const showActions = ['pending_review', 'pending_ai', 'incomplete'].includes(event.status);
+    document.getElementById('detail-approve').style.display = showActions ? 'block' : 'none';
+    document.getElementById('detail-edit').style.display = showActions ? 'block' : 'none';
+    document.getElementById('detail-reject').style.display = showActions ? 'block' : 'none';
 
     document.getElementById('detail-modal').classList.remove('hidden');
     document.getElementById('detail-modal').classList.add('flex');
@@ -480,7 +610,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   // Initial load: set filter from URL if present
   const urlStatus = new URLSearchParams(window.location.search).get('status');
   const statusSelect = document.getElementById('status-filter');
-  if (urlStatus && statusSelect && ['pending_review', 'pending_ai', 'incomplete', 'published', 'all'].includes(urlStatus)) {
+  const validStatuses = ['pending_review', 'pending_ai', 'incomplete', 'published', 'rejected', 'archived', 'cancelled', 'stale', 'all'];
+  if (urlStatus && statusSelect && validStatuses.includes(urlStatus)) {
     statusSelect.value = urlStatus;
   }
   loadEvents();

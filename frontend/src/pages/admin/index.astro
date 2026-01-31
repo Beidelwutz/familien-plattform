@@ -25,6 +25,40 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
 
       <!-- Dashboard Content (hidden until loaded) -->
       <div id="dashboard-content" class="hidden">
+        <!-- System Health Widget -->
+        <a href="/admin/health" id="health-widget" class="block bg-white rounded-2xl shadow-card p-4 mb-6 hover:shadow-lg transition-shadow border border-gray-100">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-gray-900">System Status</h2>
+            <span id="health-status-badge" class="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-500">
+              Prüfe...
+            </span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div class="flex items-center gap-2">
+              <span id="health-db-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+              <span class="text-gray-600">Database</span>
+              <span id="health-db-latency" class="text-xs text-gray-400 ml-auto"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="health-redis-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+              <span class="text-gray-600">Redis</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="health-ai-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+              <span class="text-gray-600">AI Worker</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="health-queue-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+              <span class="text-gray-600">Queue</span>
+              <span id="health-queue-count" class="text-xs text-gray-400 ml-auto"></span>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-gray-400 flex items-center justify-between">
+            <span id="health-last-update">Letzte Aktualisierung: --</span>
+            <span id="health-uptime" class="text-gray-500"></span>
+          </div>
+        </a>
+
         <!-- Dashboard Cards - Horizontal scroll on mobile -->
         <div class="flex lg:grid lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6 mb-6 lg:mb-8 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-visible snap-x snap-mandatory lg:snap-none">
           <!-- Review Queue -->
@@ -356,5 +390,117 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
       localStorage.removeItem('auth_token');
       window.location.href = '/login';
     });
+
+    // System Health Widget
+    async function updateHealthWidget() {
+      try {
+        const healthRes = await fetch(`${API_URL}/api/health/detailed`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!healthRes.ok) throw new Error('Health check failed');
+
+        const health = await healthRes.json();
+        
+        // Status badge
+        const statusBadge = document.getElementById('health-status-badge');
+        if (statusBadge) {
+          const statusStyles = {
+            ok: 'bg-green-100 text-green-700',
+            degraded: 'bg-yellow-100 text-yellow-700',
+            error: 'bg-red-100 text-red-700',
+          };
+          const statusLabels = {
+            ok: 'Alles OK',
+            degraded: 'Eingeschränkt',
+            error: 'Fehler',
+          };
+          statusBadge.className = `px-3 py-1 text-xs font-medium rounded-full ${statusStyles[health.status] || 'bg-gray-100 text-gray-500'}`;
+          statusBadge.textContent = statusLabels[health.status] || health.status;
+        }
+
+        // Database indicator
+        const dbIndicator = document.getElementById('health-db-indicator');
+        const dbLatency = document.getElementById('health-db-latency');
+        if (dbIndicator && health.services?.database) {
+          const dbStatus = health.services.database.status;
+          dbIndicator.className = `w-2.5 h-2.5 rounded-full ${dbStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'}`;
+          if (dbLatency && health.services.database.latencyMs) {
+            dbLatency.textContent = `${health.services.database.latencyMs}ms`;
+          }
+        }
+
+        // Redis indicator
+        const redisIndicator = document.getElementById('health-redis-indicator');
+        if (redisIndicator && health.services?.redis) {
+          const redisStatus = health.services.redis.status;
+          const redisOk = ['connected', 'ok'].includes(redisStatus);
+          const redisDisabled = redisStatus === 'disabled';
+          redisIndicator.className = `w-2.5 h-2.5 rounded-full ${redisOk ? 'bg-green-500' : redisDisabled ? 'bg-gray-400' : 'bg-red-500'}`;
+        }
+
+        // AI Worker indicator (check if AI worker is reachable)
+        const aiIndicator = document.getElementById('health-ai-indicator');
+        if (aiIndicator) {
+          // Try to check AI worker health
+          try {
+            const aiHealthRes = await fetch(`${API_URL}/api/admin/ai-worker/health`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (aiHealthRes.ok) {
+              const aiHealth = await aiHealthRes.json();
+              const aiOk = aiHealth.success && aiHealth.data?.status === 'healthy';
+              aiIndicator.className = `w-2.5 h-2.5 rounded-full ${aiOk ? 'bg-green-500' : 'bg-yellow-500'}`;
+            } else {
+              aiIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+            }
+          } catch {
+            aiIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+          }
+        }
+
+        // Queue indicator
+        const queueIndicator = document.getElementById('health-queue-indicator');
+        const queueCount = document.getElementById('health-queue-count');
+        if (queueIndicator && health.queue) {
+          const totalJobs = (health.queue.queued || 0) + (health.queue.running || 0);
+          const hasFailedJobs = (health.queue.failed || 0) > 0;
+          queueIndicator.className = `w-2.5 h-2.5 rounded-full ${hasFailedJobs ? 'bg-yellow-500' : 'bg-green-500'}`;
+          if (queueCount) {
+            queueCount.textContent = totalJobs > 0 ? `${totalJobs} Jobs` : '';
+          }
+        } else if (queueIndicator) {
+          queueIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+        }
+
+        // Last update timestamp
+        const lastUpdate = document.getElementById('health-last-update');
+        if (lastUpdate) {
+          lastUpdate.textContent = `Aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`;
+        }
+
+        // Uptime
+        const uptimeEl = document.getElementById('health-uptime');
+        if (uptimeEl && health.uptime) {
+          const uptimeHours = Math.floor(health.uptime / 3600);
+          const uptimeMins = Math.floor((health.uptime % 3600) / 60);
+          uptimeEl.textContent = `Uptime: ${uptimeHours}h ${uptimeMins}m`;
+        }
+
+      } catch (e) {
+        console.error('Health widget error:', e);
+        const statusBadge = document.getElementById('health-status-badge');
+        if (statusBadge) {
+          statusBadge.className = 'px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-700';
+          statusBadge.textContent = 'Nicht erreichbar';
+        }
+      }
+    }
+
+    // Initial health check
+    updateHealthWidget();
+
+    // Auto-refresh health widget every 60 seconds
+    setInterval(updateHealthWidget, 60000);
   })();
 </script>
