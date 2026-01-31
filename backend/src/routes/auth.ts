@@ -236,6 +236,7 @@ router.post('/logout', (_req: Request, res: Response) => {
 
 // POST /api/auth/sync - Explicit user sync from Supabase to Prisma
 // This endpoint ensures the Prisma user exists before the app considers the user "logged in"
+// Handles the case where a user logs in with OAuth (Google) but already has an account with the same email
 router.post('/sync', async (req: Request, res: Response, _next: NextFunction) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   
@@ -272,18 +273,9 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
       });
     }
 
-    // Upsert user in Prisma
-    const user = await prisma.user.upsert({
+    // First, check if user exists by Supabase ID
+    let user = await prisma.user.findUnique({
       where: { id: supabaseUser.id },
-      update: { 
-        email: supabaseUser.email, 
-        updated_at: new Date() 
-      },
-      create: { 
-        id: supabaseUser.id, 
-        email: supabaseUser.email, 
-        role: 'parent' 
-      },
       select: {
         id: true,
         email: true,
@@ -292,6 +284,68 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
         created_at: true
       }
     });
+
+    if (user) {
+      // User exists with this Supabase ID - update email if changed
+      if (user.email !== supabaseUser.email) {
+        user = await prisma.user.update({
+          where: { id: supabaseUser.id },
+          data: { 
+            email: supabaseUser.email, 
+            updated_at: new Date() 
+          },
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            email_verified: true,
+            created_at: true
+          }
+        });
+      }
+    } else {
+      // User doesn't exist with this Supabase ID
+      // Check if a user with this email already exists (from email/password registration)
+      const existingUserByEmail = await prisma.user.findUnique({
+        where: { email: supabaseUser.email },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          email_verified: true,
+          created_at: true
+        }
+      });
+
+      if (existingUserByEmail) {
+        // User registered with email/password before
+        // Return the existing user - the auth middleware will use the Prisma ID
+        // This allows users to log in with both email/password AND OAuth
+        user = existingUserByEmail;
+        
+        // Update last activity timestamp
+        await prisma.user.update({
+          where: { id: existingUserByEmail.id },
+          data: { updated_at: new Date() }
+        });
+      } else {
+        // Completely new user - create them with the Supabase ID
+        user = await prisma.user.create({
+          data: { 
+            id: supabaseUser.id, 
+            email: supabaseUser.email, 
+            role: 'parent' 
+          },
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            email_verified: true,
+            created_at: true
+          }
+        });
+      }
+    }
 
     // Upsert FamilyProfile (ensure it exists)
     await prisma.familyProfile.upsert({
@@ -305,11 +359,32 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
       message: 'User synchronized successfully',
       data: user
     });
-  } catch (err) {
-    console.error('Sync failed:', err);
+  } catch (err: any) {
+    // Log detailed error for debugging
+    console.error('Sync failed:', {
+      error: err.message || err,
+      code: err.code,
+      meta: err.meta,
+      stack: err.stack
+    });
+    
+    // Check for specific Prisma errors
+    let errorMessage = 'Failed to sync user account';
+    let errorCode = 'ACCOUNT_SYNC_FAILED';
+    
+    if (err.code === 'P2002') {
+      // Unique constraint violation
+      errorMessage = 'Ein Konto mit dieser E-Mail existiert bereits';
+      errorCode = 'EMAIL_EXISTS';
+    } else if (err.code === 'P2025') {
+      // Record not found
+      errorMessage = 'Datensatz nicht gefunden';
+      errorCode = 'NOT_FOUND';
+    }
+    
     return res.status(500).json({ 
       success: false, 
-      error: { code: 'ACCOUNT_SYNC_FAILED', message: 'Failed to sync user account' } 
+      error: { code: errorCode, message: errorMessage } 
     });
   }
 });

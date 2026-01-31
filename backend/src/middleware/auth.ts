@@ -54,6 +54,11 @@ export function verifyLegacyToken(token: string): JwtPayload | null {
  * Verify token - tries Supabase first, falls back to legacy JWT
  * IMPORTANT: This function no longer syncs users automatically.
  * Use POST /api/auth/sync for explicit user synchronization after login.
+ * 
+ * For Supabase users, we look up the Prisma user by ID first, then by email.
+ * This handles the case where a user registered with email/password first,
+ * then logs in with OAuth (Google) - the Supabase ID will be different from
+ * the Prisma user ID, but the email will match.
  */
 async function verifyToken(token: string): Promise<JwtPayload | null> {
   // Try Supabase token first if configured
@@ -62,14 +67,26 @@ async function verifyToken(token: string): Promise<JwtPayload | null> {
       const supabaseUser = await verifySupabaseToken(token);
       if (supabaseUser) {
         // Look up user in Prisma (READ ONLY - no sync)
-        // The /api/auth/sync endpoint handles user creation
-        const prismaUser = await prisma.user.findUnique({
+        // First try by Supabase ID, then by email
+        let prismaUser = await prisma.user.findUnique({
           where: { id: supabaseUser.id },
-          select: { role: true }
+          select: { id: true, role: true }
         });
         
+        // If not found by ID, try by email (handles OAuth login with existing email account)
+        if (!prismaUser && supabaseUser.email) {
+          prismaUser = await prisma.user.findUnique({
+            where: { email: supabaseUser.email },
+            select: { id: true, role: true }
+          });
+        }
+        
+        // Use the Prisma user ID if found, otherwise use the Supabase ID
+        // This ensures consistency when the user was created with email/password first
+        const userId = prismaUser?.id || supabaseUser.id;
+        
         return {
-          sub: supabaseUser.id,
+          sub: userId,
           email: supabaseUser.email || '',
           // Use Prisma role if user exists, otherwise fall back to metadata or default
           role: prismaUser?.role || supabaseUser.user_metadata?.role || 'parent',
