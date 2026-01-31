@@ -3,6 +3,11 @@ import { body, validationResult } from 'express-validator';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, optionalAuth, type AuthRequest } from '../middleware/auth.js';
+import { 
+  sendProviderRegistrationEmail, 
+  sendProviderApprovedEmail,
+  sendProviderRejectedEmail 
+} from '../lib/email.js';
 
 const router = Router();
 
@@ -202,6 +207,11 @@ router.post('/', requireAuth, [
       data: { role: 'provider' }
     });
 
+    // Send provider registration confirmation email (non-blocking)
+    sendProviderRegistrationEmail(req.user!.email, name).catch(err => {
+      console.error('Failed to send provider registration email:', err);
+    });
+
     res.status(201).json({
       success: true,
       message: 'Provider profile created. Awaiting verification.',
@@ -362,13 +372,75 @@ router.post('/:id/verify', requireAuth, async (req: AuthRequest, res: Response, 
 
     const provider = await prisma.provider.update({
       where: { id },
-      data: { is_verified: true }
+      data: { is_verified: true },
+      include: {
+        user: { select: { email: true } }
+      }
     });
+
+    // Send provider approved notification email (non-blocking)
+    if (provider.user?.email) {
+      sendProviderApprovedEmail(provider.user.email, provider.name).catch(err => {
+        console.error('Failed to send provider approved email:', err);
+      });
+    }
 
     res.json({
       success: true,
       message: 'Provider verified',
       data: provider
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/providers/:id/reject - Reject a provider (admin)
+router.post('/:id/reject', requireAuth, [
+  body('reason').optional().isString().isLength({ max: 500 }),
+], async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    if (req.user!.role !== 'admin') {
+      throw createError('Admin access required', 403, 'FORBIDDEN');
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const provider = await prisma.provider.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, email: true } }
+      }
+    });
+
+    if (!provider) {
+      throw createError('Provider not found', 404, 'NOT_FOUND');
+    }
+
+    // Delete the provider profile
+    await prisma.provider.delete({
+      where: { id }
+    });
+
+    // Reset user role back to parent
+    if (provider.user?.id) {
+      await prisma.user.update({
+        where: { id: provider.user.id },
+        data: { role: 'parent' }
+      });
+    }
+
+    // Send provider rejected notification email (non-blocking)
+    if (provider.user?.email) {
+      sendProviderRejectedEmail(provider.user.email, provider.name, reason).catch(err => {
+        console.error('Failed to send provider rejected email:', err);
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Provider rejected and deleted'
     });
   } catch (error) {
     next(error);

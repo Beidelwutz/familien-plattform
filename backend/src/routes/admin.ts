@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth.js';
 import { approveRevision, rejectRevision } from '../lib/eventRevision.js';
+import { sendEventApprovedEmail, sendEventRejectedEmail } from '../lib/email.js';
 
 const router = Router();
 
@@ -120,8 +121,24 @@ router.post('/review/:id/approve', async (req: Request, res: Response, next: Nex
         status: 'published',
         is_verified: true,
         last_verified_at: new Date()
+      },
+      include: {
+        provider: {
+          include: {
+            user: { select: { email: true } }
+          }
+        }
       }
     });
+
+    // Send event approved notification to provider (non-blocking)
+    if (event.provider?.user?.email) {
+      // Generate slug from title for the URL
+      const eventSlug = event.id; // Using ID as slug for now
+      sendEventApprovedEmail(event.provider.user.email, event.title, eventSlug).catch(err => {
+        console.error('Failed to send event approved email:', err);
+      });
+    }
 
     res.json({
       success: true,
@@ -154,8 +171,22 @@ router.post('/review/:id/reject', async (req: Request, res: Response, next: Next
       data: {
         status: 'rejected',
         ...(rejectionReason && { cancellation_reason: rejectionReason }),
+      },
+      include: {
+        provider: {
+          include: {
+            user: { select: { email: true } }
+          }
+        }
       }
     });
+
+    // Send event rejected notification to provider (non-blocking)
+    if (event.provider?.user?.email) {
+      sendEventRejectedEmail(event.provider.user.email, event.title, id, reason).catch(err => {
+        console.error('Failed to send event rejected email:', err);
+      });
+    }
 
     res.json({
       success: true,

@@ -27,6 +27,7 @@ import {
 import { searchEventsWithinRadius, addDistanceToEvents } from '../lib/geo.js';
 import { optionalAuth, requireAuth, type AuthRequest } from '../middleware/auth.js';
 import crypto from 'crypto';
+import { sendEventSubmittedEmail } from '../lib/email.js';
 
 const router = Router();
 
@@ -695,6 +696,13 @@ router.post('/', requireAuth, validateCreateEvent, async (req: AuthRequest, res:
         provider: true,
       }
     });
+
+    // Send event submitted confirmation email to provider (non-blocking)
+    if (provider) {
+      sendEventSubmittedEmail(req.user!.email, title, event.id).catch(err => {
+        console.error('Failed to send event submitted email:', err);
+      });
+    }
 
     res.status(201).json({
       success: true,

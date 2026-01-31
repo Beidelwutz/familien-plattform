@@ -6,7 +6,15 @@ import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { signToken, requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { verifyToken as verifySupabaseToken, isSupabaseConfigured } from '../lib/supabase.js';
-import { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } from '../lib/email.js';
+import { 
+  sendPasswordResetEmail, 
+  sendWelcomeEmail, 
+  sendVerificationEmail,
+  sendPasswordChangedEmail,
+  sendAccountLockedEmail,
+  sendEmailChangedEmail,
+  sendAccountDeletedEmail
+} from '../lib/email.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
@@ -157,6 +165,11 @@ router.post('/login', authLimiter, loginValidation, async (req: Request, res: Re
       });
 
       if (newAttempts >= MAX_LOGIN_ATTEMPTS) {
+        // Send account locked notification email (non-blocking)
+        sendAccountLockedEmail(user.email, LOCKOUT_DURATION_MINUTES).catch(err => {
+          console.error('Failed to send account locked email:', err);
+        });
+
         throw createError(
           `Too many failed attempts. Account locked for ${LOCKOUT_DURATION_MINUTES} minutes.`,
           423,
@@ -464,6 +477,11 @@ router.put('/change-password', requireAuth, [
     // Generate new token (invalidates old sessions)
     const newToken = signToken({ sub: user.id, email: user.email, role: user.role });
 
+    // Send password changed confirmation email (non-blocking)
+    sendPasswordChangedEmail(user.email).catch(err => {
+      console.error('Failed to send password changed email:', err);
+    });
+
     res.json({
       success: true,
       message: 'Password changed successfully',
@@ -529,6 +547,8 @@ router.put('/change-email', requireAuth, [
       throw createError('Email is already in use', 400, 'EMAIL_EXISTS');
     }
 
+    const oldEmail = user.email;
+
     // Update email directly (in a full implementation, you'd send a verification email first)
     // For now, we update immediately but mark as unverified
     await prisma.user.update({
@@ -543,6 +563,11 @@ router.put('/change-email', requireAuth, [
 
     // Generate new token with updated email
     const newToken = signToken({ sub: user.id, email: newEmail, role: user.role });
+
+    // Send notification to OLD email address about the change (non-blocking)
+    sendEmailChangedEmail(oldEmail, newEmail).catch(err => {
+      console.error('Failed to send email changed notification:', err);
+    });
 
     // Send verification email to new address
     const verificationToken = signToken({
@@ -616,6 +641,8 @@ router.delete('/account', requireAuth, [
       }
     }
 
+    const userEmail = user.email;
+
     // Delete user and all related data (cascading deletes handle most relations)
     // Note: This permanently deletes the user account and associated data
     await prisma.$transaction(async (tx) => {
@@ -629,6 +656,11 @@ router.delete('/account', requireAuth, [
       await tx.user.delete({
         where: { id: user.id }
       });
+    });
+
+    // Send account deleted confirmation email (non-blocking)
+    sendAccountDeletedEmail(userEmail).catch(err => {
+      console.error('Failed to send account deleted email:', err);
     });
 
     res.json({
@@ -765,6 +797,11 @@ router.post('/reset-password', authLimiter, [
         data: { used_at: new Date() }
       })
     ]);
+
+    // Send password changed confirmation email (non-blocking)
+    sendPasswordChangedEmail(resetToken.user.email).catch(err => {
+      console.error('Failed to send password changed email:', err);
+    });
 
     res.json({
       success: true,
