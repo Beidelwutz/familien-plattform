@@ -28,8 +28,17 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // CORS: allow single origin or comma-separated list (Frontend 3000/3001, Vercel preview + production)
-const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:3001';
-const corsOrigins = corsOrigin.split(',').map((o) => o.trim()).filter(Boolean);
+const defaultCorsOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://www.kiezling.com',
+  'https://kiezling.com',
+  'https://familien-plattform.vercel.app'
+];
+const corsOrigin = process.env.CORS_ORIGIN;
+const corsOrigins = corsOrigin 
+  ? corsOrigin.split(',').map((o) => o.trim()).filter(Boolean)
+  : defaultCorsOrigins;
 
 // Middleware
 app.use(helmet({
@@ -79,10 +88,12 @@ app.use('/api/admin/trends', adminTrendsRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-});
+// Start server (only when not running as serverless function)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  });
+}
 
 export default app;

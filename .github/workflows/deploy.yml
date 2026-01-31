@@ -44,24 +44,36 @@ jobs:
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
 
   # ============================================
-  # DEPLOY BACKEND TO RAILWAY
+  # DEPLOY BACKEND TO VERCEL
   # ============================================
   deploy-backend:
-    name: Deploy Backend (Railway)
+    name: Deploy Backend (Vercel)
     runs-on: ubuntu-latest
     environment: production
-    needs: [deploy-frontend]
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
       
-      - name: Deploy to Railway
-        run: railway up --service backend
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+      
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_BACKEND_TOKEN }}
+      
+      - name: Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_BACKEND_TOKEN }}
+      
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_BACKEND_TOKEN }}
 
   # ============================================
   # POST-DEPLOY CHECKS
