@@ -17,7 +17,7 @@ export const RESTRICTED_AGE_RATINGS = ['16+', '18+'] as const;
  * - status = 'published'
  * - start_datetime >= now
  * - is_cancelled = false
- * - age_rating nicht in ['16+', '18+'] (oder null)
+ * - age_rating nicht in ['16+', '18+'] (oder null/nicht vorhanden)
  * 
  * @param now - Referenzzeitpunkt (default: jetzt)
  * @returns Prisma where clause
@@ -27,10 +27,11 @@ export function whereDisplayable(now: Date = new Date()): Prisma.CanonicalEventW
     status: 'published',
     start_datetime: { gte: now },
     is_cancelled: false,
-    OR: [
-      { age_rating: null },
-      { age_rating: { notIn: [...RESTRICTED_AGE_RATINGS] } }
-    ]
+    // age_rating Filter: erlaubt null/undefined oder nicht-restringierte Ratings
+    // Hinweis: Wenn age_rating Feld noch nicht in DB existiert, wird dieser Filter ignoriert
+    NOT: {
+      age_rating: { in: [...RESTRICTED_AGE_RATINGS] }
+    }
   };
 }
 
