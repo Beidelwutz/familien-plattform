@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"  # "json" or "text"
     
+    # CORS (comma-separated list of allowed origins)
+    cors_origins: str = "http://localhost:3000,http://localhost:4000"
+    
     # Backend API
     backend_url: str = "http://localhost:4000"
     service_token: str = ""  # JWT token for service-to-service auth

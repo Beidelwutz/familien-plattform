@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing
+.pytest_cache
+.coverage
+htmlcov
+
+# Local config
+.env
+.env.local
+*.local
+
+# Build artifacts
+*.egg-info
+dist
+build
+
+# Windows
+start.bat
+Thumbs.db
+
+# Misc
+*.log
+*.tmp
