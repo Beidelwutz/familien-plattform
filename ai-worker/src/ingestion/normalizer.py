@@ -16,16 +16,48 @@ class NormalizedEvent:
     description_long: Optional[str]
     start_datetime: Optional[datetime]
     end_datetime: Optional[datetime]
+    
+    # Location / Venue
     location_address: Optional[str]
     location_lat: Optional[float]
     location_lng: Optional[float]
+    venue_name: Optional[str]
+    city: Optional[str]
+    postal_code: Optional[str]
+    
+    # Pricing
     price_type: str  # free, paid, range, unknown
     price_min: Optional[float]
     price_max: Optional[float]
+    price_details: Optional[dict]  # {adult: {min, max}, child: {min, max}, family: {min, max}, currency: "EUR"}
+    
+    # Ticket/Booking Status
+    availability_status: Optional[str]  # available, sold_out, waitlist, registration_required, unknown
+    registration_deadline: Optional[datetime]
+    
+    # Age
     age_min: Optional[int]
     age_max: Optional[int]
+    
+    # Indoor/Outdoor
     is_indoor: Optional[bool]
     is_outdoor: Optional[bool]
+    
+    # Language
+    language: Optional[str]  # "Deutsch", "Englisch"
+    
+    # Capacity
+    capacity: Optional[int]
+    spots_limited: Optional[bool]
+    
+    # Series / Recurrence
+    recurrence_rule: Optional[str]  # iCal RRULE or "jeden Samstag"
+    
+    # Transit
+    transit_stop: Optional[str]
+    has_parking: Optional[bool]
+    
+    # Contact
     booking_url: Optional[str]
     contact_email: Optional[str]
     contact_phone: Optional[str]
@@ -63,21 +95,42 @@ class EventNormalizer:
             raw_data.get('end_datetime') or raw_data.get('dtend')
         )
         
-        # Location
+        # Location / Venue
         location_address = self._normalize_address(
             raw_data.get('location_address') or raw_data.get('location', '')
         )
         location_lat = self._safe_float(raw_data.get('location_lat') or raw_data.get('lat'))
         location_lng = self._safe_float(raw_data.get('location_lng') or raw_data.get('lng'))
+        venue_name = raw_data.get('venue_name') or raw_data.get('location_name')
+        city, postal_code = self._extract_city_postal(raw_data, location_address)
         
-        # Price
+        # Price (basic + structured)
         price_type, price_min, price_max = self._extract_price(raw_data)
+        price_details = self._extract_price_details(raw_data, description)
+        
+        # Ticket/Booking Status
+        availability_status = self._extract_availability_status(raw_data, description)
+        registration_deadline = self._normalize_datetime(raw_data.get('registration_deadline'))
         
         # Age range
         age_min, age_max = self._extract_age_range(raw_data, title, description)
         
         # Indoor/Outdoor
         is_indoor, is_outdoor = self._detect_indoor_outdoor(raw_data, title, description)
+        
+        # Language
+        language = self._extract_language(raw_data, description)
+        
+        # Capacity
+        capacity = self._safe_int(raw_data.get('capacity'))
+        spots_limited = self._detect_spots_limited(raw_data, description)
+        
+        # Recurrence
+        recurrence_rule = self._extract_recurrence(raw_data, description)
+        
+        # Transit
+        transit_stop = raw_data.get('transit_stop')
+        has_parking = self._detect_parking(raw_data, description)
         
         # Contact
         booking_url = self._normalize_url(raw_data.get('booking_url') or raw_data.get('url'))
@@ -96,13 +149,25 @@ class EventNormalizer:
             location_address=location_address,
             location_lat=location_lat,
             location_lng=location_lng,
+            venue_name=venue_name,
+            city=city,
+            postal_code=postal_code,
             price_type=price_type,
             price_min=price_min,
             price_max=price_max,
+            price_details=price_details,
+            availability_status=availability_status,
+            registration_deadline=registration_deadline,
             age_min=age_min,
             age_max=age_max,
             is_indoor=is_indoor,
             is_outdoor=is_outdoor,
+            language=language,
+            capacity=capacity,
+            spots_limited=spots_limited,
+            recurrence_rule=recurrence_rule,
+            transit_stop=transit_stop,
+            has_parking=has_parking,
             booking_url=booking_url,
             contact_email=contact_email,
             contact_phone=contact_phone,
@@ -333,6 +398,183 @@ class EventNormalizer:
                 valid_images.append(img[:500])
         
         return valid_images[:10]  # Max 10 images
+    
+    def _extract_city_postal(
+        self, 
+        raw_data: dict, 
+        location_address: Optional[str]
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Extract city and postal code from data or address."""
+        city = raw_data.get('city')
+        postal_code = raw_data.get('postal_code')
+        
+        if city and postal_code:
+            return city, postal_code
+        
+        # Try to extract from address (German format: "Straße 123, 12345 Stadt")
+        if location_address:
+            # Pattern: 5-digit postal code followed by city name
+            postal_pattern = r'(\d{5})\s+([A-ZÄÖÜa-zäöüß][A-ZÄÖÜa-zäöüß\-\s]+)'
+            match = re.search(postal_pattern, location_address)
+            if match:
+                postal_code = postal_code or match.group(1)
+                city = city or match.group(2).strip()
+        
+        return city, postal_code
+    
+    def _extract_price_details(
+        self, 
+        raw_data: dict, 
+        description: str
+    ) -> Optional[dict]:
+        """Extract structured price details (adult/child/family)."""
+        price_details = raw_data.get('price_details')
+        if price_details:
+            return price_details
+        
+        text = description.lower()
+        details = {}
+        
+        # Pattern for adult prices: "Erwachsene: 12€" or "Erwachsene 12 €"
+        adult_pattern = r'erwachsene[:\s]*(\d+(?:[,\.]\d{2})?)\s*(?:€|euro)'
+        match = re.search(adult_pattern, text)
+        if match:
+            price = float(match.group(1).replace(',', '.'))
+            details['adult'] = {'min': price, 'max': price}
+        
+        # Pattern for child prices: "Kinder: 8€" or "Kind 8 €"
+        child_pattern = r'kind(?:er)?[:\s]*(\d+(?:[,\.]\d{2})?)\s*(?:€|euro)'
+        match = re.search(child_pattern, text)
+        if match:
+            price = float(match.group(1).replace(',', '.'))
+            details['child'] = {'min': price, 'max': price}
+        
+        # Pattern for family prices: "Familienkarte: 30€"
+        family_pattern = r'familien?(?:karte|ticket)?[:\s]*(\d+(?:[,\.]\d{2})?)\s*(?:€|euro)'
+        match = re.search(family_pattern, text)
+        if match:
+            price = float(match.group(1).replace(',', '.'))
+            details['family'] = {'min': price, 'max': price}
+        
+        if details:
+            details['currency'] = 'EUR'
+            return details
+        
+        return None
+    
+    def _extract_availability_status(
+        self, 
+        raw_data: dict, 
+        description: str
+    ) -> Optional[str]:
+        """Extract ticket/booking availability status."""
+        status = raw_data.get('availability_status')
+        if status:
+            return status
+        
+        text = description.lower()
+        
+        # Check for sold out
+        if any(kw in text for kw in ['ausverkauft', 'sold out', 'keine tickets', 'restlos vergriffen']):
+            return 'sold_out'
+        
+        # Check for waitlist
+        if any(kw in text for kw in ['warteliste', 'waitlist', 'warte-liste']):
+            return 'waitlist'
+        
+        # Check for registration required
+        if any(kw in text for kw in ['anmeldung erforderlich', 'anmeldung nötig', 'voranmeldung', 
+                                      'registrierung erforderlich', 'nur mit anmeldung']):
+            return 'registration_required'
+        
+        # Check for available
+        if any(kw in text for kw in ['tickets verfügbar', 'tickets erhältlich', 'jetzt buchen',
+                                      'noch plätze frei', 'restplätze']):
+            return 'available'
+        
+        return None
+    
+    def _extract_language(self, raw_data: dict, description: str) -> Optional[str]:
+        """Extract event language."""
+        language = raw_data.get('language')
+        if language:
+            return language
+        
+        text = description.lower()
+        
+        # Check for explicit language mentions
+        if any(kw in text for kw in ['auf englisch', 'in englisch', 'english']):
+            return 'Englisch'
+        if any(kw in text for kw in ['auf deutsch', 'in deutsch', 'auf deutscher sprache']):
+            return 'Deutsch'
+        
+        # Default to German for German sources
+        return 'Deutsch'
+    
+    def _detect_spots_limited(self, raw_data: dict, description: str) -> Optional[bool]:
+        """Detect if event has limited spots."""
+        spots_limited = raw_data.get('spots_limited')
+        if spots_limited is not None:
+            return spots_limited
+        
+        text = description.lower()
+        
+        if any(kw in text for kw in ['begrenzte plätze', 'begrenzte teilnehmerzahl', 
+                                      'limited spots', 'nur noch wenige plätze',
+                                      'max. teilnehmer', 'maximale teilnehmerzahl']):
+            return True
+        
+        return None
+    
+    def _extract_recurrence(self, raw_data: dict, description: str) -> Optional[str]:
+        """Extract recurrence rule from data."""
+        rrule = raw_data.get('recurrence_rule') or raw_data.get('rrule')
+        if rrule:
+            return rrule
+        
+        text = description.lower()
+        
+        # Check for weekly patterns
+        if 'jeden montag' in text:
+            return 'jeden Montag'
+        if 'jeden dienstag' in text:
+            return 'jeden Dienstag'
+        if 'jeden mittwoch' in text:
+            return 'jeden Mittwoch'
+        if 'jeden donnerstag' in text:
+            return 'jeden Donnerstag'
+        if 'jeden freitag' in text:
+            return 'jeden Freitag'
+        if 'jeden samstag' in text:
+            return 'jeden Samstag'
+        if 'jeden sonntag' in text:
+            return 'jeden Sonntag'
+        if 'täglich' in text or 'jeden tag' in text:
+            return 'täglich'
+        if 'wöchentlich' in text:
+            return 'wöchentlich'
+        if 'monatlich' in text:
+            return 'monatlich'
+        
+        return None
+    
+    def _detect_parking(self, raw_data: dict, description: str) -> Optional[bool]:
+        """Detect if parking is available."""
+        has_parking = raw_data.get('has_parking')
+        if has_parking is not None:
+            return has_parking
+        
+        text = description.lower()
+        
+        if any(kw in text for kw in ['parkplätze vorhanden', 'parkplätze verfügbar', 
+                                      'kostenlose parkplätze', 'parkhaus', 'tiefgarage',
+                                      'parkmöglichkeiten']):
+            return True
+        
+        if any(kw in text for kw in ['keine parkplätze', 'kein parkplatz']):
+            return False
+        
+        return None
     
     def _safe_float(self, value: Any) -> Optional[float]:
         """Safely convert to float."""

@@ -28,15 +28,95 @@ if (slug) {
   }
 }
 
+// Formatierung Funktionen
+const formatDateShort = (d: string | undefined) =>
+  d ? new Date(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+
 const formatDate = (d: string | undefined) =>
   d ? new Date(d).toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
 const formatTime = (d: string | undefined) =>
   d ? new Date(d).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+
+const formatDateTimeCompact = (start: string | undefined, end: string | undefined) => {
+  if (!start) return '';
+  const startDate = new Date(start);
+  const dateStr = startDate.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  const startTime = startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  if (end) {
+    const endTime = new Date(end).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return `${dateStr} • ${startTime}–${endTime}`;
+  }
+  return `${dateStr} • ${startTime} Uhr`;
+};
+
+const calculateDuration = (start: string | undefined, end: string | undefined) => {
+  if (!start || !end) return null;
+  const diff = new Date(end).getTime() - new Date(start).getTime();
+  const minutes = Math.round(diff / (1000 * 60));
+  if (minutes < 60) return `ca. ${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (mins === 0) return `ca. ${hours} Std.`;
+  return `ca. ${hours} Std. ${mins} Min.`;
+};
+
 const formatPrice = (e: any) => {
   if (e?.price_type === 'free') return 'Kostenlos';
+  if (e?.price_min && e?.price_max && e.price_min !== e.price_max) return `${e.price_min}–${e.price_max}€`;
   if (e?.price_min) return `ab ${e.price_min}€`;
   return 'Preis auf Anfrage';
 };
+
+const formatPriceDetails = (details: any) => {
+  if (!details) return null;
+  const parts = [];
+  if (details.adult?.min) parts.push(`Erwachsene: ${details.adult.min}€`);
+  if (details.child?.min) parts.push(`Kinder: ${details.child.min}€`);
+  if (details.family?.min) parts.push(`Familie: ${details.family.min}€`);
+  return parts.length > 0 ? parts : null;
+};
+
+const getAvailabilityBadge = (status: string | undefined) => {
+  const badges: Record<string, { text: string; class: string }> = {
+    available: { text: 'Tickets verfügbar', class: 'bg-green-100 text-green-700' },
+    sold_out: { text: 'Ausverkauft', class: 'bg-red-100 text-red-700' },
+    waitlist: { text: 'Warteliste', class: 'bg-yellow-100 text-yellow-700' },
+    registration_required: { text: 'Anmeldung nötig', class: 'bg-blue-100 text-blue-700' },
+  };
+  return status ? badges[status] : null;
+};
+
+const getNoiseLevelText = (level: string | undefined) => {
+  const levels: Record<string, string> = {
+    quiet: 'Ruhig',
+    moderate: 'Normal',
+    loud: 'Laut',
+  };
+  return level ? levels[level] : null;
+};
+
+const getComplexityText = (level: string | undefined) => {
+  const levels: Record<string, string> = {
+    simple: 'Leicht verständlich',
+    moderate: 'Normal',
+    advanced: 'Mit Fachbegriffen',
+  };
+  return level ? levels[level] : null;
+};
+
+const getCompletenessMessage = (score: number | undefined) => {
+  if (score == null) return null;
+  if (score >= 80) return { text: 'Vollständige Infos', class: 'text-green-600' };
+  if (score >= 50) return { text: 'Einige Infos fehlen noch', class: 'text-yellow-600' };
+  return { text: 'Viele Infos fehlen noch', class: 'text-orange-600' };
+};
+
+// Berechne Dauer
+const duration = event ? calculateDuration(event.start_datetime, event.end_datetime) : null;
+const availabilityBadge = event ? getAvailabilityBadge(event.availability_status) : null;
+const priceDetailsList = event ? formatPriceDetails(event.price_details) : null;
+const completenessMsg = event ? getCompletenessMessage(event.completeness_score) : null;
 ---
 
 <BaseLayout title={event ? `${event.title} - kiezling` : 'Event - kiezling'}>
@@ -80,48 +160,81 @@ const formatPrice = (e: any) => {
         <!-- Header Card -->
         <div class="bg-white rounded-2xl shadow-card p-6 mb-6">
           <div class="flex flex-wrap gap-2 mb-4">
+            {availabilityBadge && (
+              <span class={`badge ${availabilityBadge.class}`}>{availabilityBadge.text}</span>
+            )}
             {event.is_indoor && <span class="badge badge-indoor">🏠 Indoor</span>}
             {event.is_outdoor && <span class="badge badge-outdoor">🌳 Outdoor</span>}
             {event.price_type === 'free' && <span class="badge badge-free">Kostenlos</span>}
+            {event.sibling_friendly && <span class="badge bg-purple-100 text-purple-700">👶 Geschwister willkommen</span>}
             {event.categories?.map((c: any) => (
               <span class="badge bg-primary-100 text-primary-700">
                 {c.category?.icon || ''} {c.category?.name_de || c.category?.slug || ''}
               </span>
             ))}
           </div>
-          <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-4">{event.title}</h1>
+          
+          <h1 class="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{event.title}</h1>
+          
+          {/* Venue Name prominent */}
+          {event.venue_name && (
+            <p class="text-lg text-gray-600 mb-4">📍 {event.venue_name}</p>
+          )}
 
-          <div class="flex flex-wrap gap-6 text-gray-600 mb-4">
+          <div class="flex flex-wrap gap-x-6 gap-y-2 text-gray-600 mb-4">
+            {/* Formatiertes Datum + Zeit + Dauer */}
             <span class="flex items-center gap-2">
               <span>📅</span>
-              {formatDate(event.start_datetime)}
+              <span class="font-medium">{formatDateTimeCompact(event.start_datetime, event.end_datetime)}</span>
             </span>
-            <span class="flex items-center gap-2">
-              <span>⏰</span>
-              {formatTime(event.start_datetime)} Uhr
-            </span>
+            {duration && (
+              <span class="flex items-center gap-2">
+                <span>⏱️</span>
+                {duration}
+              </span>
+            )}
+            {/* Vollständige Adresse */}
             <span class="flex items-center gap-2">
               <span>📍</span>
-              {event.location_district || event.location_address || 'Karlsruhe'}
+              {event.location_address 
+                ? `${event.location_address}${event.postal_code ? `, ${event.postal_code}` : ''}${event.city ? ` ${event.city}` : ''}`
+                : event.location_district || 'Karlsruhe'}
             </span>
+            {/* Preis */}
             <span class="flex items-center gap-2">
               <span>💰</span>
               {formatPrice(event)}
             </span>
           </div>
 
-          {(event.scores?.stressfree_score || event.scores?.family_fit_score) && (
-            <div class="flex gap-6 pt-4 border-t border-gray-100">
-              {event.scores.family_fit_score != null && (
+          {/* Strukturierte Preise */}
+          {priceDetailsList && (
+            <div class="flex flex-wrap gap-3 mb-4 text-sm">
+              {priceDetailsList.map((price: string) => (
+                <span class="bg-gray-100 px-3 py-1 rounded-full">{price}</span>
+              ))}
+            </div>
+          )}
+
+          {/* Scores */}
+          {(event.scores?.stressfree_score || event.scores?.family_fit_score || event.save_count) && (
+            <div class="flex flex-wrap gap-6 pt-4 border-t border-gray-100">
+              {event.scores?.family_fit_score != null && (
                 <span class="flex items-center gap-2" title="Familienfreundlichkeit">
                   <span>👨‍👩‍👧‍👦</span>
                   <span class="font-semibold text-primary-600">{event.scores.family_fit_score}%</span>
                 </span>
               )}
-              {event.scores.stressfree_score != null && (
+              {event.scores?.stressfree_score != null && (
                 <span class="flex items-center gap-2" title="Stressfrei-Score">
                   <span>😌</span>
                   <span class="font-semibold text-primary-600">{event.scores.stressfree_score}%</span>
+                </span>
+              )}
+              {event.save_count != null && event.save_count > 0 && (
+                <span class="flex items-center gap-2 text-gray-500" title="Gemerkt von Familien">
+                  <span>❤️</span>
+                  <span>von {event.save_count} Familie{event.save_count !== 1 ? 'n' : ''} gemerkt</span>
                 </span>
               )}
             </div>
@@ -130,7 +243,7 @@ const formatPrice = (e: any) => {
           <div class="flex flex-wrap gap-3 mt-6">
             {event.booking_url && (
               <a href={event.booking_url} target="_blank" rel="noopener noreferrer" class="btn-primary">
-                Jetzt buchen
+                {event.availability_status === 'registration_required' ? 'Jetzt anmelden' : 'Jetzt buchen'}
               </a>
             )}
             <button type="button" class="btn-secondary" id="add-to-plan-btn">
@@ -139,6 +252,9 @@ const formatPrice = (e: any) => {
             <button type="button" class="btn-secondary" id="save-btn" data-event-id={event.id}>
               ❤️ Merken
             </button>
+            <a href={`${API_BASE}/api/events/${event.id}/ical`} class="btn-secondary" download>
+              📆 Kalender
+            </a>
           </div>
         </div>
 
@@ -182,14 +298,125 @@ const formatPrice = (e: any) => {
               <div class="prose prose-gray max-w-none text-gray-600" set:html={event.description_long || event.description_short || '<p>Keine Beschreibung verfügbar.</p>'}></div>
             </section>
 
-            {((event.age_min != null) || (event.age_max != null)) && (
+            {/* Altersempfehlung - erweitert */}
+            {((event.age_min != null) || (event.age_max != null) || event.age_recommendation_text) && (
               <section class="bg-white rounded-2xl shadow-card p-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-3">Altersempfehlung</h2>
-                <span class="inline-block px-4 py-2 bg-gray-100 rounded-xl font-medium">
-                  {event.age_min != null && event.age_max != null && `${event.age_min}–${event.age_max} Jahre`}
-                  {event.age_min != null && event.age_max == null && `Ab ${event.age_min} Jahren`}
-                  {event.age_min == null && event.age_max != null && `Bis ${event.age_max} Jahre`}
-                </span>
+                <div class="space-y-3">
+                  {event.age_recommendation_text ? (
+                    <p class="text-gray-700 font-medium">{event.age_recommendation_text}</p>
+                  ) : (
+                    <span class="inline-block px-4 py-2 bg-gray-100 rounded-xl font-medium">
+                      {event.age_min != null && event.age_max != null && `${event.age_min}–${event.age_max} Jahre`}
+                      {event.age_min != null && event.age_max == null && `Ab ${event.age_min} Jahren`}
+                      {event.age_min == null && event.age_max != null && `Bis ${event.age_max} Jahre`}
+                    </span>
+                  )}
+                  {event.sibling_friendly && (
+                    <p class="text-sm text-purple-600 flex items-center gap-2">
+                      <span>👶</span> Auch für jüngere Geschwister geeignet
+                    </p>
+                  )}
+                  {event.age_rating && (
+                    <p class="text-sm text-gray-500">Altersfreigabe: {event.age_rating}</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Sprache & Verständlichkeit */}
+            {(event.language || event.complexity_level) && (
+              <section class="bg-white rounded-2xl shadow-card p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Sprache & Verständlichkeit</h2>
+                <div class="flex flex-wrap gap-4">
+                  {event.language && (
+                    <span class="flex items-center gap-2 text-gray-600">
+                      <span>🗣️</span> {event.language}
+                    </span>
+                  )}
+                  {event.complexity_level && (
+                    <span class="flex items-center gap-2 text-gray-600">
+                      <span>📖</span> {getComplexityText(event.complexity_level)}
+                    </span>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Stressfrei-Infos */}
+            {(event.noise_level || event.has_seating != null || event.typical_wait_minutes || event.food_drink_allowed != null) && (
+              <section class="bg-white rounded-2xl shadow-card p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Gut zu wissen für Familien</h2>
+                <div class="grid grid-cols-2 gap-4">
+                  {event.noise_level && (
+                    <div class="flex items-center gap-2 text-gray-600">
+                      <span>{event.noise_level === 'quiet' ? '🔇' : event.noise_level === 'loud' ? '🔊' : '🔉'}</span>
+                      <span>Lautstärke: {getNoiseLevelText(event.noise_level)}</span>
+                    </div>
+                  )}
+                  {event.has_seating != null && (
+                    <div class="flex items-center gap-2 text-gray-600">
+                      <span>{event.has_seating ? '💺' : '🚶'}</span>
+                      <span>{event.has_seating ? 'Sitzplätze vorhanden' : 'Keine Sitzplätze'}</span>
+                    </div>
+                  )}
+                  {event.typical_wait_minutes != null && (
+                    <div class="flex items-center gap-2 text-gray-600">
+                      <span>⏳</span>
+                      <span>Wartezeit: ca. {event.typical_wait_minutes} Min.</span>
+                    </div>
+                  )}
+                  {event.food_drink_allowed != null && (
+                    <div class="flex items-center gap-2 text-gray-600">
+                      <span>{event.food_drink_allowed ? '🍔' : '🚫'}</span>
+                      <span>{event.food_drink_allowed ? 'Essen/Trinken erlaubt' : 'Kein Essen/Trinken'}</span>
+                    </div>
+                  )}
+                </div>
+                {event.early_arrival_hint && (
+                  <p class="mt-3 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                    💡 {event.early_arrival_hint}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* Kapazität */}
+            {(event.capacity || event.spots_limited) && (
+              <section class="bg-white rounded-2xl shadow-card p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Kapazität</h2>
+                <div class="space-y-2">
+                  {event.capacity && (
+                    <p class="text-gray-600">Max. {event.capacity} Teilnehmer</p>
+                  )}
+                  {event.spots_limited && (
+                    <p class="text-amber-600 flex items-center gap-2">
+                      <span>⚠️</span> Begrenzte Plätze – frühzeitig buchen empfohlen
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Wiederkehrende Termine */}
+            {(event.recurrence_rule || event.next_occurrences?.length > 0) && (
+              <section class="bg-white rounded-2xl shadow-card p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Termine</h2>
+                {event.recurrence_rule && (
+                  <p class="text-gray-600 mb-3">🔄 {event.recurrence_rule}</p>
+                )}
+                {event.next_occurrences?.length > 0 && (
+                  <div class="space-y-2">
+                    <p class="text-sm text-gray-500">Nächste Termine:</p>
+                    <ul class="space-y-1">
+                      {event.next_occurrences.slice(0, 3).map((date: string) => (
+                        <li class="text-gray-600">
+                          📅 {new Date(date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </section>
             )}
 
@@ -209,6 +436,7 @@ const formatPrice = (e: any) => {
 
           <!-- Sidebar -->
           <aside class="space-y-6 lg:pt-0">
+            {/* Anfahrt */}
             <div class="bg-white rounded-2xl shadow-card p-6">
               <h3 class="font-semibold text-gray-900 mb-3">Anfahrt</h3>
               <div class="aspect-[4/3] bg-gray-100 rounded-xl mb-3 flex items-center justify-center">
@@ -225,40 +453,118 @@ const formatPrice = (e: any) => {
                   <span class="text-gray-400">Keine Koordinaten</span>
                 )}
               </div>
-              {event.location_address && <p class="text-sm text-gray-600">{event.location_address}</p>}
+              
+              {/* Adresse */}
+              {event.venue_name && (
+                <p class="font-medium text-gray-900">{event.venue_name}</p>
+              )}
+              {event.location_address && (
+                <p class="text-sm text-gray-600">
+                  {event.location_address}
+                  {event.postal_code && `, ${event.postal_code}`}
+                  {event.city && ` ${event.city}`}
+                </p>
+              )}
+              
+              {/* ÖPNV & Parken */}
+              {(event.transit_stop || event.has_parking != null) && (
+                <div class="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                  {event.transit_stop && (
+                    <p class="text-sm text-gray-600 flex items-center gap-2">
+                      <span>🚇</span>
+                      {event.transit_stop}
+                      {event.transit_walk_minutes && ` (${event.transit_walk_minutes} Min. Fußweg)`}
+                    </p>
+                  )}
+                  {event.has_parking != null && (
+                    <p class="text-sm text-gray-600 flex items-center gap-2">
+                      <span>{event.has_parking ? '🅿️' : '🚫'}</span>
+                      {event.has_parking ? 'Parkplätze vorhanden' : 'Keine Parkplätze'}
+                    </p>
+                  )}
+                </div>
+              )}
+              
               {event.location_lat && event.location_lng && (
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${event.location_lat},${event.location_lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="text-sm text-primary-600 hover:text-primary-700 mt-2 inline-block"
+                  class="text-sm text-primary-600 hover:text-primary-700 mt-3 inline-block"
                 >
-                  Route berechnen
+                  🚗 Route berechnen
                 </a>
               )}
             </div>
 
-            {(event.contact_email || event.contact_phone || event.booking_url) && (
+            {/* Veranstalter & Kontakt */}
+            {(event.provider || event.contact_email || event.contact_phone || event.booking_url) && (
               <div class="bg-white rounded-2xl shadow-card p-6">
-                <h3 class="font-semibold text-gray-900 mb-3">Kontakt</h3>
+                <h3 class="font-semibold text-gray-900 mb-3">Veranstalter & Kontakt</h3>
+                
+                {event.provider && (
+                  <div class="mb-3 pb-3 border-b border-gray-100">
+                    <p class="font-medium text-gray-900">{event.provider.name}</p>
+                    {event.provider.type && (
+                      <p class="text-xs text-gray-500 capitalize">{event.provider.type}</p>
+                    )}
+                  </div>
+                )}
+                
                 <ul class="space-y-2 text-sm text-gray-600">
-                  {event.contact_email && <li><a href={`mailto:${event.contact_email}`} class="text-primary-600 hover:underline">{event.contact_email}</a></li>}
-                  {event.contact_phone && <li><a href={`tel:${event.contact_phone}`} class="text-primary-600 hover:underline">{event.contact_phone}</a></li>}
-                  {event.booking_url && <li><a href={event.booking_url} target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:underline">Zur Buchung</a></li>}
+                  {event.contact_email && (
+                    <li class="flex items-center gap-2">
+                      <span>✉️</span>
+                      <a href={`mailto:${event.contact_email}`} class="text-primary-600 hover:underline">{event.contact_email}</a>
+                    </li>
+                  )}
+                  {event.contact_phone && (
+                    <li class="flex items-center gap-2">
+                      <span>📞</span>
+                      <a href={`tel:${event.contact_phone}`} class="text-primary-600 hover:underline">{event.contact_phone}</a>
+                    </li>
+                  )}
+                  {event.booking_url && (
+                    <li class="flex items-center gap-2">
+                      <span>🔗</span>
+                      <a href={event.booking_url} target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:underline">Zur Buchung</a>
+                    </li>
+                  )}
                 </ul>
               </div>
             )}
 
+            {/* Quelle & Datenqualität */}
             <div class="bg-gray-50 rounded-2xl p-6">
-              <h3 class="font-semibold text-gray-900 mb-2">Quelle</h3>
-              {event.primary_source?.source?.name && <p class="text-sm text-gray-600">{event.primary_source.source.name}</p>}
-              {event.primary_source?.source_url && (
-                <a href={event.primary_source.source_url} target="_blank" rel="noopener noreferrer" class="text-sm text-primary-600 hover:underline">
-                  Originalquelle
+              <h3 class="font-semibold text-gray-900 mb-3">Quelle & Datenqualität</h3>
+              
+              {event.primary_source?.source?.name && (
+                <p class="text-sm text-gray-600 mb-1">
+                  <span class="font-medium">Quelle:</span> {event.primary_source.source.name}
+                </p>
+              )}
+              
+              {event.primary_source?.source?.url && (
+                <a 
+                  href={event.primary_source.source.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  class="text-sm text-primary-600 hover:underline block mb-3"
+                >
+                  Zur Originalquelle →
                 </a>
               )}
+              
               {event.last_verified_at && (
-                <p class="text-xs text-gray-500 mt-2">Stand: {new Date(event.last_verified_at).toLocaleDateString('de-DE')}</p>
+                <p class="text-xs text-gray-500 mb-2">
+                  Zuletzt geprüft: {new Date(event.last_verified_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
+              )}
+              
+              {completenessMsg && (
+                <p class={`text-sm ${completenessMsg.class} mt-2`}>
+                  {completenessMsg.text}
+                </p>
               )}
             </div>
           </aside>

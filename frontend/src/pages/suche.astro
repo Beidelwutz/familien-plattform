@@ -276,7 +276,7 @@ if (pagination && pagination.totalPages > 1) {
             </div>
 
             <!-- Indoor/Outdoor Filter -->
-            <div class="mb-6">
+            <div class="mb-6 pb-6 border-b border-gray-100">
               <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Drinnen/Draußen</h4>
               <div class="space-y-2">
                 <label class="flex items-center gap-3 cursor-pointer">
@@ -286,6 +286,52 @@ if (pagination && pagination.totalPages > 1) {
                 <label class="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" name="outdoor" value="true" class="accent-primary-500" checked={outdoor} />
                   <span class="text-sm">🌤️ Outdoor</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Family Extras Filter -->
+            <div class="mb-6 pb-6 border-b border-gray-100">
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Familien-Extras</h4>
+              <div class="space-y-2">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="hasSeating" value="true" class="accent-primary-500" checked={url.searchParams.get('hasSeating') === 'true'} />
+                  <span class="text-sm">💺 Mit Sitzplätzen</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="hasParking" value="true" class="accent-primary-500" checked={url.searchParams.get('hasParking') === 'true'} />
+                  <span class="text-sm">🅿️ Mit Parkplatz</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="siblingFriendly" value="true" class="accent-primary-500" checked={url.searchParams.get('siblingFriendly') === 'true'} />
+                  <span class="text-sm">👶 Geschwister willkommen</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="isRecurring" value="true" class="accent-primary-500" checked={url.searchParams.get('isRecurring') === 'true'} />
+                  <span class="text-sm">🔄 Wiederkehrend</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Noise Level Filter -->
+            <div class="mb-6">
+              <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Lautstärke</h4>
+              <div class="space-y-2">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="noiseLevel" value="" class="accent-primary-500" checked={!url.searchParams.get('noiseLevel')} />
+                  <span class="text-sm">Egal</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="noiseLevel" value="quiet" class="accent-primary-500" checked={url.searchParams.get('noiseLevel') === 'quiet'} />
+                  <span class="text-sm">🔇 Ruhig</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="noiseLevel" value="moderate" class="accent-primary-500" checked={url.searchParams.get('noiseLevel') === 'moderate'} />
+                  <span class="text-sm">🔉 Normal</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input type="radio" name="noiseLevel" value="loud" class="accent-primary-500" checked={url.searchParams.get('noiseLevel') === 'loud'} />
+                  <span class="text-sm">🔊 Laut</span>
                 </label>
               </div>
             </div>
@@ -481,6 +527,24 @@ if (pagination && pagination.totalPages > 1) {
               <label class="cursor-pointer"><input type="checkbox" name="outdoor" value="true" class="sr-only peer" checked={outdoor} /><span class="chip peer-checked:chip-active">🌤️ Outdoor</span></label>
             </div>
           </div>
+          <div>
+            <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Familien-Extras</h4>
+            <div class="flex flex-wrap gap-2">
+              <label class="cursor-pointer"><input type="checkbox" name="hasSeating" value="true" class="sr-only peer" checked={url.searchParams.get('hasSeating') === 'true'} /><span class="chip peer-checked:chip-active">💺 Sitzplätze</span></label>
+              <label class="cursor-pointer"><input type="checkbox" name="hasParking" value="true" class="sr-only peer" checked={url.searchParams.get('hasParking') === 'true'} /><span class="chip peer-checked:chip-active">🅿️ Parkplatz</span></label>
+              <label class="cursor-pointer"><input type="checkbox" name="siblingFriendly" value="true" class="sr-only peer" checked={url.searchParams.get('siblingFriendly') === 'true'} /><span class="chip peer-checked:chip-active">👶 Geschwister</span></label>
+              <label class="cursor-pointer"><input type="checkbox" name="isRecurring" value="true" class="sr-only peer" checked={url.searchParams.get('isRecurring') === 'true'} /><span class="chip peer-checked:chip-active">🔄 Wiederkehrend</span></label>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Lautstärke</h4>
+            <div class="flex flex-wrap gap-2">
+              <label class="cursor-pointer"><input type="radio" name="noiseLevel" value="" class="sr-only peer" checked={!url.searchParams.get('noiseLevel')} /><span class="chip peer-checked:chip-active">Egal</span></label>
+              <label class="cursor-pointer"><input type="radio" name="noiseLevel" value="quiet" class="sr-only peer" checked={url.searchParams.get('noiseLevel') === 'quiet'} /><span class="chip peer-checked:chip-active">🔇 Ruhig</span></label>
+              <label class="cursor-pointer"><input type="radio" name="noiseLevel" value="moderate" class="sr-only peer" checked={url.searchParams.get('noiseLevel') === 'moderate'} /><span class="chip peer-checked:chip-active">🔉 Normal</span></label>
+              <label class="cursor-pointer"><input type="radio" name="noiseLevel" value="loud" class="sr-only peer" checked={url.searchParams.get('noiseLevel') === 'loud'} /><span class="chip peer-checked:chip-active">🔊 Laut</span></label>
+            </div>
+          </div>
         </form>
         <div class="sticky bottom-0 bg-white border-t border-gray-100 p-4 flex gap-3">
           <a href="/suche" class="flex-1 btn-secondary text-center">Zurücksetzen</a>
@@ -586,6 +650,13 @@ if (pagination && pagination.totalPages > 1) {
     const cats = Array.from(base.querySelectorAll('input[name="category"]:checked')).map((el: Element) => (el as HTMLInputElement).value);
     const indoor = (base.querySelector('input[name="indoor"]') as HTMLInputElement)?.checked;
     const outdoor = (base.querySelector('input[name="outdoor"]') as HTMLInputElement)?.checked;
+    // New filters
+    const hasSeating = (base.querySelector('input[name="hasSeating"]') as HTMLInputElement)?.checked;
+    const hasParking = (base.querySelector('input[name="hasParking"]') as HTMLInputElement)?.checked;
+    const siblingFriendly = (base.querySelector('input[name="siblingFriendly"]') as HTMLInputElement)?.checked;
+    const isRecurring = (base.querySelector('input[name="isRecurring"]') as HTMLInputElement)?.checked;
+    const noiseLevel = (base.querySelector('input[name="noiseLevel"]:checked') as HTMLInputElement)?.value || '';
+    
     const p = new URLSearchParams();
     if (q) p.set('q', q);
     if (view) p.set('view', view);
@@ -599,6 +670,12 @@ if (pagination && pagination.totalPages > 1) {
     cats.forEach(c => p.append('category', c));
     if (indoor) p.set('indoor', 'true');
     if (outdoor) p.set('outdoor', 'true');
+    // New filter params
+    if (hasSeating) p.set('hasSeating', 'true');
+    if (hasParking) p.set('hasParking', 'true');
+    if (siblingFriendly) p.set('siblingFriendly', 'true');
+    if (isRecurring) p.set('isRecurring', 'true');
+    if (noiseLevel) p.set('noiseLevel', noiseLevel);
     return p;
   }
   document.getElementById('sidebar-filters')?.addEventListener('submit', (e) => {

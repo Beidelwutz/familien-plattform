@@ -16,6 +16,12 @@ export type EventStatus =
 
 export type PriceType = 'free' | 'paid' | 'range' | 'unknown';
 
+export type AvailabilityStatus = 'available' | 'sold_out' | 'waitlist' | 'registration_required' | 'unknown';
+
+export type ComplexityLevel = 'simple' | 'moderate' | 'advanced';
+
+export type NoiseLevel = 'quiet' | 'moderate' | 'loud';
+
 export type SourceType = 'api' | 'rss' | 'ics' | 'scraper' | 'partner' | 'manual';
 
 export type HealthStatus = 'healthy' | 'degraded' | 'failing' | 'dead' | 'unknown';
@@ -32,6 +38,13 @@ export type SlotType = 'activity' | 'break' | 'travel';
 // CORE TYPES
 // ============================================
 
+export interface PriceDetails {
+  adult?: { min?: number; max?: number };
+  child?: { min?: number; max?: number };
+  family?: { min?: number; max?: number };
+  currency?: string;
+}
+
 export interface Event {
   id: string;
   title: string;
@@ -41,25 +54,61 @@ export interface Event {
   // DateTime
   start_datetime: string; // ISO 8601
   end_datetime?: string;
+  is_all_day?: boolean;
   
-  // Location
+  // Location / Venue
   location_address?: string;
   location_district?: string;
   location_lat?: number;
   location_lng?: number;
+  venue_name?: string;
+  city?: string;
+  postal_code?: string;
   
   // Pricing
   price_type: PriceType;
   price_min?: number;
   price_max?: number;
+  price_details?: PriceDetails;
+  
+  // Ticket/Booking Status
+  availability_status?: AvailabilityStatus;
+  registration_deadline?: string;
   
   // Age
   age_min?: number;
   age_max?: number;
+  age_recommendation_text?: string;
+  sibling_friendly?: boolean;
   
   // Indoor/Outdoor
   is_indoor: boolean;
   is_outdoor: boolean;
+  
+  // Language & Comprehension
+  language?: string;
+  complexity_level?: ComplexityLevel;
+  
+  // Stressfree Details
+  noise_level?: NoiseLevel;
+  has_seating?: boolean;
+  typical_wait_minutes?: number;
+  food_drink_allowed?: boolean;
+  
+  // Capacity
+  capacity?: number;
+  spots_limited?: boolean;
+  early_arrival_hint?: string;
+  
+  // Series / Recurrence
+  recurrence_rule?: string;
+  parent_series_id?: string;
+  next_occurrences?: string[];
+  
+  // Transit / Arrival
+  transit_stop?: string;
+  transit_walk_minutes?: number;
+  has_parking?: boolean;
   
   // Contact
   booking_url?: string;
@@ -75,6 +124,16 @@ export interface Event {
   is_verified: boolean;
   completeness_score?: number;
   last_verified_at?: string;
+  
+  // AI Fields
+  age_rating?: string;
+  ai_summary_short?: string;
+  ai_summary_highlights?: string[];
+  ai_fit_blurb?: string;
+  
+  // Engagement
+  view_count?: number;
+  save_count?: number;
   
   // Relations
   categories?: CategoryRef[];
@@ -272,8 +331,19 @@ export interface EventSearchParams {
   categories?: string[];
   indoor?: boolean;
   outdoor?: boolean;
+  
+  // New filter options
+  language?: string;
+  noiseLevel?: NoiseLevel;
+  hasSeating?: boolean;
+  hasParking?: boolean;
+  isRecurring?: boolean;
+  availabilityStatus?: AvailabilityStatus;
+  siblingFriendly?: boolean;
+  
   page?: number;
   limit?: number;
+  sort?: 'soonest' | 'newest' | 'relevance' | 'nearest';
 }
 
 export interface PlanRequest {

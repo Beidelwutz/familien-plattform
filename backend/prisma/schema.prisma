@@ -36,18 +36,57 @@ model CanonicalEvent {
   location_lng      Decimal? @db.Decimal(11, 8)
   // PostGIS point will be added via raw SQL migration
   
+  // Venue Details (structured)
+  venue_name        String?  @db.VarChar(200)
+  postal_code       String?  @db.VarChar(10)
+  city              String?  @db.VarChar(100)
+  
   // Pricing
   price_type        PriceType @default(unknown)
   price_min         Decimal?  @db.Decimal(8, 2)
   price_max         Decimal?  @db.Decimal(8, 2)
+  price_details     Json?     @default("{}") // {adult: {min, max}, child: {min, max}, family: {min, max}, currency: "EUR"}
+  
+  // Ticket/Booking Status
+  availability_status AvailabilityStatus @default(unknown)
+  registration_deadline DateTime? @db.Timestamptz
   
   // Age range
   age_min           Int?      @db.SmallInt
   age_max           Int?      @db.SmallInt
+  age_recommendation_text String? @db.VarChar(100) // "Empfohlen ab 6 Jahren"
+  sibling_friendly  Boolean?  // Für jüngere Geschwister okay?
   
   // Indoor/Outdoor
   is_indoor         Boolean   @default(false)
   is_outdoor        Boolean   @default(false)
+  
+  // Language & Comprehension
+  language          String?   @db.VarChar(50) // "Deutsch", "Englisch"
+  complexity_level  ComplexityLevel?
+  
+  // Stressfree Details (for family planning)
+  noise_level       NoiseLevel?
+  has_seating       Boolean?
+  typical_wait_minutes Int?   @db.SmallInt
+  food_drink_allowed Boolean?
+  
+  // Capacity
+  capacity          Int?
+  spots_limited     Boolean?
+  early_arrival_hint String?  @db.VarChar(100) // "Früh da sein empfohlen"
+  
+  // Series / Recurrence
+  recurrence_rule   String?   @db.VarChar(100) // iCal RRULE or "jeden Samstag"
+  parent_series_id  String?
+  parent_series     CanonicalEvent? @relation("EventSeries", fields: [parent_series_id], references: [id])
+  series_children   CanonicalEvent[] @relation("EventSeries")
+  next_occurrences  Json?     @default("[]") // Array of next 3 dates
+  
+  // Transit/Arrival Info
+  transit_stop      String?   @db.VarChar(100)
+  transit_walk_minutes Int?   @db.SmallInt
+  has_parking       Boolean?
   
   // Contact
   booking_url       String?   @db.VarChar(500)
@@ -140,6 +179,9 @@ model CanonicalEvent {
   @@index([provider_id])
   @@index([is_cancelled])
   @@index([age_rating])
+  @@index([availability_status])
+  @@index([parent_series_id])
+  @@index([city])
   @@map("canonical_events")
 }
 
@@ -160,6 +202,26 @@ enum PriceType {
   paid
   range
   unknown
+}
+
+enum AvailabilityStatus {
+  available
+  sold_out
+  waitlist
+  registration_required
+  unknown
+}
+
+enum ComplexityLevel {
+  simple
+  moderate
+  advanced
+}
+
+enum NoiseLevel {
+  quiet
+  moderate
+  loud
 }
 
 enum PublishMethod {

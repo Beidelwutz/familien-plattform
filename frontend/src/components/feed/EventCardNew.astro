@@ -26,6 +26,11 @@ interface Props {
   lastVerified?: string;
   availableSpots?: number;
   isNew?: boolean;
+  // New fields
+  venueName?: string;
+  availabilityStatus?: 'available' | 'sold_out' | 'waitlist' | 'registration_required' | 'unknown';
+  siblingFriendly?: boolean;
+  isRecurring?: boolean;
 }
 
 const {
@@ -53,7 +58,25 @@ const {
   lastVerified,
   availableSpots,
   isNew = false,
+  // New fields
+  venueName,
+  availabilityStatus,
+  siblingFriendly = false,
+  isRecurring = false,
 } = Astro.props;
+
+// Get availability badge
+const getAvailabilityBadge = () => {
+  if (!availabilityStatus) return null;
+  const badges: Record<string, { text: string; class: string }> = {
+    sold_out: { text: 'Ausverkauft', class: 'bg-red-100 text-red-700' },
+    waitlist: { text: 'Warteliste', class: 'bg-yellow-100 text-yellow-700' },
+    registration_required: { text: 'Anmeldung', class: 'bg-blue-100 text-blue-700' },
+  };
+  return badges[availabilityStatus] || null;
+};
+
+const availabilityBadge = getAvailabilityBadge();
 
 // Format price display
 const getPriceDisplay = () => {
@@ -109,6 +132,9 @@ const score = stressfreeScore || familyFitScore;
       {isNew && (
         <span class="badge bg-accent-500 text-white">Neu</span>
       )}
+      {availabilityBadge && (
+        <span class={`badge ${availabilityBadge.class}`}>{availabilityBadge.text}</span>
+      )}
       {availableSpots !== undefined && availableSpots > 0 && (
         <span class="badge bg-secondary-500 text-white">
           Noch {availableSpots} frei
@@ -116,6 +142,9 @@ const score = stressfreeScore || familyFitScore;
       )}
       {priceType === 'free' && (
         <span class="badge badge-free">Kostenlos</span>
+      )}
+      {isRecurring && (
+        <span class="badge bg-indigo-100 text-indigo-700">🔄</span>
       )}
     </div>
 
@@ -140,10 +169,15 @@ const score = stressfreeScore || familyFitScore;
       </h3>
     </a>
 
+    <!-- Venue Name (if available) -->
+    {venueName && (
+      <p class="text-xs text-gray-500 mb-1 truncate">📍 {venueName}</p>
+    )}
+
     <!-- Date + Time (directly under title, one line) -->
     {(date || timeDisplay) && (
       <p class="text-sm text-gray-500 mb-2">
-        {date}{timeDisplay ? (date ? `, ${timeDisplay}` : timeDisplay) : ''}
+        {date}{timeDisplay ? (date ? ` • ${timeDisplay}` : timeDisplay) : ''}
       </p>
     )}
 
@@ -187,8 +221,13 @@ const score = stressfreeScore || familyFitScore;
           🌳 Outdoor
         </span>
       )}
+      {siblingFriendly && (
+        <span class="badge bg-purple-100 text-purple-700" title="Geschwister willkommen">
+          👶
+        </span>
+      )}
       {hasChangingTable && (
-        <span class="badge bg-purple-100 text-purple-700" title="Wickeltisch">
+        <span class="badge bg-pink-100 text-pink-700" title="Wickeltisch">
           🚼
         </span>
       )}

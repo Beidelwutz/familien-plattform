@@ -15,24 +15,67 @@ class CandidateData:
     start_at: Optional[str] = None  # ISO UTC
     end_at: Optional[str] = None
     timezone_original: Optional[str] = None
+    
+    # Location / Venue
     venue_name: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
     postal_code: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    
+    # Pricing
     price_min: Optional[float] = None
     price_max: Optional[float] = None
+    price_details: Optional[dict] = None  # {adult: {min, max}, child: {min, max}, family: {min, max}, currency: "EUR"}
+    
+    # Ticket/Booking Status
+    availability_status: Optional[str] = None  # available, sold_out, waitlist, registration_required, unknown
+    registration_deadline: Optional[str] = None  # ISO UTC
+    
+    # Age
     age_min: Optional[int] = None
     age_max: Optional[int] = None
+    age_recommendation_text: Optional[str] = None  # "Empfohlen ab 6 Jahren"
+    sibling_friendly: Optional[bool] = None  # Für jüngere Geschwister okay?
+    
+    # Categories & Tags
     categories: Optional[list[str]] = None
     tags: Optional[list[str]] = None
+    
+    # Indoor/Outdoor
+    is_indoor: Optional[bool] = None
+    is_outdoor: Optional[bool] = None
+    
+    # Language & Comprehension
+    language: Optional[str] = None  # "Deutsch", "Englisch"
+    complexity_level: Optional[str] = None  # simple, moderate, advanced
+    
+    # Stressfree Details
+    noise_level: Optional[str] = None  # quiet, moderate, loud
+    has_seating: Optional[bool] = None
+    typical_wait_minutes: Optional[int] = None
+    food_drink_allowed: Optional[bool] = None
+    
+    # Capacity
+    capacity: Optional[int] = None
+    spots_limited: Optional[bool] = None
+    early_arrival_hint: Optional[str] = None  # "Früh da sein empfohlen"
+    
+    # Series / Recurrence
+    recurrence_rule: Optional[str] = None  # iCal RRULE or "jeden Samstag"
+    next_occurrences: Optional[list[str]] = None  # Array of next dates (ISO)
+    
+    # Transit/Arrival Info
+    transit_stop: Optional[str] = None
+    transit_walk_minutes: Optional[int] = None
+    has_parking: Optional[bool] = None
+    
+    # Media & Contact
     images: Optional[list[str]] = None
     booking_url: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
-    is_indoor: Optional[bool] = None
-    is_outdoor: Optional[bool] = None
     
     def to_dict(self) -> dict:
         """Convert to dict, excluding None values."""
@@ -49,8 +92,21 @@ class AIClassification:
     categories: list[str]
     age_min: Optional[int] = None
     age_max: Optional[int] = None
+    age_recommendation_text: Optional[str] = None  # "Empfohlen ab 6 Jahren"
+    sibling_friendly: Optional[bool] = None  # Für jüngere Geschwister okay?
     is_indoor: Optional[bool] = None
     is_outdoor: Optional[bool] = None
+    
+    # Language & Comprehension
+    language: Optional[str] = None  # "Deutsch", "Englisch"
+    complexity_level: Optional[str] = None  # simple, moderate, advanced
+    
+    # Stressfree Details (AI-inferred)
+    noise_level: Optional[str] = None  # quiet, moderate, loud
+    has_seating: Optional[bool] = None
+    typical_wait_minutes: Optional[int] = None
+    food_drink_allowed: Optional[bool] = None
+    
     confidence: float = 0.0
     model: Optional[str] = None
     prompt_version: Optional[str] = None

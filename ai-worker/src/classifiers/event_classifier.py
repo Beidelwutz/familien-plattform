@@ -44,6 +44,20 @@ class ClassificationResult:
         "0_2": 50, "3_5": 50, "6_9": 50, "10_12": 50, "13_15": 50
     })
     
+    # Extended Age Info
+    age_recommendation_text: Optional[str] = None  # "Empfohlen ab 6 Jahren"
+    sibling_friendly: Optional[bool] = None  # Für jüngere Geschwister okay?
+    
+    # Language & Comprehension
+    language: Optional[str] = None  # "Deutsch", "Englisch"
+    complexity_level: Optional[str] = None  # simple, moderate, advanced
+    
+    # Stressfree Details (AI-inferred)
+    noise_level: Optional[str] = None  # quiet, moderate, loud
+    has_seating: Optional[bool] = None
+    typical_wait_minutes: Optional[int] = None
+    food_drink_allowed: Optional[bool] = None
+    
     # AI Summary (paraphrased, not copied)
     ai_summary_short: Optional[str] = None  # max 300 chars
     ai_summary_highlights: list[str] = field(default_factory=list)  # max 3 items
@@ -63,8 +77,8 @@ class ClassificationResult:
     # Tracking metadata
     model: str = "unknown"
     temperature: float = 0.3
-    prompt_version: str = "3.0.0"
-    schema_version: str = "2.0.0"
+    prompt_version: str = "4.0.0"
+    schema_version: str = "3.0.0"
     raw_response: Optional[str] = None
     parse_error: Optional[str] = None
     retry_count: int = 0
@@ -85,7 +99,7 @@ WICHTIGE SICHERHEITSREGELN:
 Du bewertest Events nach Familientauglichkeit und erstellst Zusammenfassungen."""
 
 
-CLASSIFICATION_PROMPT_V3 = """Analysiere das Event für Familien mit Kindern.
+CLASSIFICATION_PROMPT_V4 = """Analysiere das Event für Familien mit Kindern.
 
 EVENT-DATEN:
 Titel: {title}
@@ -115,22 +129,36 @@ AUFGABEN:
    - 10_12: Vorpubertät (10-12 Jahre)
    - 13_15: Teenager (13-15 Jahre)
 
-5. INDOOR/OUTDOOR (kann beides sein)
+5. EXTENDED AGE INFO:
+   - age_recommendation_text: Natürliche Empfehlung, z.B. "Ideal für Kinder ab 6 Jahren"
+   - sibling_friendly: true wenn jüngere Geschwister mitkommen können ohne sich zu langweilen
 
-6. AI_SUMMARY_SHORT: Eigene Zusammenfassung (max 300 Zeichen)
+6. INDOOR/OUTDOOR (kann beides sein)
+
+7. LANGUAGE & COMPLEXITY:
+   - language: "Deutsch" oder andere Sprache falls explizit erwähnt
+   - complexity_level: "simple" (leicht verständlich), "moderate" (normal), "advanced" (mit Fachbegriffen)
+
+8. STRESSFREE DETAILS (wichtig für Familien!):
+   - noise_level: "quiet" (ruhig), "moderate" (normal), "loud" (laut, z.B. Konzert)
+   - has_seating: true wenn Sitzplätze vorhanden (wichtig für Kleinkinder)
+   - typical_wait_minutes: geschätzte Wartezeit falls relevant (null wenn unbekannt)
+   - food_drink_allowed: true wenn Essen/Trinken erlaubt/verfügbar
+
+9. AI_SUMMARY_SHORT: Eigene Zusammenfassung (max 300 Zeichen)
    - NICHT kopieren, sondern paraphrasieren!
    - Fokus auf Familienaspekte
 
-7. AI_SUMMARY_HIGHLIGHTS: 2-3 kurze Highlights als Liste (je max 50 Zeichen)
+10. AI_SUMMARY_HIGHLIGHTS: 2-3 kurze Highlights als Liste (je max 50 Zeichen)
 
-8. AI_FIT_BLURB: Ein kurzer Satz warum gut für Familien (max 150 Zeichen)
-   z.B. "Ideal für regnerische Nachmittage mit Kleinkindern"
+11. AI_FIT_BLURB: Ein kurzer Satz warum gut für Familien (max 150 Zeichen)
+    z.B. "Ideal für regnerische Nachmittage mit Kleinkindern"
 
-9. FLAGS:
-   - sensitive_content: true wenn Inhalte heikel sein könnten
-   - needs_escalation: true wenn du dir unsicher bist
+12. FLAGS:
+    - sensitive_content: true wenn Inhalte heikel sein könnten
+    - needs_escalation: true wenn du dir unsicher bist
 
-10. CONFIDENCE: Deine Sicherheit (0.0-1.0) über die Gesamtbewertung
+13. CONFIDENCE: Deine Sicherheit (0.0-1.0) über die Gesamtbewertung
 
 Antworte NUR mit diesem JSON:
 {{
@@ -139,9 +167,17 @@ Antworte NUR mit diesem JSON:
   "age_max": 12,
   "age_rating": "6+",
   "age_fit_buckets": {{"0_2": 20, "3_5": 60, "6_9": 90, "10_12": 80, "13_15": 50}},
+  "age_recommendation_text": "Ideal für Kinder ab 6 Jahren",
+  "sibling_friendly": true,
   "is_indoor": true,
   "is_outdoor": false,
   "is_family_friendly": true,
+  "language": "Deutsch",
+  "complexity_level": "simple",
+  "noise_level": "moderate",
+  "has_seating": true,
+  "typical_wait_minutes": null,
+  "food_drink_allowed": true,
   "ai_summary_short": "Eigene kurze Zusammenfassung des Events...",
   "ai_summary_highlights": ["Highlight 1", "Highlight 2"],
   "ai_fit_blurb": "Ideal für...",
@@ -162,9 +198,17 @@ Bitte antworte NUR mit validem JSON im korrekten Format:
   "age_max": 12,
   "age_rating": "6+",
   "age_fit_buckets": {{"0_2": 50, "3_5": 50, "6_9": 50, "10_12": 50, "13_15": 50}},
+  "age_recommendation_text": "Empfohlen ab 6 Jahren",
+  "sibling_friendly": true,
   "is_indoor": true,
   "is_outdoor": false,
   "is_family_friendly": true,
+  "language": "Deutsch",
+  "complexity_level": "simple",
+  "noise_level": "moderate",
+  "has_seating": true,
+  "typical_wait_minutes": null,
+  "food_drink_allowed": true,
   "ai_summary_short": "Kurze Zusammenfassung",
   "ai_summary_highlights": ["Highlight"],
   "ai_fit_blurb": "Gut für Familien",
@@ -220,7 +264,7 @@ class EventClassifier:
         description = PIIRedactor.redact_for_ai(description)
         
         # Prepare user prompt
-        user_prompt = CLASSIFICATION_PROMPT_V3.format(
+        user_prompt = CLASSIFICATION_PROMPT_V4.format(
             title=title or "Unbekannt",
             description=description or "Keine Beschreibung",
             location=location or "Unbekannt",
@@ -453,9 +497,20 @@ class EventClassifier:
             is_outdoor=data.get("is_outdoor", False),
             is_family_friendly=data.get("is_family_friendly", True),
             confidence=data.get("confidence", 0.7),
-            # New fields
+            # Age fields
             age_rating=data.get("age_rating", "0+"),
             age_fit_buckets=age_fit_buckets,
+            age_recommendation_text=data.get("age_recommendation_text"),
+            sibling_friendly=data.get("sibling_friendly"),
+            # Language & Comprehension
+            language=data.get("language"),
+            complexity_level=data.get("complexity_level"),
+            # Stressfree Details
+            noise_level=data.get("noise_level"),
+            has_seating=data.get("has_seating"),
+            typical_wait_minutes=data.get("typical_wait_minutes"),
+            food_drink_allowed=data.get("food_drink_allowed"),
+            # AI Summary
             ai_summary_short=data.get("ai_summary_short"),
             ai_summary_highlights=data.get("ai_summary_highlights", []),
             ai_fit_blurb=data.get("ai_fit_blurb"),
@@ -485,6 +540,14 @@ class EventClassifier:
             confidence=0.3,
             age_rating="6+",
             age_fit_buckets={"0_2": 30, "3_5": 50, "6_9": 70, "10_12": 60, "13_15": 40},
+            age_recommendation_text="Empfohlen ab 6 Jahren",
+            sibling_friendly=None,
+            language="Deutsch",
+            complexity_level="moderate",
+            noise_level=None,
+            has_seating=None,
+            typical_wait_minutes=None,
+            food_drink_allowed=None,
             ai_summary_short=title if title else "Familienaktivität",
             ai_summary_highlights=[],
             ai_fit_blurb="Aktivität für Familien mit Kindern",
