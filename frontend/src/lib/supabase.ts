@@ -5,8 +5,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+// Production: always use nsrfzjxrtlrujxgixmdr (env may be stale in Vercel)
+const supabaseUrl = import.meta.env.PROD
+  ? 'https://nsrfzjxrtlrujxgixmdr.supabase.co'
+  : (import.meta.env.PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co');
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
 // Track if Supabase is properly configured
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
