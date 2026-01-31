@@ -9,9 +9,10 @@ ENV PORT=5000
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (gcc, g++ for python-geohash compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
