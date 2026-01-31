@@ -18,12 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
-# Note: Build context is ai-worker/ directory
-COPY requirements.txt .
+# Note: Build context is repository root
+COPY ai-worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY ai-worker/ .
 
 # Expose port (Railway sets $PORT dynamically, this is for documentation)
 EXPOSE ${PORT}

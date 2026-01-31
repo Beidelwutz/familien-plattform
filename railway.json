@@ -3,7 +3,6 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "ai-worker/Dockerfile",
-    "buildContext": "ai-worker",
     "watchPatterns": ["ai-worker/**"]
   },
   "deploy": {
