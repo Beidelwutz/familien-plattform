@@ -64,22 +64,17 @@ try {
   console.error('Error fetching events:', error);
 }
 
-// Dummy data if API not available
-if (events.length === 0) {
-  events = Array.from({ length: 12 }, (_, i) => ({
-    id: `search-${i + 1}`,
-    title: `Event ${i + 1}`,
-    price_type: i % 3 === 0 ? 'free' : 'paid',
-    price_min: i % 3 === 0 ? null : 10 + i,
-    age_min: (i % 4) * 3,
-    age_max: (i % 4) * 3 + 5,
-    is_indoor: i % 2 === 0,
-    is_outdoor: i % 2 === 1,
-    start_datetime: new Date(Date.now() + i * 86400000).toISOString(),
-    scores: { stressfree_score: 70 + (i % 30) },
-  }));
-  totalResults = 48;
-}
+// Keine Dummy-Daten: Nur echte API-Ergebnisse anzeigen.
+
+// Format date helper (z.B. "Mo, 3. Feb")
+const formatDate = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch {
+    return undefined;
+  }
+};
 
 // Format time helper
 const formatTime = (datetime: string | undefined) => {
@@ -338,6 +333,7 @@ if (pagination && pagination.totalPages > 1) {
                 id={event.id}
                 title={event.title}
                 imageUrl={event.image_urls?.[0]}
+                date={formatDate(event.start_datetime)}
                 startTime={formatTime(event.start_datetime)}
                 priceType={event.price_type}
                 priceMin={event.price_min}

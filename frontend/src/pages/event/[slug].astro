@@ -242,6 +242,7 @@ const formatPrice = (e: any) => {
                   id={e.id}
                   title={e.title}
                   imageUrl={e.image_urls?.[0]}
+                  date={e.start_datetime ? new Date(e.start_datetime).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }) : undefined}
                   startTime={e.start_datetime ? new Date(e.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : undefined}
                   priceType={e.price_type || 'unknown'}
                   priceMin={e.price_min}

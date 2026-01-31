@@ -30,6 +30,15 @@ interface Props {
 
 const { events, showLoadMore = true } = Astro.props;
 
+const formatDate = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch {
+    return undefined;
+  }
+};
+
 const formatTime = (datetime: string | undefined) => {
   if (!datetime) return undefined;
   try {
@@ -71,6 +80,7 @@ const formatLastVerified = (datetime: string | undefined) => {
           id={event.id}
           title={event.title}
           imageUrl={event.image_urls?.[0]}
+          date={formatDate(event.start_datetime)}
           startTime={formatTime(event.start_datetime)}
           distance={event.distance}
           priceType={event.price_type}
@@ -160,6 +170,9 @@ const formatLastVerified = (datetime: string | undefined) => {
   
   function createEventCard(event: any) {
     const imageUrl = event.image_urls?.[0] || '';
+    const dateStr = event.start_datetime ? new Date(event.start_datetime).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+    const timeStr = event.start_datetime ? new Date(event.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+    const dateTimeStr = dateStr && timeStr ? `${dateStr}, ${timeStr}` : dateStr || timeStr;
     
     return `
       <article class="card group relative" data-event-id="${event.id}">
@@ -169,11 +182,9 @@ const formatLastVerified = (datetime: string | undefined) => {
         </a>
         <div class="p-3 sm:p-4">
           <a href="/event/${event.id}">
-            <h3 class="font-semibold text-gray-900 line-clamp-2 mb-2 group-hover:text-primary-600 transition-colors">${event.title}</h3>
+            <h3 class="font-semibold text-gray-900 line-clamp-2 mb-1 group-hover:text-primary-600 transition-colors">${event.title}</h3>
           </a>
-          <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
-            ${event.start_datetime ? `<span>${new Date(event.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>` : ''}
-          </div>
+          ${dateTimeStr ? `<p class="text-sm text-gray-500 mb-2">${dateTimeStr}</p>` : ''}
           <div class="flex flex-wrap gap-1.5">
             ${event.is_indoor ? '<span class="badge badge-indoor">🏠 Indoor</span>' : ''}
             ${event.is_outdoor ? '<span class="badge badge-outdoor">🌳 Outdoor</span>' : ''}

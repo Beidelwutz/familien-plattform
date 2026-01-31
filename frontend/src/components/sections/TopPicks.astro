@@ -28,6 +28,16 @@ interface Props {
 
 const { events } = Astro.props;
 
+// Helper to format date from datetime (z.B. "Mo, 3. Feb")
+const formatDate = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch {
+    return undefined;
+  }
+};
+
 // Helper to format time from datetime
 const formatTime = (datetime: string | undefined) => {
   if (!datetime) return undefined;
@@ -80,6 +90,7 @@ const formatLastVerified = (datetime: string | undefined) => {
           id={event.id}
           title={event.title}
           imageUrl={event.image_urls?.[0]}
+          date={formatDate(event.start_datetime)}
           startTime={formatTime(event.start_datetime)}
           priceType={event.price_type}
           priceMin={event.price_min}

@@ -24,8 +24,8 @@ model CanonicalEvent {
   description_short String?  @db.VarChar(500)
   description_long  String?  @db.Text
   
-  // DateTime
-  start_datetime    DateTime @db.Timestamptz
+  // DateTime (optional - some sources don't provide real event dates)
+  start_datetime    DateTime? @db.Timestamptz
   end_datetime      DateTime? @db.Timestamptz
   is_all_day        Boolean   @default(false)
   

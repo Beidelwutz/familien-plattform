@@ -59,7 +59,7 @@ try {
     trendingEvents = data.data || [];
   }
 
-  // Create map pins from events
+  // Create map pins from events (nur echte Events)
   mapPins = [...topPicks, ...feedEvents]
     .filter(e => e.location_lat && e.location_lng)
     .slice(0, 12)
@@ -73,76 +73,9 @@ try {
   console.error('Error fetching data:', error);
 }
 
-// Use dummy data if API is not available
-if (topPicks.length === 0) {
-  topPicks = generateDummyEvents(8);
-}
-if (feedEvents.length === 0) {
-  feedEvents = generateDummyEvents(20);
-}
-if (availableEvents.length === 0) {
-  availableEvents = generateDummyEvents(8).map(e => ({ ...e, available_spots: Math.floor(Math.random() * 10) + 1 }));
-}
-if (newEvents.length === 0) {
-  newEvents = generateDummyEvents(8);
-}
-if (trendingEvents.length === 0) {
-  trendingEvents = generateDummyEvents(8);
-}
-if (mapPins.length === 0) {
-  mapPins = [
-    { id: '1', title: 'Zoologischer Stadtgarten', lat: 49.0069, lng: 8.4037 },
-    { id: '2', title: 'Naturkundemuseum', lat: 49.0089, lng: 8.4077 },
-    { id: '3', title: 'Schloss Karlsruhe', lat: 49.0142, lng: 8.4044 },
-    { id: '4', title: 'Stadtbibliothek', lat: 49.0076, lng: 8.4031 },
-    { id: '5', title: 'Kinderspielhaus', lat: 49.0045, lng: 8.4112 },
-    { id: '6', title: 'Schwimmbad Rheinstraße', lat: 49.0023, lng: 8.3987 },
-  ];
-}
-
-function generateDummyEvents(count: number) {
-  const titles = [
-    'Familien-Yoga im Park',
-    'Kinderbasteln: Herbstdeko',
-    'Schwimmkurs für Anfänger',
-    'Märchenstunde in der Bibliothek',
-    'Waldentdecker-Tour',
-    'Kreativworkshop: Malen',
-    'Musikgarten für Kleinkinder',
-    'Science Lab für Kids',
-    'Kinderturnen',
-    'Eltern-Kind-Café',
-    'Puppentheater',
-    'Klettern für Familien',
-    'Naturerlebnis am Fluss',
-    'Kochen für kleine Köche',
-    'Zirkusworkshop',
-    'Astronomie-Abend',
-    'Bauernhof-Besuch',
-    'Inline-Skating Kurs',
-    'Töpfern für Familien',
-    'Geocaching-Tour',
-  ];
-
-  return Array.from({ length: count }, (_, i) => ({
-    id: `dummy-${i + 1}`,
-    title: titles[i % titles.length],
-    description_short: 'Ein tolles Angebot für die ganze Familie.',
-    start_datetime: new Date(Date.now() + i * 86400000).toISOString(),
-    price_type: i % 3 === 0 ? 'free' : 'paid',
-    price_min: i % 3 === 0 ? null : 5 + (i % 10),
-    age_min: Math.floor(i % 4) * 3,
-    age_max: Math.floor(i % 4) * 3 + 5,
-    is_indoor: i % 2 === 0,
-    is_outdoor: i % 2 === 1,
-    image_urls: null,
-    scores: {
-      stressfree_score: 70 + (i % 30),
-      family_fit_score: 75 + (i % 25),
-    },
-    last_verified_at: new Date(Date.now() - i * 3600000).toISOString(),
-  }));
-}
+// Keine Dummy-/Platzhalter-Events: Es werden nur echte API-Daten angezeigt.
+// Leere Sektionen werden ausgeblendet (AvailableNow, NewThisWeek, TrendingNearby)
+// bzw. zeigen leere Bereiche (TopPicks, FeedSection, MapPreview).
 ---
 
 <BaseLayout title="kiezling - Familienaktivitäten in Karlsruhe">
@@ -156,14 +89,14 @@ function generateDummyEvents(count: number) {
   <QuickTabs activeTab={activeTab} />
 
   <main id="main-content" role="main">
-    <!-- Section A: Top Picks -->
-    <TopPicks events={topPicks} />
+    <!-- Section A: Top Picks (nur bei echten Events) -->
+    {topPicks.length > 0 && <TopPicks events={topPicks} />}
 
-    <!-- Section B: Main Feed -->
-    <FeedSection events={feedEvents} />
+    <!-- Section B: Main Feed (nur bei echten Events) -->
+    {feedEvents.length > 0 && <FeedSection events={feedEvents} />}
 
-    <!-- Section C: Map Preview -->
-    <MapPreview pins={mapPins} />
+    <!-- Section C: Map Preview (nur bei echten Pins) -->
+    {mapPins.length > 0 && <MapPreview pins={mapPins} />}
 
     <!-- Section D: Available Now -->
     <AvailableNow events={availableEvents} />
@@ -171,7 +104,7 @@ function generateDummyEvents(count: number) {
     <!-- Section E: New This Week -->
     <NewThisWeek events={newEvents} />
 
-    <!-- Section E: Trending Nearby -->
+    <!-- Section F: Trending Nearby -->
     <TrendingNearby events={trendingEvents} />
 
     <!-- Call to Action -->

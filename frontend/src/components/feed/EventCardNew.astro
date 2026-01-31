@@ -4,6 +4,8 @@ interface Props {
   id: string;
   title: string;
   imageUrl?: string;
+  /** Formatiertes Datum (z.B. "Mo, 3. Feb") – wird unter dem Titel angezeigt */
+  date?: string;
   startTime?: string;
   endTime?: string;
   duration?: string;
@@ -30,6 +32,7 @@ const {
   id,
   title,
   imageUrl,
+  date,
   startTime,
   endTime,
   duration,
@@ -132,31 +135,27 @@ const score = stressfreeScore || familyFitScore;
   <div class="p-3 sm:p-4">
     <!-- Title -->
     <a href={`/event/${id}`}>
-      <h3 class="font-semibold text-gray-900 line-clamp-2 mb-2 group-hover:text-primary-600 transition-colors">
+      <h3 class="font-semibold text-gray-900 line-clamp-2 mb-1 group-hover:text-primary-600 transition-colors">
         {title}
       </h3>
     </a>
 
-    <!-- Time & Distance -->
-    <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
-      {timeDisplay && (
-        <span class="flex items-center gap-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          {timeDisplay}
-        </span>
-      )}
-      {timeDisplay && distance && <span>·</span>}
-      {distance && (
-        <span class="flex items-center gap-1">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
-          </svg>
-          {distance}
-        </span>
-      )}
-    </div>
+    <!-- Date + Time (directly under title, one line) -->
+    {(date || timeDisplay) && (
+      <p class="text-sm text-gray-500 mb-2">
+        {date}{timeDisplay ? (date ? `, ${timeDisplay}` : timeDisplay) : ''}
+      </p>
+    )}
+
+    <!-- Distance (only if present) -->
+    {distance && (
+      <div class="flex items-center gap-1 text-sm text-gray-500 mb-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+        </svg>
+        {distance}
+      </div>
+    )}
 
     <!-- Price & Score -->
     <div class="flex items-center justify-between mb-3">
