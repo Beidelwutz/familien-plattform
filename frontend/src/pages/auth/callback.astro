@@ -24,6 +24,7 @@
     .container {
       text-align: center;
       padding: 2rem;
+      max-width: 500px;
     }
     .spinner {
       width: 48px;
@@ -53,6 +54,23 @@
       border-radius: 0.5rem;
       margin-top: 1rem;
       display: none;
+      text-align: left;
+    }
+    .error-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .error-details {
+      font-size: 0.75rem;
+      color: #991b1b;
+      word-break: break-word;
+    }
+    .error-hint {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #fecaca;
+      font-size: 0.75rem;
+      color: #b91c1c;
     }
   </style>
 </head>
@@ -66,6 +84,87 @@
 
   <script>
     import { supabase } from '../../lib/supabase';
+
+    /**
+     * Extract error code from error message
+     */
+    function getErrorCode(message: string): string {
+      const lowerMessage = message.toLowerCase();
+      
+      if (lowerMessage.includes('redirect_uri_mismatch') || lowerMessage.includes('redirect uri')) {
+        return 'redirect_uri_mismatch';
+      }
+      if (lowerMessage.includes('invalid_grant') || lowerMessage.includes('invalid grant')) {
+        return 'invalid_grant';
+      }
+      if (lowerMessage.includes('access_denied') || lowerMessage.includes('access denied')) {
+        return 'access_denied';
+      }
+      if (lowerMessage.includes('unauthorized_client')) {
+        return 'unauthorized_client';
+      }
+      if (lowerMessage.includes('invalid_client') || lowerMessage.includes('client id')) {
+        return 'invalid_client';
+      }
+      if (lowerMessage.includes('keine session') || lowerMessage.includes('no session')) {
+        return 'no_session';
+      }
+      if (lowerMessage.includes('pkce') || lowerMessage.includes('code verifier')) {
+        return 'pkce_error';
+      }
+      
+      return 'unknown';
+    }
+
+    /**
+     * Get user-friendly error title
+     */
+    function getErrorTitle(code: string): string {
+      const titles: Record<string, string> = {
+        'redirect_uri_mismatch': 'Konfigurationsfehler: Redirect-URI',
+        'invalid_grant': 'Ungültiger oder abgelaufener Code',
+        'access_denied': 'Zugriff verweigert',
+        'unauthorized_client': 'OAuth-Client nicht autorisiert',
+        'invalid_client': 'Ungültige Client-ID',
+        'no_session': 'Keine Session erhalten',
+        'pkce_error': 'Authentifizierungs-Fehler (PKCE)',
+        'unknown': 'Authentifizierung fehlgeschlagen',
+      };
+      return titles[code] || titles['unknown'];
+    }
+
+    /**
+     * Get helpful hint for common errors
+     */
+    function getErrorHint(code: string): string | null {
+      const hints: Record<string, string> = {
+        'redirect_uri_mismatch': 
+          'Die Redirect-URI in der Google Cloud Console stimmt nicht mit der Supabase-Callback-URL überein. ' +
+          'Prüfe: Google Cloud → Credentials → OAuth Client → Authorized redirect URIs muss die Supabase-Callback-URL enthalten.',
+        'invalid_grant': 
+          'Der Authentifizierungscode ist abgelaufen oder wurde bereits verwendet. Bitte versuche es erneut.',
+        'access_denied': 
+          'Du hast die Anmeldung abgebrochen oder der Zugriff wurde verweigert.',
+        'unauthorized_client': 
+          'Der OAuth-Client ist nicht korrekt in der Google Cloud Console konfiguriert.',
+        'invalid_client': 
+          'Die Client-ID in Supabase stimmt nicht mit der in der Google Cloud Console überein.',
+        'no_session': 
+          'Nach der Anmeldung wurde keine Session erstellt. Prüfe die Supabase-Konfiguration (Providers → Google).',
+        'pkce_error': 
+          'Fehler beim Code-Austausch. Bitte versuche es erneut oder lösche die Browser-Cookies für diese Seite.',
+      };
+      return hints[code] || null;
+    }
+
+    /**
+     * Check if error is a configuration error (needs longer display time)
+     */
+    function isConfigError(err: unknown): boolean {
+      if (!(err instanceof Error)) return false;
+      const code = getErrorCode(err.message);
+      return ['redirect_uri_mismatch', 'unauthorized_client', 'invalid_client', 'no_session'].includes(code);
+    }
 
     async function handleCallback() {
       const titleEl = document.getElementById('title') as HTMLElement | null;
@@ -85,26 +184,17 @@
           throw new Error(errorDescription || error);
         }
 
-        // Debug logging
-        console.log('[Callback] URL:', window.location.href);
-        console.log('[Callback] Code param:', queryParams.get('code') ? 'exists' : 'none');
-        console.log('[Callback] Hash:', window.location.hash ? 'exists' : 'none');
-
         // PKCE Flow: Exchange code for session first
         const code = queryParams.get('code');
         if (code) {
-          console.log('[Callback] Exchanging code for session...');
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
-            console.error('[Callback] Exchange error:', exchangeError);
             throw exchangeError;
           }
-          console.log('[Callback] Code exchanged successfully');
         }
 
         // Now get the session (should exist after exchange or from hash)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('[Callback] Session exists:', !!session);
         
         if (sessionError) {
           throw sessionError;
@@ -114,9 +204,16 @@
           throw new Error('Keine Session nach OAuth-Callback erhalten');
         }
 
-        // Success - store token
-        localStorage.setItem('auth_token', session.access_token);
-        console.log('[Callback] Token stored, redirecting...');
+        // Check if "remember me" was selected (stored before OAuth redirect)
+        const remember = localStorage.getItem('auth_remember') !== 'false';
+        localStorage.removeItem('auth_remember');
+
+        // Store token based on "remember me" preference
+        if (remember) {
+          localStorage.setItem('auth_token', session.access_token);
+        } else {
+          sessionStorage.setItem('auth_token', session.access_token);
+        }
 
         // Update UI
         if (titleEl) titleEl.textContent = 'Anmeldung erfolgreich!';
@@ -132,21 +229,28 @@
         }, 1000);
 
       } catch (err) {
-        console.error('[Callback] Error:', err);
-        
         if (spinnerEl) spinnerEl.style.display = 'none';
         if (titleEl) titleEl.textContent = 'Anmeldung fehlgeschlagen';
         if (messageEl) messageEl.textContent = 'Es gab ein Problem bei der Anmeldung.';
         
         if (errorEl) {
+          const errorMessage = err instanceof Error ? err.message : 'Unbekannter Fehler';
+          const errorCode = getErrorCode(errorMessage);
+          const errorHint = getErrorHint(errorCode);
+          
           errorEl.style.display = 'block';
-          errorEl.textContent = err instanceof Error ? err.message : 'Unbekannter Fehler';
+          errorEl.innerHTML = `
+            <div class="error-title">${getErrorTitle(errorCode)}</div>
+            <div class="error-details">${errorMessage}</div>
+            ${errorHint ? `<div class="error-hint">${errorHint}</div>` : ''}
+          `;
         }
 
-        // Redirect to login after delay
+        // Redirect to login after delay (longer for config errors)
+        const redirectDelay = isConfigError(err) ? 8000 : 3000;
         setTimeout(() => {
           window.location.href = '/login?error=auth_failed';
-        }, 3000);
+        }, redirectDelay);
       }
     }
 

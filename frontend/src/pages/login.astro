@@ -43,7 +43,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
           </div>
           <div class="flex justify-between items-center text-sm">
             <label class="flex items-center gap-2 cursor-pointer text-gray-600">
-              <input type="checkbox" name="remember" class="accent-primary-500 rounded" />
+              <input type="checkbox" id="remember-checkbox" name="remember" class="accent-primary-500 rounded" />
               <span>Angemeldet bleiben</span>
             </label>
             <a href="/passwort-vergessen" class="text-primary-500 hover:text-primary-600 font-medium">Passwort vergessen?</a>
@@ -51,6 +51,10 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
           <button type="submit" id="email-login-btn" class="btn-primary w-full py-3 mt-2">Anmelden</button>
           <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="login-error"></div>
           <div class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm text-center" id="login-success"></div>
+          <!-- Rate limit countdown -->
+          <div class="hidden rounded-xl bg-yellow-50 text-yellow-700 px-4 py-3 text-sm text-center" id="rate-limit-warning">
+            <p>Zu viele Anmeldeversuche. Bitte warte <span id="rate-limit-countdown">0</span> Sekunden.</p>
+          </div>
         </form>
 
         <p class="text-center text-sm text-gray-600 mt-6">
@@ -103,24 +107,57 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   const successEl = document.getElementById('login-success');
   const googleBtn = document.getElementById('google-login-btn');
   const emailBtn = document.getElementById('email-login-btn');
+  const rememberCheckbox = document.getElementById('remember-checkbox') as HTMLInputElement;
+  const rateLimitWarning = document.getElementById('rate-limit-warning');
+  const rateLimitCountdown = document.getElementById('rate-limit-countdown');
+
+  // Storage helper based on "remember me" preference
+  function getStorage() {
+    return rememberCheckbox?.checked ? localStorage : sessionStorage;
+  }
+
+  // Rate limit countdown
+  let rateLimitTimer: number | null = null;
+
+  function showRateLimitWarning(retryAfterMs: number) {
+    if (rateLimitTimer) clearInterval(rateLimitTimer);
+    
+    const seconds = Math.ceil(retryAfterMs / 1000);
+    if (rateLimitCountdown) rateLimitCountdown.textContent = String(seconds);
+    rateLimitWarning?.classList.remove('hidden');
+    errorEl?.classList.add('hidden');
+    
+    let remaining = seconds;
+    rateLimitTimer = window.setInterval(() => {
+      remaining--;
+      if (rateLimitCountdown) rateLimitCountdown.textContent = String(remaining);
+      if (remaining <= 0) {
+        if (rateLimitTimer) clearInterval(rateLimitTimer);
+        rateLimitWarning?.classList.add('hidden');
+        setLoading(emailBtn, false);
+        setLoading(googleBtn, false);
+      }
+    }, 1000);
+  }
 
   // Check if user is already logged in
   async function checkExistingSession() {
     const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
     
-    // Erst prüfen ob wir einen Token haben und ob er gültig ist
-    let token = localStorage.getItem('auth_token');
+    // Check both storages for existing token
+    let token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
     
-    // Supabase Session prüfen
+    // Check Supabase session
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.access_token) {
       token = session.access_token;
+      // Store in localStorage by default if session exists
       localStorage.setItem('auth_token', token);
     }
     
-    // Wenn wir einen Token haben, beim Backend validieren
+    // Validate token with backend
     if (token) {
       try {
         const res = await fetch(`${API_BASE}/api/auth/me`, {
@@ -128,30 +165,26 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         });
         
         if (res.ok) {
-          // Token ist gültig - prüfen ob Admin-Redirect und User Admin ist
           const data = await res.json();
           
-          // Wenn Redirect zu /admin geht, prüfen ob User Admin ist
+          // Check admin permission for admin routes
           if (redirectTo.startsWith('/admin') && data.data?.role !== 'admin') {
-            // Nicht Admin - nicht weiterleiten, Fehler anzeigen
             showError('Du hast keine Admin-Berechtigung.');
             localStorage.removeItem('auth_token');
+            sessionStorage.removeItem('auth_token');
             await supabase.auth.signOut();
             return;
           }
           
-          // Alles OK - weiterleiten
           window.location.href = redirectTo;
           return;
         } else {
-          // Token ungültig - entfernen und Supabase ausloggen
           localStorage.removeItem('auth_token');
+          sessionStorage.removeItem('auth_token');
           await supabase.auth.signOut();
         }
       } catch (err) {
-        // Netzwerkfehler - Token behalten, aber nicht weiterleiten
-        console.error('Backend validation failed:', err);
-        // Token nicht entfernen bei Netzwerkfehler
+        // Network error - don't remove token
       }
     }
   }
@@ -175,6 +208,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       errorEl.classList.remove('hidden');
     }
     if (successEl) successEl.classList.add('hidden');
+    rateLimitWarning?.classList.add('hidden');
   }
 
   // Show success message
@@ -184,6 +218,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       successEl.classList.remove('hidden');
     }
     if (errorEl) errorEl.classList.add('hidden');
+    rateLimitWarning?.classList.add('hidden');
   }
 
   // Set button loading state
@@ -200,20 +235,18 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
 
   // Google Login Handler
   googleBtn?.addEventListener('click', async () => {
-    console.log('[DEBUG H1] Google login clicked');
     try {
       setLoading(googleBtn, true);
       if (errorEl) errorEl.classList.add('hidden');
       
-      // Store redirect URL for callback
+      // Store redirect URL and remember preference for callback
       const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
       localStorage.setItem('auth_redirect', redirectTo);
+      localStorage.setItem('auth_remember', rememberCheckbox?.checked ? 'true' : 'false');
       
-      console.log('[DEBUG H1] Calling signInWithGoogle, redirect:', redirectTo);
       await signInWithGoogle();
       // User will be redirected to Google, then to /auth/callback
     } catch (err: any) {
-      console.error('[DEBUG H1] Google login error:', err?.message, err);
       showError('Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.');
       setLoading(googleBtn, false);
     }
@@ -222,25 +255,28 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   // Email Login Handler
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    console.log('[DEBUG H1] Form submit started');
     if (errorEl) errorEl.classList.add('hidden');
     setLoading(emailBtn, true);
 
     const formData = new FormData(form);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
-    console.log('[DEBUG H1] Calling signInWithEmail for:', email);
+    const remember = rememberCheckbox?.checked;
 
     try {
       const { session, user } = await signInWithEmail(email, password);
-      console.log('[DEBUG H1] signInWithEmail result:', { hasSession: !!session, hasUser: !!user, userId: user?.id });
 
       if (session && user) {
         showSuccess('Anmeldung erfolgreich! Du wirst weitergeleitet...');
         
-        // Store access token for API calls (backward compatibility)
-        localStorage.setItem('auth_token', session.access_token);
-        console.log('[DEBUG H2] Token stored, length:', session.access_token?.length);
+        // Store token based on "remember me" preference
+        const storage = remember ? localStorage : sessionStorage;
+        storage.setItem('auth_token', session.access_token);
+        
+        // Also store in localStorage for consistency with other parts of the app
+        if (remember) {
+          localStorage.setItem('auth_token', session.access_token);
+        }
         
         // Sync local saved events to backend
         try {
@@ -257,17 +293,27 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
 
         // Redirect
         const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
-        console.log('[DEBUG H3] About to redirect to:', redirectTo);
         setTimeout(() => {
           window.location.href = redirectTo;
         }, 500);
       } else {
-        console.log('[DEBUG H1] No session or user returned');
         showError('Anmeldung fehlgeschlagen. Bitte überprüfe deine Zugangsdaten.');
         setLoading(emailBtn, false);
       }
     } catch (err: any) {
-      console.error('[DEBUG H1] Login error caught:', err?.message, err);
+      // Handle rate limiting (429)
+      if (err.status === 429 || err.message?.includes('rate limit') || err.message?.includes('Too many')) {
+        const retryAfter = err.retry_after_ms || 60000; // Default 60 seconds
+        showRateLimitWarning(retryAfter);
+        return;
+      }
+      
+      // Handle account locked
+      if (err.message?.includes('locked') || err.code === 'ACCOUNT_LOCKED') {
+        showError(err.message || 'Konto vorübergehend gesperrt. Bitte versuche es später erneut.');
+        setLoading(emailBtn, false);
+        return;
+      }
       
       // Handle specific Supabase errors
       if (err.message?.includes('Invalid login credentials')) {
@@ -282,10 +328,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   });
 
   // Initialize
-  // Show error immediately if Supabase is not configured
   if (!isSupabaseConfigured) {
     showError('Authentifizierung ist momentan nicht verfügbar. Bitte versuche es später erneut.');
-    console.error('Supabase nicht konfiguriert - prüfe PUBLIC_SUPABASE_URL und PUBLIC_SUPABASE_ANON_KEY');
   } else {
     checkExistingSession();
   }

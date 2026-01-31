@@ -3,11 +3,12 @@ import jwt from 'jsonwebtoken';
 import { createError } from './errorHandler.js';
 import { verifyToken as verifySupabaseToken } from '../lib/supabase.js';
 import { prisma } from '../lib/prisma.js';
+import type { UserRole } from '../lib/types.js';
 
 export interface JwtPayload {
   sub: string;
   email: string;
-  role: string;
+  role: UserRole | 'password_reset' | 'email_verification';
   iat?: number;
   exp?: number;
 }
@@ -67,9 +68,8 @@ async function verifyToken(token: string): Promise<JwtPayload | null> {
           role: prismaUser?.role || supabaseUser.user_metadata?.role || 'parent',
         };
       }
-    } catch (err) {
+    } catch {
       // Supabase verification failed, try legacy
-      console.debug('Supabase token verification failed, trying legacy JWT');
     }
   }
 

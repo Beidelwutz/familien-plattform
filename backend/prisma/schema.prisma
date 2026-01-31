@@ -480,11 +480,11 @@ model Provider {
 
 enum ProviderType {
   verein
-  schule
-  camp
-  museum
-  cafe
-  other
+  unternehmen
+  kommune
+  kita
+  freiberuflich
+  sonstiges
 }
 
 enum SubscriptionTier {
@@ -507,6 +507,11 @@ model User {
   email_verified    Boolean   @default(false)
   email_verified_at DateTime? @db.Timestamptz
   
+  // Account lockout
+  failed_login_attempts Int       @default(0)
+  locked_until          DateTime? @db.Timestamptz
+  last_login_at         DateTime? @db.Timestamptz
+  
   created_at    DateTime @default(now()) @db.Timestamptz
   updated_at    DateTime @updatedAt @db.Timestamptz
   
@@ -514,6 +519,7 @@ model User {
   family_profile FamilyProfile?
   saved_events  SavedEvent[]
   plans         Plan[]
+  password_reset_tokens PasswordResetToken[]
   
   // Revision relations
   revisions_created  EventRevision[] @relation("RevisionCreator")
@@ -532,6 +538,22 @@ enum UserRole {
   parent
   provider
   admin
+}
+
+// Password Reset Tokens for secure token management
+model PasswordResetToken {
+  id          String    @id @default(uuid())
+  user_id     String
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash  String    @db.VarChar(255)
+  expires_at  DateTime  @db.Timestamptz
+  used_at     DateTime? @db.Timestamptz
+  created_at  DateTime  @default(now()) @db.Timestamptz
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@index([expires_at])
+  @@map("password_reset_tokens")
 }
 
 model FamilyProfile {

@@ -25,7 +25,7 @@ import {
   createEventRevision 
 } from '../lib/eventRevision.js';
 import { searchEventsWithinRadius, addDistanceToEvents } from '../lib/geo.js';
-import { optionalAuth, type AuthRequest } from '../middleware/auth.js';
+import { optionalAuth, requireAuth, type AuthRequest } from '../middleware/auth.js';
 import crypto from 'crypto';
 
 const router = Router();
@@ -573,8 +573,8 @@ const validateCreateEvent = [
   body('categories').optional().isArray(),
 ];
 
-// POST /api/events - Create a new event (manual/provider)
-router.post('/', optionalAuth, validateCreateEvent, async (req: AuthRequest, res: Response, next: NextFunction) => {
+// POST /api/events - Create a new event (requires authentication)
+router.post('/', requireAuth, validateCreateEvent, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -631,14 +631,28 @@ router.post('/', optionalAuth, validateCreateEvent, async (req: AuthRequest, res
       image_urls: image_urls || [],
     };
 
-    // If user is a provider, link to their provider ID
-    if (req.user) {
-      const provider = await prisma.provider.findUnique({
-        where: { user_id: req.user.sub }
-      });
-      if (provider) {
-        eventData.provider_id = provider.id;
+    // Check if user is a provider and link to their provider ID
+    const provider = await prisma.provider.findUnique({
+      where: { user_id: req.user!.sub }
+    });
+
+    if (provider) {
+      // Check if provider is verified before allowing event creation
+      if (!provider.is_verified) {
+        throw createError(
+          'Provider not verified. Please wait for admin verification before creating events.',
+          403,
+          'PROVIDER_NOT_VERIFIED'
+        );
       }
+      eventData.provider_id = provider.id;
+    } else if (req.user!.role !== 'admin') {
+      // Only admins can create events without a provider profile
+      throw createError(
+        'Provider profile required to create events. Please create a provider profile first.',
+        403,
+        'PROVIDER_REQUIRED'
+      );
     }
 
     // Calculate completeness
@@ -1144,7 +1158,7 @@ const validateEventUpdate = [
 ];
 
 // PUT /api/events/:id - Update event (creates revision for published events)
-router.put('/:id', optionalAuth, validateEventUpdate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.put('/:id', requireAuth, validateEventUpdate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -1152,11 +1166,22 @@ router.put('/:id', optionalAuth, validateEventUpdate, async (req: AuthRequest, r
     }
 
     const { id } = req.params;
-    const userId = req.user?.sub;
+    const userId = req.user!.sub;
+    const isAdmin = req.user!.role === 'admin';
 
     const event = await prisma.canonicalEvent.findUnique({ where: { id } });
     if (!event) {
       throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    // Check ownership: Only the event's provider or an admin can update
+    if (!isAdmin && event.provider_id) {
+      const provider = await prisma.provider.findUnique({
+        where: { user_id: userId }
+      });
+      if (!provider || provider.id !== event.provider_id) {
+        throw createError('Not authorized to edit this event', 403, 'FORBIDDEN');
+      }
     }
 
     // Extract updatable fields from request body
@@ -1246,7 +1271,7 @@ router.put('/:id', optionalAuth, validateEventUpdate, async (req: AuthRequest, r
 });
 
 // PATCH /api/events/:id - Partial update (alias for PUT)
-router.patch('/:id', optionalAuth, validateEventUpdate, async (req: AuthRequest, res: Response, next: NextFunction) => {
+router.patch('/:id', requireAuth, validateEventUpdate, async (req: AuthRequest, res: Response, next: NextFunction) => {
   // Delegate to PUT handler
   req.method = 'PUT';
   router.handle(req, res, next);

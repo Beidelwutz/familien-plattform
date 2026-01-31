@@ -1,0 +1,416 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import StickyHeader from '../../../components/layout/StickyHeader.astro';
+const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+const { id } = Astro.params;
+---
+
+<BaseLayout title="Event bearbeiten - kiezling Anbieter">
+  <StickyHeader />
+  <main class="min-h-screen bg-gray-50 py-8 px-4">
+    <div class="max-w-3xl mx-auto">
+      <!-- Loading State -->
+      <div id="loading-state" class="flex items-center justify-center min-h-[40vh]">
+        <div class="text-center">
+          <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p class="text-gray-500">Event wird geladen...</p>
+        </div>
+      </div>
+
+      <!-- Auth Required -->
+      <div id="auth-required" class="hidden">
+        <div class="bg-white rounded-2xl shadow-card p-8 text-center">
+          <h1 class="text-xl font-bold text-gray-900 mb-2">Anmeldung erforderlich</h1>
+          <p class="text-gray-500 mb-6">Bitte melde dich als Anbieter an.</p>
+          <a href="/anbieter/login" class="btn-primary inline-block px-6 py-3">Zur Anmeldung</a>
+        </div>
+      </div>
+
+      <!-- Not Found -->
+      <div id="not-found" class="hidden">
+        <div class="bg-white rounded-2xl shadow-card p-8 text-center">
+          <h1 class="text-xl font-bold text-gray-900 mb-2">Event nicht gefunden</h1>
+          <p class="text-gray-500 mb-6">Dieses Event existiert nicht oder gehört nicht zu deinem Konto.</p>
+          <a href="/anbieter/events" class="btn-primary inline-block px-6 py-3">Zu meinen Events</a>
+        </div>
+      </div>
+
+      <!-- Event Form -->
+      <div id="event-form-container" class="hidden">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <a href="/anbieter/events" class="text-gray-500 hover:text-gray-700 text-sm mb-2 inline-flex items-center gap-1">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+              </svg>
+              Meine Events
+            </a>
+            <h1 class="text-2xl font-bold text-gray-900">Event bearbeiten</h1>
+          </div>
+          <span id="event-status" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600"></span>
+        </div>
+
+        <!-- Published Warning -->
+        <div id="published-warning" class="hidden bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+          <p class="text-sm text-yellow-800">
+            <strong>Hinweis:</strong> Dieses Event ist bereits veröffentlicht. Änderungen werden zur Prüfung eingereicht und müssen von uns freigegeben werden.
+          </p>
+        </div>
+
+        <form id="event-form" class="space-y-6">
+          <!-- Basic Info -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h2 class="font-semibold text-gray-900 mb-4">Grundinformationen</h2>
+            
+            <div class="space-y-4">
+              <div>
+                <label for="title" class="block font-medium text-sm text-gray-700 mb-1">Titel *</label>
+                <input type="text" id="title" name="title" required maxlength="200"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div>
+                <label for="description_short" class="block font-medium text-sm text-gray-700 mb-1">Kurzbeschreibung</label>
+                <textarea id="description_short" name="description_short" rows="2" maxlength="500"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"></textarea>
+              </div>
+
+              <div>
+                <label for="description_long" class="block font-medium text-sm text-gray-700 mb-1">Ausführliche Beschreibung</label>
+                <textarea id="description_long" name="description_long" rows="5"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Date & Time -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h2 class="font-semibold text-gray-900 mb-4">Datum und Uhrzeit</h2>
+            
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label for="start_date" class="block font-medium text-sm text-gray-700 mb-1">Startdatum *</label>
+                <input type="date" id="start_date" name="start_date" required
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div>
+                <label for="start_time" class="block font-medium text-sm text-gray-700 mb-1">Startzeit *</label>
+                <input type="time" id="start_time" name="start_time" required
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div>
+                <label for="end_date" class="block font-medium text-sm text-gray-700 mb-1">Enddatum</label>
+                <input type="date" id="end_date" name="end_date"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div>
+                <label for="end_time" class="block font-medium text-sm text-gray-700 mb-1">Endzeit</label>
+                <input type="time" id="end_time" name="end_time"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Location -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h2 class="font-semibold text-gray-900 mb-4">Ort</h2>
+            
+            <div class="space-y-4">
+              <div>
+                <label for="location_address" class="block font-medium text-sm text-gray-700 mb-1">Adresse</label>
+                <input type="text" id="location_address" name="location_address" maxlength="300"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="is_indoor" name="is_indoor" class="w-5 h-5 accent-primary-500 rounded" />
+                  <span class="text-gray-700">Indoor</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="is_outdoor" name="is_outdoor" class="w-5 h-5 accent-primary-500 rounded" />
+                  <span class="text-gray-700">Outdoor</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Age & Price -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h2 class="font-semibold text-gray-900 mb-4">Zielgruppe & Preis</h2>
+            
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label for="age_min" class="block font-medium text-sm text-gray-700 mb-1">Alter von</label>
+                <input type="number" id="age_min" name="age_min" min="0" max="99"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div>
+                <label for="age_max" class="block font-medium text-sm text-gray-700 mb-1">Alter bis</label>
+                <input type="number" id="age_max" name="age_max" min="0" max="99"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <label for="price_type" class="block font-medium text-sm text-gray-700 mb-1">Preistyp</label>
+              <select id="price_type" name="price_type"
+                class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors">
+                <option value="unknown">Keine Angabe</option>
+                <option value="free">Kostenlos</option>
+                <option value="paid">Kostenpflichtig</option>
+                <option value="range">Preisspanne</option>
+              </select>
+            </div>
+
+            <div id="price-fields" class="hidden mt-4 grid md:grid-cols-2 gap-4">
+              <div>
+                <label for="price_min" class="block font-medium text-sm text-gray-700 mb-1">Preis ab (EUR)</label>
+                <input type="number" id="price_min" name="price_min" min="0" step="0.01"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+              <div>
+                <label for="price_max" class="block font-medium text-sm text-gray-700 mb-1">Preis bis (EUR)</label>
+                <input type="number" id="price_max" name="price_max" min="0" step="0.01"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Contact & Booking -->
+          <div class="bg-white rounded-2xl shadow-card p-6">
+            <h2 class="font-semibold text-gray-900 mb-4">Kontakt & Buchung</h2>
+            
+            <div class="space-y-4">
+              <div>
+                <label for="booking_url" class="block font-medium text-sm text-gray-700 mb-1">Buchungs-/Anmelde-Link</label>
+                <input type="url" id="booking_url" name="booking_url"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+              </div>
+
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label for="contact_email" class="block font-medium text-sm text-gray-700 mb-1">Kontakt E-Mail</label>
+                  <input type="email" id="contact_email" name="contact_email"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+                </div>
+                <div>
+                  <label for="contact_phone" class="block font-medium text-sm text-gray-700 mb-1">Kontakt Telefon</label>
+                  <input type="tel" id="contact_phone" name="contact_phone"
+                    class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Messages -->
+          <div id="form-error" class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm"></div>
+          <div id="form-success" class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm"></div>
+
+          <!-- Submit -->
+          <div class="flex gap-4">
+            <a href="/anbieter/events" class="btn-secondary flex-1 py-3 text-center">Abbrechen</a>
+            <button type="submit" id="submit-btn" class="btn-primary flex-1 py-3">Änderungen speichern</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_BASE, id }}>
+  let eventData = null;
+  let eventStatus = null;
+
+  async function init() {
+    const loadingState = document.getElementById('loading-state');
+    const authRequired = document.getElementById('auth-required');
+    const notFound = document.getElementById('not-found');
+    const formContainer = document.getElementById('event-form-container');
+    const publishedWarning = document.getElementById('published-warning');
+
+    const token = localStorage.getItem('auth_token');
+    
+    if (!token) {
+      loadingState?.classList.add('hidden');
+      authRequired?.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      // Load event data
+      const eventResponse = await fetch(`${API_BASE}/api/events/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!eventResponse.ok) {
+        loadingState?.classList.add('hidden');
+        notFound?.classList.remove('hidden');
+        return;
+      }
+
+      eventData = (await eventResponse.json()).data;
+      eventStatus = eventData.status;
+
+      // Populate form
+      populateForm(eventData);
+
+      // Show published warning
+      if (eventStatus === 'published') {
+        publishedWarning?.classList.remove('hidden');
+      }
+
+      // Update status badge
+      const statusEl = document.getElementById('event-status');
+      const statusLabels = {
+        'published': { label: 'Veröffentlicht', class: 'bg-green-100 text-green-700' },
+        'pending_review': { label: 'In Prüfung', class: 'bg-yellow-100 text-yellow-700' },
+        'incomplete': { label: 'Unvollständig', class: 'bg-gray-100 text-gray-600' },
+        'raw': { label: 'Entwurf', class: 'bg-gray-100 text-gray-600' }
+      };
+      const status = statusLabels[eventStatus] || { label: eventStatus, class: 'bg-gray-100 text-gray-600' };
+      if (statusEl) {
+        statusEl.textContent = status.label;
+        statusEl.className = `px-3 py-1 rounded-full text-sm font-medium ${status.class}`;
+      }
+
+      loadingState?.classList.add('hidden');
+      formContainer?.classList.remove('hidden');
+
+    } catch (error) {
+      loadingState?.classList.add('hidden');
+      notFound?.classList.remove('hidden');
+    }
+  }
+
+  function populateForm(event) {
+    const form = document.getElementById('event-form');
+    if (!form || !event) return;
+
+    form.title.value = event.title || '';
+    form.description_short.value = event.description_short || '';
+    form.description_long.value = event.description_long || '';
+    
+    if (event.start_datetime) {
+      const startDate = new Date(event.start_datetime);
+      form.start_date.value = startDate.toISOString().split('T')[0];
+      form.start_time.value = startDate.toTimeString().slice(0, 5);
+    }
+
+    if (event.end_datetime) {
+      const endDate = new Date(event.end_datetime);
+      form.end_date.value = endDate.toISOString().split('T')[0];
+      form.end_time.value = endDate.toTimeString().slice(0, 5);
+    }
+
+    form.location_address.value = event.location_address || '';
+    form.is_indoor.checked = event.is_indoor || false;
+    form.is_outdoor.checked = event.is_outdoor || false;
+    form.age_min.value = event.age_min || '';
+    form.age_max.value = event.age_max || '';
+    form.price_type.value = event.price_type || 'unknown';
+    form.price_min.value = event.price_min || '';
+    form.price_max.value = event.price_max || '';
+    form.booking_url.value = event.booking_url || '';
+    form.contact_email.value = event.contact_email || '';
+    form.contact_phone.value = event.contact_phone || '';
+
+    // Show price fields if needed
+    if (event.price_type === 'paid' || event.price_type === 'range') {
+      document.getElementById('price-fields')?.classList.remove('hidden');
+    }
+  }
+
+  // Price type toggle
+  document.getElementById('price_type')?.addEventListener('change', (e) => {
+    const priceFields = document.getElementById('price-fields');
+    const value = e.target.value;
+    if (value === 'paid' || value === 'range') {
+      priceFields?.classList.remove('hidden');
+    } else {
+      priceFields?.classList.add('hidden');
+    }
+  });
+
+  // Form submission
+  document.getElementById('event-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const errorEl = document.getElementById('form-error');
+    const successEl = document.getElementById('form-success');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    errorEl?.classList.add('hidden');
+    successEl?.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Wird gespeichert...';
+
+    const token = localStorage.getItem('auth_token');
+    const form = e.target;
+    
+    const startDate = form.start_date.value;
+    const startTime = form.start_time.value;
+    const endDate = form.end_date.value || startDate;
+    const endTime = form.end_time.value;
+
+    const updateData = {
+      title: form.title.value,
+      description_short: form.description_short.value || null,
+      description_long: form.description_long.value || null,
+      start_datetime: `${startDate}T${startTime}:00`,
+      end_datetime: endTime ? `${endDate}T${endTime}:00` : null,
+      location_address: form.location_address.value || null,
+      is_indoor: form.is_indoor.checked,
+      is_outdoor: form.is_outdoor.checked,
+      age_min: form.age_min.value ? parseInt(form.age_min.value) : null,
+      age_max: form.age_max.value ? parseInt(form.age_max.value) : null,
+      price_type: form.price_type.value,
+      price_min: form.price_min.value ? parseFloat(form.price_min.value) : null,
+      price_max: form.price_max.value ? parseFloat(form.price_max.value) : null,
+      booking_url: form.booking_url.value || null,
+      contact_email: form.contact_email.value || null,
+      contact_phone: form.contact_phone.value || null,
+    };
+
+    try {
+      const response = await fetch(`${API_BASE}/api/events/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok || response.status === 202) {
+        if (response.status === 202) {
+          successEl.textContent = 'Änderungen wurden zur Prüfung eingereicht.';
+        } else {
+          successEl.textContent = 'Event wurde aktualisiert!';
+        }
+        successEl?.classList.remove('hidden');
+      } else {
+        errorEl.textContent = data.error?.message || 'Ein Fehler ist aufgetreten.';
+        errorEl?.classList.remove('hidden');
+      }
+    } catch (error) {
+      errorEl.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+      errorEl?.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Änderungen speichern';
+    }
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+</script>

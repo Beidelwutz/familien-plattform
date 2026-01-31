@@ -7,6 +7,10 @@ Häufige Probleme und deren Lösungen.
 - [Server-Probleme](#server-probleme)
 - [Datenbank-Probleme](#datenbank-probleme)
 - [Authentifizierung](#authentifizierung)
+  - [Google-Anmeldung erstellt keinen Account](#google-anmeldung-erstellt-keinen-account-in-supabase)
+  - [401 Unauthorized](#401-unauthorized)
+  - [403 Forbidden (Admin)](#403-forbidden-admin-endpoints)
+  - [Rate Limit (429)](#rate-limit-erreicht-429)
 - [API-Fehler](#api-fehler)
 - [Frontend-Probleme](#frontend-probleme)
 - [Entwicklungsumgebung](#entwicklungsumgebung)
@@ -159,6 +163,60 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 ---
 
 ## Authentifizierung
+
+### Google-Anmeldung erstellt keinen Account in Supabase
+
+**Symptom:** Nach Klick auf „Mit Google anmelden" wird zur Google-Anmeldeseite weitergeleitet, aber danach erscheint kein User in Supabase (Authentication → Users).
+
+**Ursache:** Der OAuth-Flow bricht zwischen Google und Supabase ab (falsche Redirect-URI, Provider nicht eingerichtet).
+
+**Checkliste:**
+
+| Schritt | Wo | Prüfung |
+|---------|-----|---------|
+| 1 | Supabase → Authentication → Providers | Google aktiviert, Client ID + Client Secret eingetragen |
+| 2 | Supabase → Authentication → URL Configuration | Site URL (z.B. `http://localhost:3000`) und Redirect URLs inkl. `http://localhost:3000/auth/callback` |
+| 3 | Google Cloud Console → APIs & Services → Credentials → OAuth Client | Authorized redirect URI = `https://<PROJECT_REF>.supabase.co/auth/v1/callback` |
+| 4 | Frontend `.env` | `PUBLIC_SUPABASE_URL` und `PUBLIC_SUPABASE_ANON_KEY` gesetzt |
+| 5 | Backend `.env` | `SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY` gesetzt |
+
+**Häufige Fehler und Lösungen:**
+
+1. **`redirect_uri_mismatch`:**
+   - Die Redirect-URI in Google Cloud stimmt nicht exakt mit Supabase überein
+   - Lösung: In Google Cloud Console unter OAuth Client die URI `https://<PROJECT_REF>.supabase.co/auth/v1/callback` hinzufügen
+   - `<PROJECT_REF>` = der Teil vor `.supabase.co` in deiner Supabase-URL
+
+2. **`invalid_client` / Client ID ungültig:**
+   - Client ID in Supabase stimmt nicht mit Google Cloud überein
+   - Lösung: Client ID aus Google Cloud Console kopieren und in Supabase → Providers → Google einfügen
+
+3. **`access_denied`:**
+   - User hat Anmeldung abgebrochen oder OAuth Consent Screen nicht akzeptiert
+   - Lösung: In Google Cloud Console → OAuth consent screen prüfen, ob Test-User hinzugefügt (bei „External" + „Testing")
+
+4. **Keine Session nach Callback:**
+   - Supabase konnte den User nicht anlegen
+   - Lösung: Prüfen ob Google Provider in Supabase aktiviert ist und Client Secret korrekt eingetragen
+
+**Google Cloud Console einrichten:**
+
+```
+1. https://console.cloud.google.com/apis/credentials öffnen
+2. Projekt auswählen (oder neues erstellen)
+3. „+ CREATE CREDENTIALS" → „OAuth client ID"
+4. Application type: „Web application"
+5. Name: z.B. „Supabase Auth"
+6. Authorized redirect URIs: 
+   → URI HINZUFÜGEN
+   → https://<PROJECT_REF>.supabase.co/auth/v1/callback
+7. Speichern
+8. Client ID und Client Secret kopieren → in Supabase eintragen
+```
+
+**Wichtig:** Änderungen in Google Cloud können 5 Minuten bis mehrere Stunden dauern, bis sie aktiv werden.
+
+---
 
 ### 401 Unauthorized
 

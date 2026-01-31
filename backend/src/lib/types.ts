@@ -47,15 +47,10 @@ export type {
   PlanRequest,
 } from '../../shared/types/index.js';
 
-// Backend-specific extensions
-export interface AuthUser {
-  sub: string;
-  email: string;
-  role: string;
-  iat?: number;
-  exp?: number;
-}
+// Re-export JwtPayload from auth middleware for convenience
+export type { JwtPayload } from '../middleware/auth.js';
 
+// Backend-specific extensions
 export interface EventWithDistance {
   id: string;
   title: string;

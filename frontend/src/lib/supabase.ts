@@ -11,17 +11,6 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 // Track if Supabase is properly configured
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
-// Debug logging (remove in production later)
-if (typeof window !== 'undefined') {
-  console.log('[Supabase] URL configured:', !!supabaseUrl);
-  console.log('[Supabase] Key configured:', !!supabaseAnonKey);
-  if (!isSupabaseConfigured) {
-    console.error('[Supabase] FEHLER: Umgebungsvariablen nicht gesetzt!');
-    console.error('[Supabase] PUBLIC_SUPABASE_URL:', supabaseUrl || '(leer)');
-    console.error('[Supabase] PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '(gesetzt)' : '(leer)');
-  }
-}
-
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
@@ -44,13 +33,38 @@ function checkSupabaseConfig() {
 }
 
 /**
+ * Get the OAuth callback URL for this application.
+ * Used for Google OAuth and other OAuth providers.
+ * This URL must be registered in:
+ * - Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
+ * - Google Cloud Console → Credentials → OAuth Client → Authorized redirect URIs 
+ *   (use the Supabase callback URL: https://<PROJECT_REF>.supabase.co/auth/v1/callback)
+ */
+export function getAuthCallbackUrl(): string {
+  if (typeof window === 'undefined') {
+    // SSR fallback - should not be used in production
+    return '/auth/callback';
+  }
+  return `${window.location.origin}/auth/callback`;
+}
+
+/**
+ * Get the password reset callback URL
+ */
+export function getPasswordResetUrl(): string {
+  if (typeof window === 'undefined') {
+    return '/passwort-reset';
+  }
+  return `${window.location.origin}/passwort-reset`;
+}
+
+/**
  * Get the current session
  * Also syncs the access_token to localStorage for backward compatibility
  */
 export async function getSession() {
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error) {
-    console.error('Error getting session:', error);
     return null;
   }
   
@@ -71,7 +85,6 @@ export async function getSession() {
 export async function getUser() {
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error) {
-    console.error('Error getting user:', error);
     return null;
   }
   return user;
@@ -86,12 +99,11 @@ export async function signInWithGoogle(redirectTo?: string) {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: redirectTo || `${window.location.origin}/auth/callback`,
+      redirectTo: redirectTo || getAuthCallbackUrl(),
     },
   });
   
   if (error) {
-    console.error('Google sign-in error:', error);
     throw error;
   }
   
@@ -143,7 +155,6 @@ export async function signUpWithEmail(email: string, password: string, metadata?
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) {
-    console.error('Sign out error:', error);
     throw error;
   }
 }
@@ -153,7 +164,7 @@ export async function signOut() {
  */
 export async function resetPassword(email: string) {
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/passwort-reset`,
+    redirectTo: getPasswordResetUrl(),
   });
   
   if (error) {

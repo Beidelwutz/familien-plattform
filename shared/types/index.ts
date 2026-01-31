@@ -20,7 +20,7 @@ export type SourceType = 'api' | 'rss' | 'ics' | 'scraper' | 'partner' | 'manual
 
 export type HealthStatus = 'healthy' | 'degraded' | 'failing' | 'dead' | 'unknown';
 
-export type ProviderType = 'verein' | 'schule' | 'camp' | 'museum' | 'cafe' | 'other';
+export type ProviderType = 'verein' | 'unternehmen' | 'kommune' | 'kita' | 'freiberuflich' | 'sonstiges';
 
 export type SubscriptionTier = 'free' | 'basic' | 'pro';
 
@@ -177,7 +177,11 @@ export interface User {
   id: string;
   email: string;
   role: UserRole;
+  email_verified?: boolean;
+  email_verified_at?: string;
+  last_login_at?: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface FamilyProfile {

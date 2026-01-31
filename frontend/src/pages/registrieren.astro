@@ -36,18 +36,33 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
             class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
         </div>
         <div class="flex flex-col gap-2">
-          <label for="password" class="font-medium text-sm text-gray-700">Passwort (min. 6 Zeichen)</label>
-          <input type="password" id="password" name="password" required minlength="6" placeholder="••••••••" autocomplete="new-password"
+          <label for="password" class="font-medium text-sm text-gray-700">Passwort (min. 8 Zeichen)</label>
+          <input type="password" id="password" name="password" required minlength="8" placeholder="••••••••" autocomplete="new-password"
             class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+          <!-- Password Strength Indicator -->
+          <div id="password-strength" class="hidden mt-2">
+            <div class="flex gap-1 mb-1">
+              <div id="strength-bar-1" class="h-1 flex-1 rounded bg-gray-200"></div>
+              <div id="strength-bar-2" class="h-1 flex-1 rounded bg-gray-200"></div>
+              <div id="strength-bar-3" class="h-1 flex-1 rounded bg-gray-200"></div>
+              <div id="strength-bar-4" class="h-1 flex-1 rounded bg-gray-200"></div>
+            </div>
+            <p id="strength-text" class="text-xs text-gray-500"></p>
+          </div>
         </div>
         <div class="flex flex-col gap-2">
           <label for="password2" class="font-medium text-sm text-gray-700">Passwort wiederholen</label>
-          <input type="password" id="password2" name="password2" required minlength="6" placeholder="••••••••" autocomplete="new-password"
+          <input type="password" id="password2" name="password2" required minlength="8" placeholder="••••••••" autocomplete="new-password"
             class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" />
+          <p id="password-match" class="hidden text-xs"></p>
         </div>
         <button type="submit" id="email-register-btn" class="btn-primary w-full py-3 mt-2">Registrieren</button>
         <div class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm text-center" id="register-error"></div>
         <div class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm text-center" id="register-success"></div>
+        <!-- Rate limit countdown -->
+        <div class="hidden rounded-xl bg-yellow-50 text-yellow-700 px-4 py-3 text-sm text-center" id="rate-limit-warning">
+          <p>Zu viele Anfragen. Bitte warte <span id="rate-limit-countdown">0</span> Sekunden.</p>
+        </div>
       </form>
 
       <p class="text-center text-sm text-gray-500 mt-4">
@@ -69,6 +84,110 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   const successEl = document.getElementById('register-success');
   const googleBtn = document.getElementById('google-register-btn');
   const emailBtn = document.getElementById('email-register-btn');
+  const passwordInput = document.getElementById('password') as HTMLInputElement;
+  const password2Input = document.getElementById('password2') as HTMLInputElement;
+  const rateLimitWarning = document.getElementById('rate-limit-warning');
+  const rateLimitCountdown = document.getElementById('rate-limit-countdown');
+
+  // Password strength checker
+  function checkPasswordStrength(password: string): number {
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^a-zA-Z0-9]/.test(password)) score++;
+    return Math.min(score, 4);
+  }
+
+  function updatePasswordStrength(password: string) {
+    const strengthContainer = document.getElementById('password-strength');
+    const strengthText = document.getElementById('strength-text');
+    const bars = [
+      document.getElementById('strength-bar-1'),
+      document.getElementById('strength-bar-2'),
+      document.getElementById('strength-bar-3'),
+      document.getElementById('strength-bar-4')
+    ];
+
+    if (!password) {
+      strengthContainer?.classList.add('hidden');
+      return;
+    }
+
+    strengthContainer?.classList.remove('hidden');
+    const strength = checkPasswordStrength(password);
+
+    const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+    const texts = ['Sehr schwach', 'Schwach', 'Mittel', 'Stark'];
+
+    bars.forEach((bar, index) => {
+      if (bar) {
+        bar.classList.remove('bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500');
+        if (index < strength) {
+          bar.classList.add(colors[strength - 1]);
+        } else {
+          bar.classList.add('bg-gray-200');
+        }
+      }
+    });
+
+    if (strengthText) {
+      strengthText.textContent = strength > 0 ? texts[strength - 1] : 'Sehr schwach';
+      strengthText.className = `text-xs ${strength >= 3 ? 'text-green-600' : strength >= 2 ? 'text-yellow-600' : 'text-red-600'}`;
+    }
+  }
+
+  function updatePasswordMatch() {
+    const matchEl = document.getElementById('password-match');
+    const password = passwordInput?.value;
+    const password2 = password2Input?.value;
+
+    if (!password2) {
+      matchEl?.classList.add('hidden');
+      return;
+    }
+
+    matchEl?.classList.remove('hidden');
+    if (password === password2) {
+      matchEl!.textContent = 'Passwörter stimmen überein';
+      matchEl!.className = 'text-xs text-green-600';
+    } else {
+      matchEl!.textContent = 'Passwörter stimmen nicht überein';
+      matchEl!.className = 'text-xs text-red-600';
+    }
+  }
+
+  // Password strength and match listeners
+  passwordInput?.addEventListener('input', (e) => {
+    updatePasswordStrength((e.target as HTMLInputElement).value);
+    updatePasswordMatch();
+  });
+  password2Input?.addEventListener('input', updatePasswordMatch);
+
+  // Rate limit countdown
+  let rateLimitTimer: number | null = null;
+
+  function showRateLimitWarning(retryAfterMs: number) {
+    if (rateLimitTimer) clearInterval(rateLimitTimer);
+    
+    const seconds = Math.ceil(retryAfterMs / 1000);
+    if (rateLimitCountdown) rateLimitCountdown.textContent = String(seconds);
+    rateLimitWarning?.classList.remove('hidden');
+    errorEl?.classList.add('hidden');
+    
+    let remaining = seconds;
+    rateLimitTimer = window.setInterval(() => {
+      remaining--;
+      if (rateLimitCountdown) rateLimitCountdown.textContent = String(remaining);
+      if (remaining <= 0) {
+        if (rateLimitTimer) clearInterval(rateLimitTimer);
+        rateLimitWarning?.classList.add('hidden');
+        setLoading(emailBtn, false);
+        setLoading(googleBtn, false);
+      }
+    }, 1000);
+  }
 
   // Check if user is already logged in
   async function checkExistingSession() {
@@ -86,6 +205,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       errorEl.classList.remove('hidden');
     }
     if (successEl) successEl.classList.add('hidden');
+    rateLimitWarning?.classList.add('hidden');
   }
 
   // Show success message
@@ -95,6 +215,7 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       successEl.classList.remove('hidden');
     }
     if (errorEl) errorEl.classList.add('hidden');
+    rateLimitWarning?.classList.add('hidden');
   }
 
   // Set button loading state
@@ -122,7 +243,6 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       await signInWithGoogle();
       // User will be redirected to Google, then to /auth/callback
     } catch (err) {
-      console.error('Google register error:', err);
       showError('Google-Registrierung fehlgeschlagen. Bitte versuche es erneut.');
       setLoading(googleBtn, false);
     }
@@ -144,8 +264,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       showError('Die Passwörter stimmen nicht überein.');
       return;
     }
-    if (password.length < 6) {
-      showError('Das Passwort muss mindestens 6 Zeichen haben.');
+    if (password.length < 8) {
+      showError('Das Passwort muss mindestens 8 Zeichen haben.');
       return;
     }
 
@@ -161,6 +281,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         if (!session) {
           showSuccess('Konto erstellt! Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.');
           form.reset();
+          document.getElementById('password-strength')?.classList.add('hidden');
+          document.getElementById('password-match')?.classList.add('hidden');
         } else {
           // Auto-confirmed (e.g., in development)
           showSuccess('Konto erstellt! Du wirst weitergeleitet...');
@@ -175,7 +297,12 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         showError('Registrierung fehlgeschlagen. Bitte versuche es erneut.');
       }
     } catch (err: any) {
-      console.error('Register error:', err);
+      // Handle rate limiting (429)
+      if (err.status === 429 || err.message?.includes('rate limit') || err.message?.includes('Too many')) {
+        const retryAfter = err.retry_after_ms || 60000;
+        showRateLimitWarning(retryAfter);
+        return;
+      }
       
       // Handle specific Supabase errors
       if (err.message?.includes('User already registered')) {
@@ -193,10 +320,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   });
 
   // Initialize
-  // Show error immediately if Supabase is not configured
   if (!isSupabaseConfigured) {
     showError('Authentifizierung ist momentan nicht verfügbar. Bitte versuche es später erneut.');
-    console.error('Supabase nicht konfiguriert - prüfe PUBLIC_SUPABASE_URL und PUBLIC_SUPABASE_ANON_KEY');
   } else {
     checkExistingSession();
   }

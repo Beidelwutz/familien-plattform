@@ -47,6 +47,8 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                 <span class="text-sm text-gray-500">E-Mail</span>
                 <p class="font-medium text-gray-900" id="user-email-display">-</p>
               </div>
+              <span id="email-verified-badge" class="hidden px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Verifiziert</span>
+              <span id="email-unverified-badge" class="hidden px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Nicht verifiziert</span>
             </div>
             <div class="flex items-center justify-between py-3 border-b border-gray-100">
               <div>
@@ -61,6 +63,47 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Change Email -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h2 class="font-semibold text-gray-900 mb-4">E-Mail-Adresse ändern</h2>
+          <p class="text-sm text-gray-500 mb-4">Nach der Änderung musst du deine neue E-Mail-Adresse bestätigen.</p>
+          
+          <form id="change-email-form" class="space-y-4">
+            <div class="flex flex-col gap-2">
+              <label for="new-email" class="font-medium text-sm text-gray-700">Neue E-Mail-Adresse</label>
+              <input 
+                type="email" 
+                id="new-email" 
+                name="newEmail" 
+                required
+                autocomplete="email"
+                placeholder="neue@email.de"
+                class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
+              />
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <label for="email-password" class="font-medium text-sm text-gray-700">Aktuelles Passwort bestätigen</label>
+              <input 
+                type="password" 
+                id="email-password" 
+                name="password" 
+                required
+                autocomplete="current-password"
+                class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
+              />
+            </div>
+
+            <!-- Messages -->
+            <div id="email-error" class="hidden rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm"></div>
+            <div id="email-success" class="hidden rounded-xl bg-green-50 text-green-700 px-4 py-3 text-sm"></div>
+
+            <button type="submit" id="change-email-btn" class="btn-primary py-3 px-6">
+              E-Mail ändern
+            </button>
+          </form>
         </div>
 
         <!-- Change Password -->
@@ -93,6 +136,16 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                 autocomplete="new-password"
                 class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-primary-500 transition-colors" 
               />
+              <!-- Password Strength Indicator -->
+              <div id="password-strength" class="hidden mt-2">
+                <div class="flex gap-1 mb-1">
+                  <div id="strength-bar-1" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-2" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-3" class="h-1 flex-1 rounded bg-gray-200"></div>
+                  <div id="strength-bar-4" class="h-1 flex-1 rounded bg-gray-200"></div>
+                </div>
+                <p id="strength-text" class="text-xs text-gray-500"></p>
+              </div>
             </div>
 
             <div class="flex flex-col gap-2">
@@ -122,8 +175,9 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         <!-- Danger Zone -->
         <div class="bg-white rounded-2xl shadow-card p-6 border-2 border-red-100">
           <h2 class="font-semibold text-red-700 mb-4">Gefahrenzone</h2>
-          <div class="space-y-4">
-            <div class="flex items-center justify-between">
+          <div class="space-y-6">
+            <!-- Logout -->
+            <div class="flex items-center justify-between pb-4 border-b border-gray-100">
               <div>
                 <p class="font-medium text-gray-900">Abmelden</p>
                 <p class="text-sm text-gray-500">Von diesem Gerät abmelden</p>
@@ -131,6 +185,65 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               <button id="logout-settings-btn" class="px-4 py-2 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 transition-colors">
                 Abmelden
               </button>
+            </div>
+
+            <!-- Delete Account -->
+            <div>
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="font-medium text-red-700">Konto löschen</p>
+                  <p class="text-sm text-gray-500">Alle Daten werden unwiderruflich gelöscht</p>
+                </div>
+                <button id="show-delete-form-btn" class="px-4 py-2 border-2 border-red-200 rounded-xl text-red-700 hover:bg-red-50 transition-colors">
+                  Konto löschen
+                </button>
+              </div>
+
+              <!-- Delete Confirmation Form -->
+              <div id="delete-account-form-container" class="hidden mt-4 p-4 bg-red-50 rounded-xl">
+                <p class="text-sm text-red-700 mb-4">
+                  <strong>Achtung:</strong> Diese Aktion kann nicht rückgängig gemacht werden. Alle deine Daten, einschließlich gespeicherter Events und Pläne, werden dauerhaft gelöscht.
+                </p>
+                <form id="delete-account-form" class="space-y-4">
+                  <div class="flex flex-col gap-2">
+                    <label for="delete-password" class="font-medium text-sm text-red-700">Passwort bestätigen</label>
+                    <input 
+                      type="password" 
+                      id="delete-password" 
+                      name="password" 
+                      required
+                      autocomplete="current-password"
+                      class="w-full px-4 py-3 border-2 border-red-200 rounded-xl focus:outline-none focus:border-red-500 transition-colors bg-white" 
+                    />
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <label for="delete-confirmation" class="font-medium text-sm text-red-700">
+                      Tippe <span class="font-mono bg-red-100 px-1 rounded">DELETE</span> zur Bestätigung
+                    </label>
+                    <input 
+                      type="text" 
+                      id="delete-confirmation" 
+                      name="confirmation" 
+                      required
+                      placeholder="DELETE"
+                      class="w-full px-4 py-3 border-2 border-red-200 rounded-xl focus:outline-none focus:border-red-500 transition-colors bg-white font-mono" 
+                    />
+                  </div>
+
+                  <!-- Messages -->
+                  <div id="delete-error" class="hidden rounded-xl bg-red-100 text-red-800 px-4 py-3 text-sm"></div>
+
+                  <div class="flex gap-3">
+                    <button type="button" id="cancel-delete-btn" class="flex-1 py-3 px-6 border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-white transition-colors">
+                      Abbrechen
+                    </button>
+                    <button type="submit" id="delete-account-btn" class="flex-1 py-3 px-6 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors">
+                      Endgültig löschen
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </div>
@@ -143,6 +256,56 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   const loadingState = document.getElementById('loading-state');
   const authRequired = document.getElementById('auth-required');
   const settingsContent = document.getElementById('settings-content');
+
+  // Password strength checker
+  function checkPasswordStrength(password) {
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^a-zA-Z0-9]/.test(password)) score++;
+    return Math.min(score, 4);
+  }
+
+  function updatePasswordStrength(password) {
+    const strengthContainer = document.getElementById('password-strength');
+    const strengthText = document.getElementById('strength-text');
+    const bars = [
+      document.getElementById('strength-bar-1'),
+      document.getElementById('strength-bar-2'),
+      document.getElementById('strength-bar-3'),
+      document.getElementById('strength-bar-4')
+    ];
+
+    if (!password) {
+      strengthContainer?.classList.add('hidden');
+      return;
+    }
+
+    strengthContainer?.classList.remove('hidden');
+    const strength = checkPasswordStrength(password);
+
+    const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+    const texts = ['Sehr schwach', 'Schwach', 'Mittel', 'Stark'];
+
+    bars.forEach((bar, index) => {
+      bar.classList.remove('bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500');
+      if (index < strength) {
+        bar.classList.add(colors[strength - 1]);
+      } else {
+        bar.classList.add('bg-gray-200');
+      }
+    });
+
+    strengthText.textContent = strength > 0 ? texts[strength - 1] : 'Sehr schwach';
+    strengthText.className = `text-xs ${strength >= 3 ? 'text-green-600' : strength >= 2 ? 'text-yellow-600' : 'text-red-600'}`;
+  }
+
+  // Initialize password strength on new password field
+  document.getElementById('new-password')?.addEventListener('input', (e) => {
+    updatePasswordStrength(e.target.value);
+  });
 
   async function initSettings() {
     const token = localStorage.getItem('auth_token');
@@ -184,6 +347,13 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         day: 'numeric'
       });
 
+      // Show verification badge
+      if (user.email_verified) {
+        document.getElementById('email-verified-badge')?.classList.remove('hidden');
+      } else {
+        document.getElementById('email-unverified-badge')?.classList.remove('hidden');
+      }
+
       // Show content
       loadingState?.classList.add('hidden');
       settingsContent?.classList.remove('hidden');
@@ -194,6 +364,83 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       authRequired?.classList.remove('hidden');
     }
   }
+
+  // Change email form
+  const changeEmailForm = document.getElementById('change-email-form');
+  const emailError = document.getElementById('email-error');
+  const emailSuccess = document.getElementById('email-success');
+
+  changeEmailForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const newEmail = document.getElementById('new-email')?.value;
+    const password = document.getElementById('email-password')?.value;
+    const submitBtn = document.getElementById('change-email-btn');
+
+    // Reset messages
+    emailError?.classList.add('hidden');
+    emailSuccess?.classList.add('hidden');
+
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      emailError.textContent = 'Nicht angemeldet. Bitte lade die Seite neu.';
+      emailError?.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Wird geändert...';
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/change-email`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newEmail, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update token if new one was returned
+        if (data.data?.token) {
+          localStorage.setItem('auth_token', data.data.token);
+        }
+
+        // Update displayed email
+        document.getElementById('user-email-display').textContent = data.data?.email || newEmail;
+        
+        // Update verification badges
+        document.getElementById('email-verified-badge')?.classList.add('hidden');
+        document.getElementById('email-unverified-badge')?.classList.remove('hidden');
+
+        emailSuccess.textContent = 'E-Mail wurde geändert. Bitte überprüfe dein Postfach zur Verifizierung.';
+        emailSuccess?.classList.remove('hidden');
+
+        // Clear form
+        changeEmailForm.reset();
+      } else {
+        const errorMessages = {
+          'INVALID_PASSWORD': 'Das Passwort ist falsch.',
+          'SAME_EMAIL': 'Die neue E-Mail muss sich von der aktuellen unterscheiden.',
+          'EMAIL_EXISTS': 'Diese E-Mail-Adresse wird bereits verwendet.',
+          'NO_PASSWORD': 'Für OAuth-Konten kann die E-Mail nicht geändert werden.',
+          'VALIDATION_ERROR': data.error?.message || 'Ungültige Eingabe.'
+        };
+
+        emailError.textContent = errorMessages[data.error?.code] || data.error?.message || 'Ein Fehler ist aufgetreten.';
+        emailError?.classList.remove('hidden');
+      }
+    } catch (error) {
+      emailError.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+      emailError?.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'E-Mail ändern';
+    }
+  });
 
   // Change password form
   const changePasswordForm = document.getElementById('change-password-form');
@@ -256,8 +503,9 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         passwordSuccess.textContent = 'Passwort wurde erfolgreich geändert.';
         passwordSuccess?.classList.remove('hidden');
 
-        // Clear form
+        // Clear form and hide strength indicator
         changePasswordForm.reset();
+        document.getElementById('password-strength')?.classList.add('hidden');
       } else {
         const errorMessages = {
           'INVALID_PASSWORD': 'Das aktuelle Passwort ist falsch.',
@@ -275,6 +523,93 @@ const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Passwort ändern';
+    }
+  });
+
+  // Show/hide delete account form
+  const showDeleteFormBtn = document.getElementById('show-delete-form-btn');
+  const deleteFormContainer = document.getElementById('delete-account-form-container');
+  const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+
+  showDeleteFormBtn?.addEventListener('click', () => {
+    deleteFormContainer?.classList.remove('hidden');
+    showDeleteFormBtn?.classList.add('hidden');
+  });
+
+  cancelDeleteBtn?.addEventListener('click', () => {
+    deleteFormContainer?.classList.add('hidden');
+    showDeleteFormBtn?.classList.remove('hidden');
+    document.getElementById('delete-account-form')?.reset();
+    document.getElementById('delete-error')?.classList.add('hidden');
+  });
+
+  // Delete account form
+  const deleteAccountForm = document.getElementById('delete-account-form');
+  const deleteError = document.getElementById('delete-error');
+
+  deleteAccountForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const password = document.getElementById('delete-password')?.value;
+    const confirmation = document.getElementById('delete-confirmation')?.value;
+    const submitBtn = document.getElementById('delete-account-btn');
+
+    // Reset messages
+    deleteError?.classList.add('hidden');
+
+    // Validate confirmation
+    if (confirmation !== 'DELETE') {
+      deleteError.textContent = 'Bitte tippe DELETE zur Bestätigung.';
+      deleteError?.classList.remove('hidden');
+      return;
+    }
+
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      deleteError.textContent = 'Nicht angemeldet. Bitte lade die Seite neu.';
+      deleteError?.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Wird gelöscht...';
+
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/account`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password, confirmation })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Clear token and redirect
+        localStorage.removeItem('auth_token');
+        
+        // Show success message briefly before redirect
+        alert('Dein Konto wurde erfolgreich gelöscht.');
+        window.location.href = '/';
+      } else {
+        const errorMessages = {
+          'INVALID_PASSWORD': 'Das Passwort ist falsch.',
+          'LAST_ADMIN': 'Das letzte Admin-Konto kann nicht gelöscht werden.',
+          'NO_PASSWORD': 'OAuth-Konten können hier nicht gelöscht werden.',
+          'VALIDATION_ERROR': data.error?.message || 'Ungültige Eingabe.'
+        };
+
+        deleteError.textContent = errorMessages[data.error?.code] || data.error?.message || 'Ein Fehler ist aufgetreten.';
+        deleteError?.classList.remove('hidden');
+      }
+    } catch (error) {
+      deleteError.textContent = 'Verbindungsfehler. Bitte versuche es später erneut.';
+      deleteError?.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Endgültig löschen';
     }
   });
 
