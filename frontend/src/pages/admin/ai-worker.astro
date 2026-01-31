@@ -1,0 +1,307 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StickyHeader from '../../components/layout/StickyHeader.astro';
+import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+---
+
+<BaseLayout title="AI Worker - Admin - kiezling">
+  <StickyHeader />
+  <AdminMobileNav currentPage="ai-worker" />
+  
+  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header class="mb-6">
+        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+        <h1 class="text-2xl font-bold text-gray-900">AI Worker</h1>
+        <p class="text-gray-500 text-sm mt-1">Pending-Events klassifizieren und Status setzen</p>
+      </header>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade Status...</p>
+      </div>
+
+      <!-- Content -->
+      <div id="content" class="hidden space-y-6">
+        <!-- Pending AI Card -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-900">Warten auf AI-Klassifizierung</h2>
+              <p class="text-sm text-gray-500">Events mit Status <code class="bg-gray-100 px-1 rounded">pending_ai</code></p>
+            </div>
+            <div class="text-right">
+              <span id="pending-ai-count" class="text-4xl font-bold text-amber-500">--</span>
+              <span class="block text-sm text-gray-500">Events</span>
+            </div>
+          </div>
+          
+          <div class="border-t border-gray-100 pt-4 mt-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div class="flex items-center gap-2">
+                <label for="limit-select" class="text-sm text-gray-600">Limit:</label>
+                <select id="limit-select" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              <button 
+                id="process-btn" 
+                class="flex-1 sm:flex-none px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <span id="btn-icon">🚀</span>
+                <span id="btn-text">Pending-AI verarbeiten</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Processing Result -->
+        <div id="result-card" class="hidden bg-white rounded-2xl shadow-card p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Ergebnis der Verarbeitung</h3>
+          
+          <!-- Result Summary -->
+          <div id="result-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div class="bg-green-50 rounded-xl p-4 text-center">
+              <span id="result-published" class="text-2xl font-bold text-green-600">0</span>
+              <span class="block text-sm text-green-600">Veröffentlicht</span>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-4 text-center">
+              <span id="result-review" class="text-2xl font-bold text-amber-600">0</span>
+              <span class="block text-sm text-amber-600">Zur Prüfung</span>
+            </div>
+            <div class="bg-red-50 rounded-xl p-4 text-center">
+              <span id="result-rejected" class="text-2xl font-bold text-red-600">0</span>
+              <span class="block text-sm text-red-600">Abgelehnt</span>
+            </div>
+            <div class="bg-gray-50 rounded-xl p-4 text-center">
+              <span id="result-failed" class="text-2xl font-bold text-gray-600">0</span>
+              <span class="block text-sm text-gray-600">Fehler</span>
+            </div>
+          </div>
+
+          <!-- Result Details -->
+          <div id="result-details" class="hidden">
+            <div class="border-t border-gray-100 pt-4">
+              <h4 class="text-sm font-medium text-gray-700 mb-2">Details:</h4>
+              <div id="result-list" class="max-h-64 overflow-y-auto space-y-2 text-sm"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Worker Status (Optional - wenn Backend-Proxy existiert) -->
+        <div id="worker-status-card" class="hidden bg-white rounded-2xl shadow-card p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Worker Status</h3>
+          <div class="flex items-center gap-3">
+            <span id="worker-indicator" class="w-3 h-3 rounded-full bg-gray-300"></span>
+            <span id="worker-status-text" class="text-gray-600">Prüfe...</span>
+          </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Schnellzugriff</h3>
+          <div class="flex flex-wrap gap-3">
+            <a href="/admin/review?status=pending_ai" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium">
+              📋 Pending-AI Events ansehen
+            </a>
+            <a href="/admin/review?status=pending_review" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
+              👁️ Review Queue
+            </a>
+            <a href="/admin/ai-usage" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
+              📊 AI Usage Monitor
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+        <p class="text-red-500 text-lg mb-4">Fehler beim Laden</p>
+        <button onclick="loadData()" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Erneut versuchen</button>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script define:vars={{ API_URL }}>
+  const token = localStorage.getItem('auth_token');
+  if (!token) {
+    window.location.href = '/login?redirect=/admin/ai-worker';
+  }
+
+  let isProcessing = false;
+
+  async function loadData() {
+    document.getElementById('loading-state').classList.remove('hidden');
+    document.getElementById('content').classList.add('hidden');
+    document.getElementById('error-state').classList.add('hidden');
+
+    try {
+      const pendingRes = await fetch(`${API_URL}/api/admin/pending-ai-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!pendingRes.ok) throw new Error('Failed to load pending count');
+
+      const pending = await pendingRes.json();
+      document.getElementById('pending-ai-count').textContent = pending.data?.count || 0;
+
+      // Optional: Check worker health
+      checkWorkerHealth();
+
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('content').classList.remove('hidden');
+    } catch (e) {
+      console.error('Load error:', e);
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('error-state').classList.remove('hidden');
+    }
+  }
+
+  async function checkWorkerHealth() {
+    const card = document.getElementById('worker-status-card');
+    const indicator = document.getElementById('worker-indicator');
+    const statusText = document.getElementById('worker-status-text');
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ai-worker/health`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        card.classList.remove('hidden');
+        if (data.success && data.data?.status === 'healthy') {
+          indicator.className = 'w-3 h-3 rounded-full bg-green-500';
+          statusText.textContent = 'Erreichbar';
+          statusText.className = 'text-green-600';
+        } else {
+          indicator.className = 'w-3 h-3 rounded-full bg-yellow-500';
+          statusText.textContent = 'Eingeschränkt';
+          statusText.className = 'text-yellow-600';
+        }
+      }
+    } catch (e) {
+      // Worker health endpoint nicht verfügbar - Card versteckt lassen
+      console.log('Worker health check not available');
+    }
+  }
+
+  async function processEvents() {
+    if (isProcessing) return;
+
+    const btn = document.getElementById('process-btn');
+    const btnIcon = document.getElementById('btn-icon');
+    const btnText = document.getElementById('btn-text');
+    const limit = document.getElementById('limit-select').value;
+
+    // Set loading state
+    isProcessing = true;
+    btn.disabled = true;
+    btnIcon.textContent = '⏳';
+    btnText.textContent = 'Verarbeite...';
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/process-pending-ai?limit=${limit}`, {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Processing failed');
+      }
+
+      // Show results
+      showResults(data);
+
+      // Reload pending count
+      const pendingRes = await fetch(`${API_URL}/api/admin/pending-ai-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (pendingRes.ok) {
+        const pending = await pendingRes.json();
+        document.getElementById('pending-ai-count').textContent = pending.data?.count || 0;
+      }
+
+    } catch (e) {
+      console.error('Processing error:', e);
+      alert('Fehler bei der Verarbeitung: ' + e.message);
+    } finally {
+      isProcessing = false;
+      btn.disabled = false;
+      btnIcon.textContent = '🚀';
+      btnText.textContent = 'Pending-AI verarbeiten';
+    }
+  }
+
+  function showResults(data) {
+    const resultCard = document.getElementById('result-card');
+    resultCard.classList.remove('hidden');
+
+    // Summary
+    const summary = data.summary || {};
+    document.getElementById('result-published').textContent = summary.published || 0;
+    document.getElementById('result-review').textContent = summary.pending_review || 0;
+    document.getElementById('result-rejected').textContent = summary.rejected || 0;
+    document.getElementById('result-failed').textContent = summary.failed || 0;
+
+    // Details
+    const results = data.results || [];
+    if (results.length > 0) {
+      document.getElementById('result-details').classList.remove('hidden');
+      const listEl = document.getElementById('result-list');
+      
+      listEl.innerHTML = results.map(r => {
+        let statusClass = 'text-gray-600';
+        let statusIcon = '❓';
+        
+        if (r.status === 'published') {
+          statusClass = 'text-green-600';
+          statusIcon = '✅';
+        } else if (r.status === 'pending_review') {
+          statusClass = 'text-amber-600';
+          statusIcon = '👁️';
+        } else if (r.status === 'rejected') {
+          statusClass = 'text-red-600';
+          statusIcon = '❌';
+        } else if (r.error) {
+          statusClass = 'text-gray-500';
+          statusIcon = '⚠️';
+        }
+
+        return `
+          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+            <div class="flex items-center gap-2 min-w-0">
+              <span>${statusIcon}</span>
+              <span class="truncate" title="${r.title || r.id}">${r.title || r.id}</span>
+            </div>
+            <span class="${statusClass} text-xs font-medium whitespace-nowrap ml-2">
+              ${r.error ? r.error : r.status}
+              ${r.familyFit ? `(${r.familyFit}%)` : ''}
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Scroll to results
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // Event listeners
+  document.getElementById('process-btn').addEventListener('click', processEvents);
+
+  // Initial load
+  loadData();
+</script>

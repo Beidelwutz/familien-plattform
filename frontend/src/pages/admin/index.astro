@@ -26,7 +26,7 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
       <!-- Dashboard Content (hidden until loaded) -->
       <div id="dashboard-content" class="hidden">
         <!-- Dashboard Cards - Horizontal scroll on mobile -->
-        <div class="flex lg:grid lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 lg:mb-8 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-visible snap-x snap-mandatory lg:snap-none">
+        <div class="flex lg:grid lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6 mb-6 lg:mb-8 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-visible snap-x snap-mandatory lg:snap-none">
           <!-- Review Queue -->
           <a href="/admin/review" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
             <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">📋</div>
@@ -36,6 +36,19 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
               <div class="mt-2">
                 <span id="review-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
                 <span class="block text-xs text-gray-500">ausstehend</span>
+              </div>
+            </div>
+          </a>
+
+          <!-- AI Worker / Pending AI -->
+          <a href="/admin/ai-worker" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
+            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">🤖</div>
+            <div>
+              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">AI Worker</h2>
+              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Warten auf Klassifizierung</p>
+              <div class="mt-2">
+                <span id="pending-ai-count" class="text-lg sm:text-xl font-bold text-amber-500">--</span>
+                <span class="block text-xs text-gray-500">warten auf AI</span>
               </div>
             </div>
           </a>
@@ -91,7 +104,7 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
 
         <section class="mb-8">
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Übersicht</h2>
-          <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <a href="/admin/review?status=all" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="total-events" class="block text-xl font-bold text-primary-500">--</span>
               <span class="text-sm text-gray-500">Events gesamt</span>
@@ -103,6 +116,10 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
             <a href="/admin/review?status=pending_review" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="pending-events" class="block text-xl font-bold text-primary-500">--</span>
               <span class="text-sm text-gray-500">Ausstehend</span>
+            </a>
+            <a href="/admin/ai-worker" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-amber-300 hover:shadow-md transition-all block">
+              <span id="pending-ai-overview" class="block text-xl font-bold text-amber-500">--</span>
+              <span class="text-sm text-gray-500">Warten auf AI</span>
             </a>
             <a href="/admin/runs" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="today-imports" class="block text-xl font-bold text-primary-500">--</span>
@@ -253,7 +270,7 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
 
     // Load dashboard data
     try {
-      const [statsRes, dupsRes, attentionRes, trendsRes] = await Promise.all([
+      const [statsRes, dupsRes, attentionRes, trendsRes, pendingAiRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/stats`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
@@ -266,6 +283,9 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
         fetch(`${API_URL}/api/admin/trends/stats`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
+        fetch(`${API_URL}/api/admin/pending-ai-count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
       ]);
 
       if (!statsRes.ok) throw new Error('Stats fetch failed');
@@ -274,6 +294,7 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
       const dups = dupsRes.ok ? await dupsRes.json() : { pagination: { total: 0 } };
       const attention = attentionRes.ok ? await attentionRes.json() : { total: 0 };
       const trends = trendsRes.ok ? await trendsRes.json() : { uniqueTerms: 0, lastComputed: null };
+      const pendingAi = pendingAiRes.ok ? await pendingAiRes.json() : { data: { count: 0 } };
 
       // Update DOM
       const totalEvents = document.getElementById('total-events');
@@ -311,6 +332,13 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
       // Trends
       const trendingCount = document.getElementById('trending-count');
       if (trendingCount) trendingCount.textContent = String(trends.lastComputed ? (trends.uniqueTerms || 0) : 0);
+
+      // Pending AI
+      const pendingAiCountValue = String(pendingAi.data?.count || 0);
+      const pendingAiCount = document.getElementById('pending-ai-count');
+      const pendingAiOverview = document.getElementById('pending-ai-overview');
+      if (pendingAiCount) pendingAiCount.textContent = pendingAiCountValue;
+      if (pendingAiOverview) pendingAiOverview.textContent = pendingAiCountValue;
 
       // Show content
       document.getElementById('loading-state')?.classList.add('hidden');

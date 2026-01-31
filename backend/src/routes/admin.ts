@@ -1284,4 +1284,81 @@ router.get('/pending-ai-count', async (_req: Request, res: Response, next: NextF
   }
 });
 
+// ============================================
+// AI WORKER PROXY ENDPOINTS
+// ============================================
+
+// GET /api/admin/ai-worker/health - Proxy to AI Worker health endpoint
+router.get('/ai-worker/health', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const response = await fetch(`${AI_WORKER_URL}/health`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+    
+    if (!response.ok) {
+      return res.json({
+        success: false,
+        error: `AI Worker returned ${response.status}`,
+        data: { status: 'unhealthy' }
+      });
+    }
+    
+    const data = await response.json();
+    
+    res.json({
+      success: true,
+      data: {
+        status: 'healthy',
+        ...data
+      }
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.warn(`AI Worker health check failed: ${errorMessage}`);
+    
+    res.json({
+      success: false,
+      error: errorMessage,
+      data: { status: 'unreachable' }
+    });
+  }
+});
+
+// GET /api/admin/ai-worker/queue-stats - Proxy to AI Worker queue stats endpoint
+router.get('/ai-worker/queue-stats', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const response = await fetch(`${AI_WORKER_URL}/crawl/queue-stats`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+    
+    if (!response.ok) {
+      return res.json({
+        success: false,
+        error: `AI Worker returned ${response.status}`,
+        data: null
+      });
+    }
+    
+    const data = await response.json();
+    
+    res.json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.warn(`AI Worker queue-stats failed: ${errorMessage}`);
+    
+    res.json({
+      success: false,
+      error: errorMessage,
+      data: null
+    });
+  }
+});
+
 export default router;
