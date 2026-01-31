@@ -5,8 +5,12 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { signToken, requireAuth, type AuthRequest } from '../middleware/auth.js';
+import { verifyToken as verifySupabaseToken } from '../lib/supabase.js';
 import { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } from '../lib/email.js';
 import { authLimiter } from '../middleware/rateLimit.js';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const router = Router();
 
@@ -197,6 +201,7 @@ router.post('/login', authLimiter, loginValidation, async (req: Request, res: Re
 });
 
 // GET /api/auth/me - Get current user (requires valid JWT)
+// Note: This endpoint only READS the user, it does NOT sync. Use POST /api/auth/sync for that.
 router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authReq = req as AuthRequest;
@@ -205,7 +210,8 @@ router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFun
       select: { id: true, email: true, role: true, email_verified: true, created_at: true }
     });
     if (!user) {
-      return next(createError('User not found', 404, 'NOT_FOUND'));
+      // User exists in Supabase but not in Prisma - they need to call /sync first
+      return next(createError('Account not found. Please try logging in again.', 404, 'ACCOUNT_NOT_FOUND'));
     }
     res.json({
       success: true,
@@ -222,6 +228,90 @@ router.post('/logout', (_req: Request, res: Response) => {
     success: true,
     message: 'Logged out'
   });
+});
+
+// ============================================
+// SUPABASE USER SYNC
+// ============================================
+
+// POST /api/auth/sync - Explicit user sync from Supabase to Prisma
+// This endpoint ensures the Prisma user exists before the app considers the user "logged in"
+router.post('/sync', async (req: Request, res: Response, _next: NextFunction) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ 
+      success: false, 
+      error: { code: 'AUTH_INVALID', message: 'Authentication required' } 
+    });
+  }
+
+  if (!isSupabaseConfigured) {
+    return res.status(503).json({ 
+      success: false, 
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Supabase is not configured' } 
+    });
+  }
+
+  try {
+    // Verify Supabase token
+    const supabaseUser = await verifySupabaseToken(token);
+    
+    if (!supabaseUser) {
+      return res.status(401).json({ 
+        success: false, 
+        error: { code: 'AUTH_INVALID', message: 'Invalid or expired token' } 
+      });
+    }
+
+    // Check if email exists
+    if (!supabaseUser.email) {
+      return res.status(409).json({ 
+        success: false, 
+        error: { code: 'EMAIL_MISSING', message: 'No email associated with this account' } 
+      });
+    }
+
+    // Upsert user in Prisma
+    const user = await prisma.user.upsert({
+      where: { id: supabaseUser.id },
+      update: { 
+        email: supabaseUser.email, 
+        updated_at: new Date() 
+      },
+      create: { 
+        id: supabaseUser.id, 
+        email: supabaseUser.email, 
+        role: 'parent' 
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        email_verified: true,
+        created_at: true
+      }
+    });
+
+    // Upsert FamilyProfile (ensure it exists)
+    await prisma.familyProfile.upsert({
+      where: { user_id: user.id },
+      update: {},
+      create: { user_id: user.id }
+    });
+
+    return res.json({
+      success: true,
+      message: 'User synchronized successfully',
+      data: user
+    });
+  } catch (err) {
+    console.error('Sync failed:', err);
+    return res.status(500).json({ 
+      success: false, 
+      error: { code: 'ACCOUNT_SYNC_FAILED', message: 'Failed to sync user account' } 
+    });
+  }
 });
 
 // ============================================

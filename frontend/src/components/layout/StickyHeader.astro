@@ -65,8 +65,43 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
           <span class="text-sm font-medium">Merkliste</span>
         </a>
 
+        <!-- Profile / Login - Loading state -->
+        <div id="auth-loading" class="flex items-center gap-2 px-4 py-2 text-gray-400">
+          <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+
+        <!-- Profile / Login - Connection Error state -->
+        <div id="auth-error" class="hidden relative">
+          <button 
+            id="auth-error-btn"
+            class="flex items-center gap-2 px-3 py-2 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500"
+            aria-expanded="false"
+            aria-haspopup="true"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+            <span class="hidden sm:inline text-sm font-medium">Verbindungsfehler</span>
+          </button>
+          <!-- Error Dropdown -->
+          <div id="auth-error-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 py-3 px-4 z-50">
+            <p class="text-sm text-gray-600 mb-3">Verbindung zum Server nicht möglich.</p>
+            <div class="flex gap-2">
+              <button id="auth-retry-btn" class="flex-1 px-3 py-2 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600">
+                Erneut versuchen
+              </button>
+              <button id="auth-error-logout-btn" class="px-3 py-2 text-gray-600 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">
+                Abmelden
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Profile / Login - Logged out state -->
-        <a href="/login" id="login-btn" class="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-full hover:bg-primary-600 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+        <a href="/login" id="login-btn" class="hidden flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-full hover:bg-primary-600 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
           </svg>
@@ -199,7 +234,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
 <script>
   import { syncAuthToken } from '../../lib/authSync';
-  import { getSession } from '../../lib/supabase';
+  
   // Mobile menu toggle
   const mobileMenuBtn = document.getElementById('mobile-menu-btn');
   const mobileMenu = document.getElementById('mobile-menu');
@@ -239,17 +274,101 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     userMenuBtn.setAttribute('aria-expanded', userDropdown?.classList.contains('hidden') ? 'false' : 'true');
   });
 
-  // Close dropdown when clicking outside
+  // Error dropdown toggle
+  const authErrorBtn = document.getElementById('auth-error-btn');
+  const authErrorDropdown = document.getElementById('auth-error-dropdown');
+
+  authErrorBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    authErrorDropdown?.classList.toggle('hidden');
+    authErrorBtn.setAttribute('aria-expanded', authErrorDropdown?.classList.contains('hidden') ? 'false' : 'true');
+  });
+
+  // Close dropdowns when clicking outside
   document.addEventListener('click', (e) => {
     const target = e.target as Node | null;
     if (!userMenuBtn?.contains(target) && !userDropdown?.contains(target)) {
       userDropdown?.classList.add('hidden');
       userMenuBtn?.setAttribute('aria-expanded', 'false');
     }
+    if (!authErrorBtn?.contains(target) && !authErrorDropdown?.contains(target)) {
+      authErrorDropdown?.classList.add('hidden');
+      authErrorBtn?.setAttribute('aria-expanded', 'false');
+    }
   });
 
-  // Auth state management
+  // Auth state management - 3 States: loading, authenticated, unauthenticated, connection_error
   const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
+
+  // UI Elements
+  const authLoading = document.getElementById('auth-loading');
+  const authError = document.getElementById('auth-error');
+  const loginBtn = document.getElementById('login-btn');
+  const userMenu = document.getElementById('user-menu');
+  const mobileLoginBtn = document.getElementById('mobile-login-btn');
+  const mobileUserSection = document.getElementById('mobile-user-section');
+
+  type AuthState = 'loading' | 'authenticated' | 'unauthenticated' | 'connection_error';
+
+  function setAuthState(state: AuthState, user?: { email: string; role: string }) {
+    // Hide all states first
+    authLoading?.classList.add('hidden');
+    authError?.classList.add('hidden');
+    loginBtn?.classList.add('hidden');
+    userMenu?.classList.add('hidden');
+    mobileLoginBtn?.classList.add('hidden');
+    mobileUserSection?.classList.add('hidden');
+
+    switch (state) {
+      case 'loading':
+        authLoading?.classList.remove('hidden');
+        break;
+
+      case 'authenticated':
+        userMenu?.classList.remove('hidden');
+        mobileUserSection?.classList.remove('hidden');
+        
+        if (user) {
+          const userEmail = document.getElementById('user-email');
+          const dropdownEmail = document.getElementById('dropdown-email');
+          const dropdownRole = document.getElementById('dropdown-role');
+          const mobileUserEmail = document.getElementById('mobile-user-email');
+
+          if (userEmail) userEmail.textContent = user.email.split('@')[0];
+          if (dropdownEmail) dropdownEmail.textContent = user.email;
+          if (mobileUserEmail) mobileUserEmail.textContent = user.email;
+          
+          const roleLabels: Record<string, string> = {
+            'admin': 'Administrator',
+            'provider': 'Anbieter',
+            'parent': 'Familie'
+          };
+          if (dropdownRole) dropdownRole.textContent = roleLabels[user.role] || user.role;
+
+          // Show admin link for admin users
+          if (user.role === 'admin') {
+            document.getElementById('admin-link')?.classList.remove('hidden');
+            document.getElementById('mobile-admin-link')?.classList.remove('hidden');
+          }
+
+          // Show provider link for provider users
+          if (user.role === 'provider' || user.role === 'admin') {
+            document.getElementById('provider-link')?.classList.remove('hidden');
+            document.getElementById('mobile-provider-link')?.classList.remove('hidden');
+          }
+        }
+        break;
+
+      case 'unauthenticated':
+        loginBtn?.classList.remove('hidden');
+        mobileLoginBtn?.classList.remove('hidden');
+        break;
+
+      case 'connection_error':
+        authError?.classList.remove('hidden');
+        break;
+    }
+  }
 
   async function checkAuthState() {
     let token = localStorage.getItem('auth_token');
@@ -257,11 +376,9 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     // Debug logging
     console.log('[Auth] Checking auth state, API_BASE:', API_BASE);
     console.log('[Auth] Token exists:', !!token);
-    
-    const loginBtn = document.getElementById('login-btn');
-    const userMenu = document.getElementById('user-menu');
-    const mobileLoginBtn = document.getElementById('mobile-login-btn');
-    const mobileUserSection = document.getElementById('mobile-user-section');
+
+    // Start with loading state
+    setAuthState('loading');
 
     if (!token) {
       token = await syncAuthToken();
@@ -270,27 +387,30 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     if (!token) {
       // Not logged in
       console.log('[Auth] No token found, showing login button');
-      loginBtn?.classList.remove('hidden');
-      userMenu?.classList.add('hidden');
-      mobileLoginBtn?.classList.remove('hidden');
-      mobileUserSection?.classList.add('hidden');
+      setAuthState('unauthenticated');
       return;
     }
 
     try {
-      // Verify token and get user info
+      // Verify token and get user info from backend
       const response = await fetch(`${API_BASE}/api/auth/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!response.ok) {
-        // Token invalid - clear and show login
+        // Token invalid or user not found in DB
         console.log('[Auth] Token invalid, response status:', response.status);
+        
+        // Clear invalid token and sign out of Supabase
         localStorage.removeItem('auth_token');
-        loginBtn?.classList.remove('hidden');
-        userMenu?.classList.add('hidden');
-        mobileLoginBtn?.classList.remove('hidden');
-        mobileUserSection?.classList.add('hidden');
+        try {
+          const { supabase } = await import('../../lib/supabase');
+          await supabase.auth.signOut();
+        } catch {
+          // Supabase not available, continue
+        }
+        
+        setAuthState('unauthenticated');
         return;
       }
 
@@ -298,68 +418,15 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
       const user = data.data;
       console.log('[Auth] User authenticated:', user.email, 'Role:', user.role);
 
-      // Show logged in state
-      loginBtn?.classList.add('hidden');
-      userMenu?.classList.remove('hidden');
-      mobileLoginBtn?.classList.add('hidden');
-      mobileUserSection?.classList.remove('hidden');
-
-      // Update user info
-      const userEmail = document.getElementById('user-email');
-      const dropdownEmail = document.getElementById('dropdown-email');
-      const dropdownRole = document.getElementById('dropdown-role');
-      const mobileUserEmail = document.getElementById('mobile-user-email');
-
-      if (userEmail) userEmail.textContent = user.email.split('@')[0];
-      if (dropdownEmail) dropdownEmail.textContent = user.email;
-      if (mobileUserEmail) mobileUserEmail.textContent = user.email;
-      
-      const roleLabels: Record<string, string> = {
-        'admin': 'Administrator',
-        'provider': 'Anbieter',
-        'parent': 'Familie'
-      };
-      if (dropdownRole) dropdownRole.textContent = roleLabels[user.role] || user.role;
-
-      // Show admin link for admin users
-      if (user.role === 'admin') {
-        document.getElementById('admin-link')?.classList.remove('hidden');
-        document.getElementById('mobile-admin-link')?.classList.remove('hidden');
-      }
-
-      // Show provider link for provider users
-      if (user.role === 'provider' || user.role === 'admin') {
-        document.getElementById('provider-link')?.classList.remove('hidden');
-        document.getElementById('mobile-provider-link')?.classList.remove('hidden');
-      }
+      setAuthState('authenticated', user);
 
     } catch (error) {
-      console.error('[Auth] Auth check failed:', error);
-
-      // Fallback: try to show session-based logged-in UI when backend is unreachable
-      const session = await getSession();
-      if (session?.user?.email) {
-        loginBtn?.classList.add('hidden');
-        userMenu?.classList.remove('hidden');
-        mobileLoginBtn?.classList.add('hidden');
-        mobileUserSection?.classList.remove('hidden');
-
-        const userEmail = document.getElementById('user-email');
-        const dropdownEmail = document.getElementById('dropdown-email');
-        const dropdownRole = document.getElementById('dropdown-role');
-        const mobileUserEmail = document.getElementById('mobile-user-email');
-        if (userEmail) userEmail.textContent = session.user.email.split('@')[0];
-        if (dropdownEmail) dropdownEmail.textContent = session.user.email;
-        if (mobileUserEmail) mobileUserEmail.textContent = session.user.email;
-        if (dropdownRole) dropdownRole.textContent = 'Angemeldet';
-        return;
-      }
-
-      // On error without session, show login button
-      loginBtn?.classList.remove('hidden');
-      userMenu?.classList.add('hidden');
-      mobileLoginBtn?.classList.remove('hidden');
-      mobileUserSection?.classList.add('hidden');
+      console.error('[Auth] Auth check failed (network error):', error);
+      
+      // Network error - show connection error state
+      // DO NOT show as "logged in" without backend confirmation
+      // DO NOT clear token immediately (might be temporary network issue)
+      setAuthState('connection_error');
     }
   }
 
@@ -387,9 +454,17 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     }
   }
 
-  // Attach logout handlers
+  // Retry function for connection errors
+  function handleRetry() {
+    authErrorDropdown?.classList.add('hidden');
+    checkAuthState();
+  }
+
+  // Attach handlers
   document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
   document.getElementById('mobile-logout-btn')?.addEventListener('click', handleLogout);
+  document.getElementById('auth-retry-btn')?.addEventListener('click', handleRetry);
+  document.getElementById('auth-error-logout-btn')?.addEventListener('click', handleLogout);
 
   // Check auth state on load
   if (document.readyState === 'loading') {

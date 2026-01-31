@@ -85,6 +85,8 @@
   <script>
     import { supabase } from '../../lib/supabase';
 
+    const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
+
     /**
      * Extract error code from error message
      */
@@ -128,6 +130,9 @@
         'invalid_client': 'Ungültige Client-ID',
         'no_session': 'Keine Session erhalten',
         'pkce_error': 'Authentifizierungs-Fehler (PKCE)',
+        'ACCOUNT_SYNC_FAILED': 'Konto konnte nicht angelegt werden',
+        'EMAIL_MISSING': 'Keine E-Mail-Adresse',
+        'AUTH_INVALID': 'Authentifizierung ungültig',
         'unknown': 'Authentifizierung fehlgeschlagen',
       };
       return titles[code] || titles['unknown'];
@@ -153,6 +158,10 @@
           'Nach der Anmeldung wurde keine Session erstellt. Prüfe die Supabase-Konfiguration (Providers → Google).',
         'pkce_error': 
           'Fehler beim Code-Austausch. Bitte versuche es erneut oder lösche die Browser-Cookies für diese Seite.',
+        'ACCOUNT_SYNC_FAILED': 
+          'Dein Konto konnte nicht in der Datenbank angelegt werden. Bitte versuche es erneut.',
+        'EMAIL_MISSING': 
+          'Google hat keine E-Mail-Adresse übermittelt. Bitte nutze den E-Mail-Login oder prüfe deine Google-Kontoeinstellungen.',
       };
       return hints[code] || null;
     }
@@ -166,11 +175,27 @@
       return ['redirect_uri_mismatch', 'unauthorized_client', 'invalid_client', 'no_session'].includes(code);
     }
 
+    /**
+     * Clean up auth state on error
+     */
+    async function cleanupAuthState() {
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // Ignore signOut errors
+      }
+    }
+
     async function handleCallback() {
       const titleEl = document.getElementById('title') as HTMLElement | null;
       const messageEl = document.getElementById('message') as HTMLElement | null;
       const spinnerEl = document.getElementById('spinner') as HTMLElement | null;
       const errorEl = document.getElementById('error') as HTMLElement | null;
+
+      // For redirect after error
+      let errorCode = 'auth_failed';
 
       try {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -215,9 +240,37 @@
           sessionStorage.setItem('auth_token', session.access_token);
         }
 
-        // Update UI
+        // Update UI - syncing
+        if (messageEl) messageEl.textContent = 'Konto wird synchronisiert...';
+
+        // ============================================
+        // CRITICAL: Sync user to backend database
+        // This ensures the Prisma user exists before we consider the login successful
+        // ============================================
+        const syncResponse = await fetch(`${API_BASE}/api/auth/sync`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        });
+
+        if (!syncResponse.ok) {
+          const syncData = await syncResponse.json().catch(() => ({}));
+          errorCode = syncData.error?.code || 'ACCOUNT_SYNC_FAILED';
+          
+          // Clean up - user is in Supabase but not synced to our DB
+          await cleanupAuthState();
+          
+          throw new Error(syncData.error?.message || 'Konto konnte nicht synchronisiert werden');
+        }
+
+        // Debug logging in dev mode
+        if (import.meta.env.DEV) {
+          const syncData = await syncResponse.clone().json();
+          console.log('[Auth Callback] Sync successful:', syncData);
+        }
+
+        // Update UI - success
         if (titleEl) titleEl.textContent = 'Anmeldung erfolgreich!';
-        if (messageEl) messageEl.textContent = 'Sie werden weitergeleitet...';
+        if (messageEl) messageEl.textContent = 'Du wirst weitergeleitet...';
         if (spinnerEl) spinnerEl.style.borderTopColor = '#10b981';
 
         // Redirect
@@ -235,21 +288,24 @@
         
         if (errorEl) {
           const errorMessage = err instanceof Error ? err.message : 'Unbekannter Fehler';
-          const errorCode = getErrorCode(errorMessage);
-          const errorHint = getErrorHint(errorCode);
+          const displayCode = getErrorCode(errorMessage) !== 'unknown' ? getErrorCode(errorMessage) : errorCode;
+          const errorHint = getErrorHint(displayCode);
           
           errorEl.style.display = 'block';
           errorEl.innerHTML = `
-            <div class="error-title">${getErrorTitle(errorCode)}</div>
+            <div class="error-title">${getErrorTitle(displayCode)}</div>
             <div class="error-details">${errorMessage}</div>
             ${errorHint ? `<div class="error-hint">${errorHint}</div>` : ''}
           `;
         }
 
+        // Clean up auth state on any error
+        await cleanupAuthState();
+
         // Redirect to login after delay (longer for config errors)
         const redirectDelay = isConfigError(err) ? 8000 : 3000;
         setTimeout(() => {
-          window.location.href = '/login?error=auth_failed';
+          window.location.href = `/login?error=${errorCode}`;
         }, redirectDelay);
       }
     }

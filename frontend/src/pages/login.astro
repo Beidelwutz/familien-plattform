@@ -102,6 +102,8 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
 <script>
   import { supabase, signInWithGoogle, signInWithEmail, isSupabaseConfigured } from '../lib/supabase';
 
+  const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
+
   const form = document.getElementById('login-form') as HTMLFormElement;
   const errorEl = document.getElementById('login-error');
   const successEl = document.getElementById('login-success');
@@ -110,6 +112,21 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
   const rememberCheckbox = document.getElementById('remember-checkbox') as HTMLInputElement;
   const rateLimitWarning = document.getElementById('rate-limit-warning');
   const rateLimitCountdown = document.getElementById('rate-limit-countdown');
+
+  // ============================================
+  // Standardized error messages (from backend codes)
+  // ============================================
+  const ERROR_MESSAGES: Record<string, string> = {
+    'ACCOUNT_NOT_FOUND': 'Kein Konto gefunden. Bitte erneut anmelden oder registrieren.',
+    'ACCOUNT_SYNC_FAILED': 'Konto konnte nicht angelegt werden. Bitte erneut versuchen.',
+    'EMAIL_MISSING': 'Google hat keine E-Mail übermittelt. Bitte E-Mail-Login nutzen.',
+    'AUTH_INVALID': 'Session abgelaufen. Bitte erneut anmelden.',
+    'auth_failed': 'Anmeldung fehlgeschlagen. Bitte versuche es erneut.',
+  };
+
+  function getErrorMessage(code: string): string {
+    return ERROR_MESSAGES[code] || code;
+  }
 
   // Storage helper based on "remember me" preference
   function getStorage() {
@@ -142,7 +159,6 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
 
   // Check if user is already logged in
   async function checkExistingSession() {
-    const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
     
     // Check both storages for existing token
@@ -157,6 +173,11 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       localStorage.setItem('auth_token', token);
     }
     
+    // Debug logging in dev mode
+    if (import.meta.env.DEV) {
+      console.log('[Auth Debug] checkExistingSession:', { hasToken: !!token, hasSession: !!session });
+    }
+    
     // Validate token with backend
     if (token) {
       try {
@@ -166,6 +187,11 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         
         if (res.ok) {
           const data = await res.json();
+          
+          // Debug logging
+          if (import.meta.env.DEV) {
+            console.log('[Auth Debug] User verified:', data.data);
+          }
           
           // Check admin permission for admin routes
           if (redirectTo.startsWith('/admin') && data.data?.role !== 'admin') {
@@ -179,25 +205,44 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
           window.location.href = redirectTo;
           return;
         } else {
+          // Debug logging
+          if (import.meta.env.DEV) {
+            const errorData = await res.clone().json().catch(() => ({}));
+            console.log('[Auth Debug] Token validation failed:', res.status, errorData);
+          }
+          
           localStorage.removeItem('auth_token');
           sessionStorage.removeItem('auth_token');
           await supabase.auth.signOut();
         }
       } catch (err) {
         // Network error - don't remove token
+        if (import.meta.env.DEV) {
+          console.error('[Auth Debug] Network error during session check:', err);
+        }
       }
     }
   }
 
-  // Check for error in URL (from callback)
+  // Check for error in URL (from callback or redirect)
   function checkUrlError() {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
+    
     if (error && errorEl) {
-      errorEl.textContent = error === 'auth_failed' 
-        ? 'Anmeldung fehlgeschlagen. Bitte versuche es erneut.'
-        : error;
+      // Use standardized error message mapping
+      errorEl.textContent = getErrorMessage(error);
       errorEl.classList.remove('hidden');
+      
+      // Debug logging in dev mode
+      if (import.meta.env.DEV) {
+        console.log('[Auth Debug] URL error parameter:', error);
+      }
+      
+      // Clear the error from URL to prevent showing it again on refresh
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('error');
+      window.history.replaceState({}, '', newUrl.toString());
     }
   }
 
@@ -266,6 +311,11 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
     try {
       const { session, user } = await signInWithEmail(email, password);
 
+      // Debug logging in dev mode
+      if (import.meta.env.DEV) {
+        console.log('[Auth Debug] signInWithEmail result:', { session: !!session, user: !!user, userEmail: user?.email });
+      }
+
       if (session && user) {
         showSuccess('Anmeldung erfolgreich! Du wirst weitergeleitet...');
         
@@ -285,7 +335,6 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
             'Content-Type': 'application/json', 
             'Authorization': `Bearer ${session.access_token}` 
           };
-          const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           for (const eventId of localIds) {
             await fetch(`${API_BASE}/api/user/saved-events/${eventId}`, { method: 'POST', headers });
           }
@@ -301,6 +350,11 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         setLoading(emailBtn, false);
       }
     } catch (err: any) {
+      // Debug logging in dev mode
+      if (import.meta.env.DEV) {
+        console.error('[Auth Debug] Login error:', err);
+      }
+
       // Handle rate limiting (429)
       if (err.status === 429 || err.message?.includes('rate limit') || err.message?.includes('Too many')) {
         const retryAfter = err.retry_after_ms || 60000; // Default 60 seconds
@@ -315,12 +369,17 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
         return;
       }
       
-      // Handle specific Supabase errors
+      // Handle specific Supabase errors with helpful hints
       if (err.message?.includes('Invalid login credentials')) {
         showError('E-Mail oder Passwort falsch.');
       } else if (err.message?.includes('Email not confirmed')) {
         showError('Bitte bestätige zuerst deine E-Mail-Adresse.');
+      } else if (err.message?.includes('Invalid API key')) {
+        showError('Konfigurationsfehler. Bitte kontaktiere den Administrator.');
+      } else if (err.message?.includes('Signups not allowed')) {
+        showError('Anmeldung momentan nicht möglich. Bitte kontaktiere den Administrator.');
       } else {
+        // Show the actual error message prominently
         showError(err.message || 'Ein Fehler ist aufgetreten. Bitte versuche es erneut.');
       }
       setLoading(emailBtn, false);

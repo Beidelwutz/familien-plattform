@@ -52,6 +52,8 @@ export function verifyLegacyToken(token: string): JwtPayload | null {
 
 /**
  * Verify token - tries Supabase first, falls back to legacy JWT
+ * IMPORTANT: This function no longer syncs users automatically.
+ * Use POST /api/auth/sync for explicit user synchronization after login.
  */
 async function verifyToken(token: string): Promise<JwtPayload | null> {
   // Try Supabase token first if configured
@@ -59,12 +61,17 @@ async function verifyToken(token: string): Promise<JwtPayload | null> {
     try {
       const supabaseUser = await verifySupabaseToken(token);
       if (supabaseUser) {
-        // Sync user to Prisma if needed and get role
-        const prismaUser = await syncUserToPrisma(supabaseUser.id, supabaseUser.email || '');
+        // Look up user in Prisma (READ ONLY - no sync)
+        // The /api/auth/sync endpoint handles user creation
+        const prismaUser = await prisma.user.findUnique({
+          where: { id: supabaseUser.id },
+          select: { role: true }
+        });
         
         return {
           sub: supabaseUser.id,
           email: supabaseUser.email || '',
+          // Use Prisma role if user exists, otherwise fall back to metadata or default
           role: prismaUser?.role || supabaseUser.user_metadata?.role || 'parent',
         };
       }
@@ -79,26 +86,28 @@ async function verifyToken(token: string): Promise<JwtPayload | null> {
 
 /**
  * Sync Supabase user to Prisma User table
+ * THROWS on error - no silent failures allowed
+ * Used by POST /api/auth/sync endpoint
  */
-async function syncUserToPrisma(supabaseUserId: string, email: string) {
-  try {
-    const user = await prisma.user.upsert({
-      where: { id: supabaseUserId },
-      update: { 
-        email,
-        updated_at: new Date(),
-      },
-      create: {
-        id: supabaseUserId,
-        email,
-        role: 'parent',
-      },
-    });
-    return user;
-  } catch (err) {
-    console.error('Failed to sync user to Prisma:', err);
-    return null;
+export async function syncUserToPrisma(supabaseUserId: string, email: string) {
+  if (!email) {
+    throw new Error('EMAIL_MISSING: Cannot sync user without email');
   }
+  
+  const user = await prisma.user.upsert({
+    where: { id: supabaseUserId },
+    update: { 
+      email,
+      updated_at: new Date(),
+    },
+    create: {
+      id: supabaseUserId,
+      email,
+      role: 'parent',
+    },
+  });
+  
+  return user;
 }
 
 /** 
@@ -126,14 +135,14 @@ export async function requireAuth(req: AuthRequest, _res: Response, next: NextFu
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
   
   if (!token) {
-    next(createError('Authentication required', 401, 'UNAUTHORIZED'));
+    next(createError('Authentication required', 401, 'AUTH_INVALID'));
     return;
   }
   
   const payload = await verifyToken(token);
   
   if (!payload) {
-    next(createError('Invalid or expired token', 401, 'UNAUTHORIZED'));
+    next(createError('Invalid or expired token', 401, 'AUTH_INVALID'));
     return;
   }
   
