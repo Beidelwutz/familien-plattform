@@ -3,6 +3,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import StickyHeader from "../../components/layout/StickyHeader.astro";
 
 const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
+const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:5000";
 ---
 
 <BaseLayout title="DLQ Manager - Admin - kiezling">
@@ -69,8 +70,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
     </div>
   </main>
 
-  <script define:vars={{ API_URL }}>
-    const workerUrl = 'http://localhost:5000';
+  <script define:vars={{ API_URL, WORKER_URL }}>
+    const workerUrl = WORKER_URL;
 
     async function loadDLQJobs() {
       try {
