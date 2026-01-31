@@ -92,28 +92,28 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
         <section class="mb-8">
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Übersicht</h2>
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            <a href="/admin/review?status=all" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="total-events" class="block text-xl font-bold text-primary-500">--</span>
               <span class="text-sm text-gray-500">Events gesamt</span>
-            </div>
-            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            </a>
+            <a href="/admin/review?status=published" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="published-events" class="block text-xl font-bold text-primary-500">--</span>
               <span class="text-sm text-gray-500">Veröffentlicht</span>
-            </div>
-            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            </a>
+            <a href="/admin/review?status=pending_review" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="pending-events" class="block text-xl font-bold text-primary-500">--</span>
               <span class="text-sm text-gray-500">Ausstehend</span>
-            </div>
-            <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
+            </a>
+            <a href="/admin/runs" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
               <span id="today-imports" class="block text-xl font-bold text-primary-500">--</span>
               <span class="text-sm text-gray-500">Heute importiert</span>
-            </div>
+            </a>
           </div>
         </section>
 
         <section>
           <h2 class="text-xl font-semibold text-gray-900 mb-4">Quellen-Gesundheit</h2>
-          <div class="bg-white rounded-2xl shadow-card p-4">
+          <a href="/admin/sources" class="block bg-white rounded-2xl shadow-card p-4 hover:shadow-lg transition-shadow">
             <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
               <div>
                 <span id="sources-healthy" class="block text-lg font-bold text-green-500">--</span>
@@ -136,7 +136,7 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
                 <span class="text-xs text-gray-500">Unbekannt</span>
               </div>
             </div>
-          </div>
+          </a>
         </section>
       </div>
 

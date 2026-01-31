@@ -21,7 +21,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <option value="pending_review">Ausstehend</option>
           <option value="pending_ai">Warte auf AI</option>
           <option value="incomplete">Unvollständig</option>
-          <option value="all">Alle</option>
+          <option value="published">Veröffentlicht</option>
+          <option value="all">Alle (nicht veröffentlicht)</option>
         </select>
         <button class="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-sm hover:bg-gray-50" id="refresh-btn">
           🔄 Aktualisieren
@@ -476,6 +477,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     });
   });
 
-  // Initial load
+  // Initial load: set filter from URL if present
+  const urlStatus = new URLSearchParams(window.location.search).get('status');
+  const statusSelect = document.getElementById('status-filter');
+  if (urlStatus && statusSelect && ['pending_review', 'pending_ai', 'incomplete', 'published', 'all'].includes(urlStatus)) {
+    statusSelect.value = urlStatus;
+  }
   loadEvents();
 </script>
