@@ -5,7 +5,7 @@
 
 import { prisma } from './prisma.js';
 import { SOURCE_PRIORITY, computeFingerprint } from './idempotency.js';
-import { calculateCompleteness, determineInitialStatus } from './eventCompleteness.js';
+import { calculateCompleteness, determineInitialStatus, determineStatusFromAI, type AIScoreInput } from './eventCompleteness.js';
 
 // Staleness threshold in days
 const STALENESS_DAYS = 180;
@@ -385,7 +385,19 @@ export async function processSingleCandidate(
   };
   
   const completeness = calculateCompleteness(eventData);
-  const initialStatus = determineInitialStatus(completeness);
+  
+  // Determine status based on AI scores if available, otherwise use completeness
+  let initialStatus: string;
+  if (candidate.ai?.scores && candidate.ai?.classification) {
+    const aiScores: AIScoreInput = {
+      family_fit: candidate.ai.scores.family_fit,
+      confidence: candidate.ai.classification.confidence,
+    };
+    initialStatus = determineStatusFromAI(completeness, aiScores);
+  } else {
+    // No AI scores: set to pending_ai for later processing
+    initialStatus = completeness.score >= 50 ? 'pending_ai' : 'incomplete';
+  }
   
   // Build initial provenance
   const initialProvenance: Record<string, string> = {};
@@ -464,7 +476,7 @@ export async function processSingleCandidate(
         quality_score: candidate.ai.scores.quality,
         family_fit_score: candidate.ai.scores.family_fit,
         stressfree_score: candidate.ai.scores.stressfree || null,
-        confidence: 0.8,
+        confidence: candidate.ai.classification?.confidence ?? 0.8,
         ai_model_version: 'worker-v1',
       }
     }).catch(() => {}); // Ignore if exists

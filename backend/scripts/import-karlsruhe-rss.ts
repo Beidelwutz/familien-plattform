@@ -156,11 +156,14 @@ async function importEvents() {
       const fingerprint = computeFingerprint(item.title, item.pubDate);
       const externalId = item.guid.substring(0, 255);
       
-      // Check if event source already exists
+      // Check if event source already exists (by external_id OR fingerprint)
       const existingEventSource = await prisma.eventSource.findFirst({
         where: {
           source_id: source.id,
-          external_id: externalId,
+          OR: [
+            { external_id: externalId },
+            { fingerprint: fingerprint },
+          ],
         },
         include: {
           canonical_event: true,
@@ -194,14 +197,17 @@ async function importEvents() {
         updated++;
       } else {
         // Create new canonical event
+        // Note: pubDate is the RSS publication date, NOT the actual event start time
+        // We set start_datetime to null since we don't have real event time data
+        // Status is 'pending_ai' - needs AI classification to determine family_fit_score
         const canonicalEvent = await prisma.canonicalEvent.create({
           data: {
             title: item.title.substring(0, 200),
             description_short: item.description.substring(0, 500) || null,
             description_long: item.description || null,
-            start_datetime: startDate,
+            start_datetime: null, // pubDate is not the event start time
             booking_url: item.link || null,
-            status: 'pending_review',
+            status: 'pending_ai', // Needs AI classification before publishing
             is_complete: false,
             completeness_score: 30, // Low score - needs enrichment
             location_address: 'Karlsruhe', // Default

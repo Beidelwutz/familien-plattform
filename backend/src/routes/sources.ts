@@ -662,4 +662,193 @@ router.get('/cron/status', requireAuth, requireAdmin, async (_req: Request, res:
   }
 });
 
+// ============================================
+// AI PROCESSING CRON
+// ============================================
+
+import { AI_THRESHOLDS } from '../lib/eventCompleteness.js';
+
+/**
+ * Helper function to determine status from AI scores
+ */
+function determineStatusFromAIScores(familyFitScore: number, confidence: number): string {
+  if (familyFitScore < AI_THRESHOLDS.FAMILY_FIT_REJECT) {
+    return 'rejected';
+  }
+  if (confidence >= AI_THRESHOLDS.CONFIDENCE_PUBLISH && 
+      familyFitScore >= AI_THRESHOLDS.FAMILY_FIT_PUBLISH) {
+    return 'published';
+  }
+  return 'pending_review';
+}
+
+// POST /api/sources/cron/process-pending-ai - Process pending_ai events (called by Vercel cron)
+router.post('/cron/process-pending-ai', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Verify cron secret
+    const authHeader = req.headers.authorization;
+    const providedSecret = authHeader?.replace('Bearer ', '');
+    
+    if (CRON_SECRET && providedSecret !== CRON_SECRET) {
+      throw createError('Invalid cron secret', 401, 'UNAUTHORIZED');
+    }
+    
+    const BATCH_SIZE = 20; // Process max 20 per cron run to avoid timeout
+    
+    // Get events with pending_ai status
+    const pendingEvents = await prisma.canonicalEvent.findMany({
+      where: { status: 'pending_ai' },
+      take: BATCH_SIZE,
+      orderBy: { created_at: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        description_short: true,
+        description_long: true,
+        location_address: true,
+        price_min: true,
+        price_max: true,
+        is_indoor: true,
+        is_outdoor: true,
+      }
+    });
+    
+    if (pendingEvents.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: 'No pending events to process', 
+        processed: 0 
+      });
+    }
+    
+    logger.info(`Cron: Processing ${pendingEvents.length} pending_ai events`);
+    
+    const results: Array<{ id: string; status?: string; success: boolean; error?: string }> = [];
+    
+    for (const event of pendingEvents) {
+      try {
+        // Classification
+        const classifyRes = await fetch(`${AI_WORKER_URL}/classify/event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: event.title,
+            description: event.description_short || event.description_long || '',
+            location_address: event.location_address || '',
+            price_min: event.price_min ? Number(event.price_min) : null,
+            price_max: event.price_max ? Number(event.price_max) : null,
+            is_indoor: event.is_indoor,
+            is_outdoor: event.is_outdoor,
+          }),
+        });
+        
+        if (!classifyRes.ok) {
+          throw new Error(`Classification failed: ${classifyRes.status}`);
+        }
+        const classification = await classifyRes.json();
+        
+        // Scoring
+        const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: event.title,
+            description: event.description_short || event.description_long || '',
+            location_address: event.location_address || '',
+          }),
+        });
+        
+        if (!scoreRes.ok) {
+          throw new Error(`Scoring failed: ${scoreRes.status}`);
+        }
+        const scores = await scoreRes.json();
+        
+        // Determine new status
+        const newStatus = determineStatusFromAIScores(
+          scores.family_fit_score,
+          classification.confidence
+        );
+        
+        // Update event
+        await prisma.canonicalEvent.update({
+          where: { id: event.id },
+          data: {
+            status: newStatus,
+            age_min: classification.age_min ?? undefined,
+            age_max: classification.age_max ?? undefined,
+            is_indoor: classification.is_indoor,
+            is_outdoor: classification.is_outdoor,
+          }
+        });
+        
+        // Create/update EventScore
+        await prisma.eventScore.upsert({
+          where: { event_id: event.id },
+          create: {
+            event_id: event.id,
+            relevance_score: scores.relevance_score,
+            quality_score: scores.quality_score,
+            family_fit_score: scores.family_fit_score,
+            stressfree_score: scores.stressfree_score,
+            confidence: classification.confidence,
+            ai_model_version: 'cron-v1',
+          },
+          update: {
+            relevance_score: scores.relevance_score,
+            quality_score: scores.quality_score,
+            family_fit_score: scores.family_fit_score,
+            stressfree_score: scores.stressfree_score,
+            confidence: classification.confidence,
+            scored_at: new Date(),
+          }
+        });
+        
+        // Add categories
+        if (classification.categories?.length > 0) {
+          const categories = await prisma.category.findMany({
+            where: { slug: { in: classification.categories } }
+          });
+          for (const cat of categories) {
+            await prisma.eventCategory.upsert({
+              where: { event_id_category_id: { event_id: event.id, category_id: cat.id } },
+              create: { event_id: event.id, category_id: cat.id },
+              update: {},
+            });
+          }
+        }
+        
+        results.push({ id: event.id, status: newStatus, success: true });
+        
+        // Small delay to avoid overwhelming the worker
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (err) {
+        results.push({ id: event.id, success: false, error: (err as Error).message });
+        logger.error(`Cron: Failed to process event ${event.id}: ${(err as Error).message}`);
+      }
+    }
+    
+    const summary = {
+      total: results.length,
+      published: results.filter(r => r.status === 'published').length,
+      pending_review: results.filter(r => r.status === 'pending_review').length,
+      rejected: results.filter(r => r.status === 'rejected').length,
+      failed: results.filter(r => !r.success).length,
+    };
+    
+    logger.info(`Cron: AI processing complete - ${summary.published} published, ${summary.pending_review} pending_review, ${summary.rejected} rejected, ${summary.failed} failed`);
+
+    res.json({
+      success: true,
+      message: `Processed ${results.length} events`,
+      data: {
+        summary,
+        results,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/check-sources",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/process-pending-ai",
+      "schedule": "*/15 * * * *"
     }
   ],
   "headers": [
@@ -28,6 +32,10 @@
     {
       "source": "/api/cron/check-sources",
       "destination": "https://api.kiezling.com/api/sources/cron/check"
+    },
+    {
+      "source": "/api/cron/process-pending-ai",
+      "destination": "https://api.kiezling.com/api/sources/cron/process-pending-ai"
     }
   ]
 }

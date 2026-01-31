@@ -4,6 +4,10 @@ import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth.js';
 import { approveRevision, rejectRevision } from '../lib/eventRevision.js';
 import { sendEventApprovedEmail, sendEventRejectedEmail } from '../lib/email.js';
+import { AI_THRESHOLDS } from '../lib/eventCompleteness.js';
+import { logger } from '../lib/logger.js';
+
+const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 
 const router = Router();
 
@@ -1063,6 +1067,217 @@ router.get('/ingest-runs/:id/items', async (req: Request, res: Response, next: N
         limit: Number(limit),
         offset: Number(offset),
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// AI PROCESSING
+// ============================================
+
+/**
+ * Helper function to determine status from AI scores
+ */
+function determineStatusFromAIScores(familyFitScore: number, confidence: number): string {
+  // Low family fit score: not relevant for families
+  if (familyFitScore < AI_THRESHOLDS.FAMILY_FIT_REJECT) {
+    return 'rejected';
+  }
+  
+  // High confidence + good family fit: auto-publish
+  if (confidence >= AI_THRESHOLDS.CONFIDENCE_PUBLISH && 
+      familyFitScore >= AI_THRESHOLDS.FAMILY_FIT_PUBLISH) {
+    return 'published';
+  }
+  
+  // Otherwise: manual review
+  return 'pending_review';
+}
+
+// POST /api/admin/process-pending-ai - Process events with pending_ai status through AI Worker
+router.post('/process-pending-ai', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { limit = 50 } = req.query;
+    
+    // Get events with pending_ai status
+    const pendingEvents = await prisma.canonicalEvent.findMany({
+      where: { 
+        status: 'pending_ai',
+      },
+      take: Number(limit),
+      orderBy: { created_at: 'asc' },
+      select: {
+        id: true,
+        title: true,
+        description_short: true,
+        description_long: true,
+        location_address: true,
+        price_min: true,
+        price_max: true,
+        is_indoor: true,
+        is_outdoor: true,
+      }
+    });
+    
+    if (pendingEvents.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: 'No pending events to process', 
+        processed: 0,
+        summary: { published: 0, pending_review: 0, rejected: 0, failed: 0 }
+      });
+    }
+    
+    logger.info(`Processing ${pendingEvents.length} pending_ai events`);
+    
+    interface ProcessResult {
+      id: string;
+      status?: string;
+      success: boolean;
+      error?: string;
+    }
+    
+    const results: ProcessResult[] = [];
+    
+    for (const event of pendingEvents) {
+      try {
+        // Step 1: Classification
+        const classifyRes = await fetch(`${AI_WORKER_URL}/classify/event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: event.title,
+            description: event.description_short || event.description_long || '',
+            location_address: event.location_address || '',
+            price_min: event.price_min ? Number(event.price_min) : null,
+            price_max: event.price_max ? Number(event.price_max) : null,
+            is_indoor: event.is_indoor,
+            is_outdoor: event.is_outdoor,
+          }),
+        });
+        
+        if (!classifyRes.ok) {
+          const errorText = await classifyRes.text();
+          throw new Error(`Classification failed: ${classifyRes.status} - ${errorText}`);
+        }
+        const classification = await classifyRes.json();
+        
+        // Step 2: Scoring
+        const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: event.title,
+            description: event.description_short || event.description_long || '',
+            location_address: event.location_address || '',
+          }),
+        });
+        
+        if (!scoreRes.ok) {
+          const errorText = await scoreRes.text();
+          throw new Error(`Scoring failed: ${scoreRes.status} - ${errorText}`);
+        }
+        const scores = await scoreRes.json();
+        
+        // Step 3: Determine new status based on AI scores
+        const newStatus = determineStatusFromAIScores(
+          scores.family_fit_score,
+          classification.confidence
+        );
+        
+        // Step 4: Update the event
+        await prisma.canonicalEvent.update({
+          where: { id: event.id },
+          data: {
+            status: newStatus,
+            age_min: classification.age_min ?? undefined,
+            age_max: classification.age_max ?? undefined,
+            is_indoor: classification.is_indoor,
+            is_outdoor: classification.is_outdoor,
+          }
+        });
+        
+        // Step 5: Create/update EventScore
+        await prisma.eventScore.upsert({
+          where: { event_id: event.id },
+          create: {
+            event_id: event.id,
+            relevance_score: scores.relevance_score,
+            quality_score: scores.quality_score,
+            family_fit_score: scores.family_fit_score,
+            stressfree_score: scores.stressfree_score,
+            confidence: classification.confidence,
+            ai_model_version: 'classify-v1',
+          },
+          update: {
+            relevance_score: scores.relevance_score,
+            quality_score: scores.quality_score,
+            family_fit_score: scores.family_fit_score,
+            stressfree_score: scores.stressfree_score,
+            confidence: classification.confidence,
+            scored_at: new Date(),
+          }
+        });
+        
+        // Step 6: Add categories if provided
+        if (classification.categories && classification.categories.length > 0) {
+          const categories = await prisma.category.findMany({
+            where: { slug: { in: classification.categories } }
+          });
+          for (const cat of categories) {
+            await prisma.eventCategory.upsert({
+              where: { 
+                event_id_category_id: { 
+                  event_id: event.id, 
+                  category_id: cat.id 
+                } 
+              },
+              create: { event_id: event.id, category_id: cat.id },
+              update: {},
+            });
+          }
+        }
+        
+        results.push({ id: event.id, status: newStatus, success: true });
+        logger.info(`Processed event ${event.id}: ${newStatus} (family_fit: ${scores.family_fit_score}, confidence: ${classification.confidence})`);
+        
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        results.push({ id: event.id, success: false, error: errorMessage });
+        logger.error(`Failed to process event ${event.id}: ${errorMessage}`);
+      }
+    }
+    
+    const summary = {
+      published: results.filter(r => r.status === 'published').length,
+      pending_review: results.filter(r => r.status === 'pending_review').length,
+      rejected: results.filter(r => r.status === 'rejected').length,
+      failed: results.filter(r => !r.success).length,
+    };
+    
+    res.json({
+      success: true,
+      processed: results.length,
+      results,
+      summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/pending-ai-count - Get count of events waiting for AI processing
+router.get('/pending-ai-count', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const count = await prisma.canonicalEvent.count({
+      where: { status: 'pending_ai' }
+    });
+    
+    res.json({
+      success: true,
+      data: { count }
     });
   } catch (error) {
     next(error);

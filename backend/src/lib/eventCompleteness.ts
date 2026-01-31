@@ -144,3 +144,61 @@ export function determineInitialStatus(completeness: CompletenessResult): string
   }
   return 'pending_review';
 }
+
+/**
+ * AI Score input for status determination
+ */
+export interface AIScoreInput {
+  family_fit: number;  // 0-100
+  confidence: number;  // 0.0-1.0
+}
+
+/**
+ * Schwellenwerte für die Status-Bestimmung
+ */
+export const AI_THRESHOLDS = {
+  FAMILY_FIT_REJECT: 30,      // Events mit family_fit < 30 werden rejected
+  FAMILY_FIT_PUBLISH: 50,     // Events mit family_fit >= 50 können auto-published werden
+  CONFIDENCE_PUBLISH: 0.8,    // Mindest-Konfidenz für auto-publish
+} as const;
+
+/**
+ * Determines the event status based on AI scores
+ * 
+ * Decision logic:
+ * - family_fit < 30: 'rejected' (not relevant for families)
+ * - confidence >= 0.8 AND family_fit >= 50: 'published' (auto-publish)
+ * - Otherwise: 'pending_review' (manual review needed)
+ * 
+ * @param completeness - Completeness score result
+ * @param aiScores - Optional AI scores (family_fit, confidence)
+ * @returns Event status string
+ */
+export function determineStatusFromAI(
+  completeness: CompletenessResult,
+  aiScores?: AIScoreInput
+): string {
+  // Without AI scores: use traditional completeness-based logic
+  if (!aiScores) {
+    return determineInitialStatus(completeness);
+  }
+  
+  // Very incomplete events need more data first
+  if (completeness.score < 50) {
+    return 'incomplete';
+  }
+  
+  // Low family fit score: not relevant for families
+  if (aiScores.family_fit < AI_THRESHOLDS.FAMILY_FIT_REJECT) {
+    return 'rejected';
+  }
+  
+  // High confidence + good family fit: auto-publish
+  if (aiScores.confidence >= AI_THRESHOLDS.CONFIDENCE_PUBLISH && 
+      aiScores.family_fit >= AI_THRESHOLDS.FAMILY_FIT_PUBLISH) {
+    return 'published';
+  }
+  
+  // Medium confidence or lower family fit: manual review
+  return 'pending_review';
+}
