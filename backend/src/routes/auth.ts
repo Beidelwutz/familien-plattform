@@ -9,9 +9,6 @@ import { verifyToken as verifySupabaseToken, isSupabaseConfigured } from '../lib
 import { sendPasswordResetEmail, sendWelcomeEmail, sendVerificationEmail } from '../lib/email.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 
-// Check if Supabase is configured
-const isSupabaseConfigured = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-
 const router = Router();
 
 const SALT_ROUNDS = 10;
@@ -239,7 +236,7 @@ router.post('/logout', (_req: Request, res: Response) => {
 // Handles the case where a user logs in with OAuth (Google) but already has an account with the same email
 router.post('/sync', async (req: Request, res: Response, _next: NextFunction) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
     return res.status(401).json({ 
       success: false, 
@@ -257,7 +254,7 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
   try {
     // Verify Supabase token
     const supabaseUser = await verifySupabaseToken(token);
-    
+
     if (!supabaseUser) {
       return res.status(401).json({ 
         success: false, 
