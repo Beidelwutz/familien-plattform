@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Ingest-Runs - Admin - kiezling">
@@ -105,11 +107,9 @@ import StickyHeader from '../../components/layout/StickyHeader.astro';
   </main>
 </BaseLayout>
 
-<script>
-  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
-  
-  let runs: any[] = [];
-  let currentRunId: string | null = null;
+<script is:inline define:vars={{ API_URL }}>
+  let runs = [];
+  let currentRunId = null;
   const token = localStorage.getItem('auth_token');
 
   // Auth check

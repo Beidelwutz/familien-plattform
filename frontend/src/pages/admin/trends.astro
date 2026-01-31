@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Trends & Suggestions - Admin - kiezling">
@@ -257,14 +259,12 @@ import StickyHeader from '../../components/layout/StickyHeader.astro';
   </div>
 </BaseLayout>
 
-<script>
-  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
-  
+<script is:inline define:vars={{ API_URL }}>
   // State
-  let currentAbortController: AbortController | null = null;
-  let lastCreatedOverrideId: string | null = null;
-  let undoTimeout: number | null = null;
-  let inputDebounce: number | null = null;
+  let currentAbortController = null;
+  let lastCreatedOverrideId = null;
+  let undoTimeout = null;
+  let inputDebounce = null;
 
   // Auth check
   (async function initAuth() {

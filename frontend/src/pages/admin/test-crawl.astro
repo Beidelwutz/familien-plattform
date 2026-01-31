@@ -1,6 +1,9 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import StickyHeader from "../../components/layout/StickyHeader.astro";
+
+const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
+const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:5000";
 ---
 
 <BaseLayout title="Test Crawl - Admin - kiezling">
@@ -114,10 +117,7 @@ import StickyHeader from "../../components/layout/StickyHeader.astro";
     </div>
   </main>
 
-  <script>
-    const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
-    const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || 'http://localhost:5000';
-    
+  <script is:inline define:vars={{ API_URL, WORKER_URL }}>
     const workerUrl = WORKER_URL;
     let lastResult = null;
 

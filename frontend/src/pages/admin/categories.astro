@@ -2,6 +2,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StickyHeader from '../../components/layout/StickyHeader.astro';
 import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+
+const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <BaseLayout title="Kategorien verwalten - Admin - kiezling">
@@ -94,11 +96,9 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
   </div>
 </BaseLayout>
 
-<script>
-  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
-  
-  let categories: any[] = [];
-  let deleteTargetId: string | null = null;
+<script is:inline define:vars={{ API_URL }}>
+  let categories = [];
+  let deleteTargetId = null;
 
   // Elements
   const loadingState = document.getElementById('loading-state');
