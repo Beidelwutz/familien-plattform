@@ -19,6 +19,7 @@ class CrawlRequest(BaseModel):
     source_type: str = "rss"
     force: bool = False
     enable_ai: bool = False  # Enable AI classification/scoring
+    ingest_run_id: Optional[str] = None  # Backend IngestRun ID for status updates
 
 
 class CrawlStatus(BaseModel):
@@ -50,6 +51,7 @@ async def trigger_crawl(request: CrawlRequest, queue: JobQueue = Depends(get_que
                 "source_type": request.source_type,
                 "force": request.force,
                 "enable_ai": request.enable_ai,
+                "ingest_run_id": request.ingest_run_id,
             },
             queue=QUEUE_CRAWL
         )

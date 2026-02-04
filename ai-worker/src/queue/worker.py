@@ -309,12 +309,12 @@ async def process_crawl_job(payload: dict) -> dict:
             await update_ingest_run(ingest_run_id, "failed", error_message=error_msg)
         raise ValueError(error_msg)
     
-    # Step 1: Crawl/Parse the feed
+    # Step 1: Crawl/Parse the feed (parse_rss/parse_ics return (events, etag, last_modified, was_modified))
     try:
         if source_type == "rss":
-            parsed_events = await feed_parser.parse_rss(source_url)
+            parsed_events, _, _, _ = await feed_parser.parse_rss(source_url)
         elif source_type == "ics":
-            parsed_events = await feed_parser.parse_ics(source_url)
+            parsed_events, _, _, _ = await feed_parser.parse_ics(source_url)
         else:
             error_msg = f"Unknown source type: {source_type}"
             if ingest_run_id:
@@ -331,6 +331,8 @@ async def process_crawl_job(payload: dict) -> dict:
     
     if len(parsed_events) == 0:
         logger.warning(f"No events found in {source_url}")
+        if ingest_run_id:
+            await update_ingest_run(ingest_run_id, "success", events_found=0)
         return {
             "source_id": source_id,
             "events_found": 0,
@@ -339,6 +341,14 @@ async def process_crawl_job(payload: dict) -> dict:
             "events_unchanged": 0,
             "events_ignored": 0,
         }
+    
+    # Progress: tell backend how many events we found (so UI can show "X Events gefunden")
+    if ingest_run_id:
+        await update_ingest_run(
+            ingest_run_id, "running",
+            events_found=len(parsed_events),
+            events_created=0, events_updated=0, events_skipped=0,
+        )
     
     # Step 2: In-Run Dedupe (remove duplicates within this fetch)
     deduplicator = create_parsed_event_deduplicator()
@@ -359,9 +369,19 @@ async def process_crawl_job(payload: dict) -> dict:
     
     # Step 5: Batch Ingest to Backend
     result = await send_batch_to_backend(source_id, candidates, ingest_run_id)
-    
     summary = result.get("summary", {})
-    
+
+    if not result.get("success", True):
+        err = result.get("error", "Batch ingest failed")
+        if ingest_run_id:
+            await update_ingest_run(
+                ingest_run_id, "failed",
+                events_found=len(parsed_events),
+                events_created=0, events_updated=0, events_skipped=0,
+                error_message=str(err)[:500],
+            )
+        raise RuntimeError(f"Backend batch ingest failed: {err}")
+
     return {
         "source_id": source_id,
         "events_found": len(parsed_events),

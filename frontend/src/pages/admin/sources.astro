@@ -696,8 +696,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         };
         const statusColor = statusColors[run.status] || 'bg-gray-100 text-gray-700';
         const date = formatRelativeTime(run.started_at);
-        const eventsInfo = run.status === 'running' ? 'Läuft...' : 
-          `${run.events_created || 0} neu, ${run.events_updated || 0} aktualisiert`;
+        const eventsInfo = run.status === 'running'
+          ? `${run.events_found ?? 0} gefunden, läuft...`
+          : `${run.events_created || 0} neu, ${run.events_updated || 0} aktualisiert`;
 
         return `
           <div class="flex items-center justify-between py-1 ${runs.indexOf(run) > 0 ? 'border-t border-gray-100' : ''}">
@@ -754,29 +755,57 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
-  // Poll for run status
+  // Poll for run status (with elapsed time and stuck hint)
+  const pollStartTime = {}; // sourceId -> timestamp when polling started
+
   async function pollRunStatus(sourceId, runId) {
     if (activePolling[sourceId]) {
       clearInterval(activePolling[sourceId]);
     }
+    pollStartTime[sourceId] = Date.now();
 
     const importStatus = document.getElementById(`import-status-${sourceId}`);
     const importDetails = document.getElementById(`import-details-${sourceId}`);
 
+    function formatElapsed() {
+      const start = pollStartTime[sourceId];
+      if (!start) return '';
+      const sec = Math.floor((Date.now() - start) / 1000);
+      if (sec < 60) return `${sec} s`;
+      const min = Math.floor(sec / 60);
+      return `${min} min ${sec % 60} s`;
+    }
+
+    function updateRunningUI(run) {
+      const eventsFound = run.events_found ?? 0;
+      const elapsed = formatElapsed();
+      const stuckHint = (Date.now() - pollStartTime[sourceId]) > 30000
+        ? ' – Bei langer Wartezeit: AI-Worker prüfen (läuft er? Queue?)'
+        : '';
+      if (importDetails) {
+        importDetails.innerHTML = `
+          <span>${eventsFound} Events gefunden</span>
+          <span class="text-blue-600"> · Läuft seit ${elapsed}</span>
+          ${stuckHint ? `<br><span class="text-amber-600 text-xs">${stuckHint}</span>` : ''}
+        `;
+      }
+    }
+
     let pollCount = 0;
-    const maxPolls = 60;
+    const maxPolls = 90; // 90 * 2s = 3 min
 
     activePolling[sourceId] = setInterval(async () => {
       pollCount++;
-      
+
       if (pollCount > maxPolls) {
         clearInterval(activePolling[sourceId]);
         delete activePolling[sourceId];
+        delete pollStartTime[sourceId];
         if (importStatus) {
           importStatus.innerHTML = `
             <div class="flex items-center gap-2">
               <span class="text-yellow-600">⚠</span>
-              <span class="text-sm font-medium text-yellow-700">Timeout - Status unbekannt</span>
+              <span class="text-sm font-medium text-yellow-700">Timeout – Run läuft noch im Backend. Seite neu laden oder Run auf der Runs-Seite prüfen.</span>
             </div>
           `;
         }
@@ -786,18 +815,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       try {
         const data = await apiFetch(`/api/admin/ingest-runs/${runId}`);
         const run = data.data;
-        
+
         if (['success', 'partial', 'failed'].includes(run.status)) {
           clearInterval(activePolling[sourceId]);
           delete activePolling[sourceId];
-          
+          delete pollStartTime[sourceId];
+
           const statusConfig = {
             success: { icon: '✓', color: 'green', label: 'Erfolgreich' },
             partial: { icon: '⚠', color: 'yellow', label: 'Teilweise erfolgreich' },
             failed: { icon: '✕', color: 'red', label: 'Fehlgeschlagen' },
           };
           const config = statusConfig[run.status];
-          
+
           if (importStatus) {
             importStatus.className = `bg-${config.color}-50 border border-${config.color}-200 rounded-lg p-3 mb-3`;
             importStatus.innerHTML = `
@@ -810,22 +840,30 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               </div>
             `;
           }
-          
-          // Reload after a short delay
+
           setTimeout(() => {
             loadSources();
             loadFetchHistory(sourceId);
           }, 2000);
         } else {
-          // Still running - update details
-          if (importDetails) {
-            importDetails.textContent = `${run.events_found || 0} Events gefunden...`;
-          }
+          // Still running – show progress and elapsed time
+          updateRunningUI(run);
         }
       } catch (e) {
         console.error('Poll error:', e);
       }
     }, 2000);
+
+    // First update immediately so "Läuft seit 0 s" and events count show right away
+    (async () => {
+      try {
+        const data = await apiFetch(`/api/admin/ingest-runs/${runId}`);
+        const run = data.data;
+        if (run && !['success', 'partial', 'failed'].includes(run.status)) {
+          updateRunningUI(run);
+        }
+      } catch (_) {}
+    })();
   }
 
   // Toggle active status
