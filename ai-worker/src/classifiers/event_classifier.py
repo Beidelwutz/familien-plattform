@@ -13,6 +13,7 @@ Includes:
 
 from dataclasses import dataclass, field
 from typing import Optional, Any
+from datetime import datetime
 import json
 import hashlib
 import logging
@@ -67,6 +68,14 @@ class ClassificationResult:
     # Legacy fields (kept for backward compatibility)
     description_short: Optional[str] = None
     family_reason: Optional[str] = None
+    
+    # Extracted event details (from description text)
+    extracted_start_datetime: Optional[str] = None  # ISO-8601 format
+    extracted_end_datetime: Optional[str] = None    # ISO-8601 format
+    extracted_location_address: Optional[str] = None
+    extracted_location_district: Optional[str] = None
+    datetime_confidence: float = 0.0
+    location_confidence: float = 0.0
     
     # Flags for processing
     flags: dict = field(default_factory=lambda: {
@@ -160,6 +169,28 @@ AUFGABEN:
 
 13. CONFIDENCE: Deine Sicherheit (0.0-1.0) über die Gesamtbewertung
 
+14. DATUM/ZEIT EXTRAKTION (WICHTIG - falls in Beschreibung erwähnt):
+    - extracted_start_datetime: ISO-8601 Format (z.B. "2026-03-15T14:00:00")
+    - extracted_end_datetime: ISO-8601 Format falls erwähnt (null wenn nicht)
+    - datetime_confidence: 0.0-1.0 wie sicher du bei der Datum/Zeit-Extraktion bist
+    - Suche nach Formulierungen wie:
+      * "am 15. März um 14 Uhr"
+      * "jeden Samstag von 10-12 Uhr"
+      * "täglich ab 10 Uhr"
+      * "Sonntag, 16.03.2026, 15:00"
+    - Bei wiederkehrenden Events: Das HEUTIGE DATUM ist {current_date}. Berechne das nächste vorkommende Datum.
+    - null falls kein Datum/Zeit erkennbar
+
+15. ORT EXTRAKTION (WICHTIG - falls in Beschreibung erwähnt):
+    - extracted_location_address: Vollständige Adresse falls erkennbar
+    - extracted_location_district: Stadtteil (z.B. "Südstadt", "Durlach", "Mühlburg")
+    - location_confidence: 0.0-1.0 wie sicher du bei der Ort-Extraktion bist
+    - Suche nach:
+      * Straßennamen mit Hausnummer
+      * Bekannte Orte ("im Schlosspark", "beim ZKM", "in der Stadtbibliothek")
+      * Stadtteile
+    - null falls kein Ort erkennbar
+
 Antworte NUR mit diesem JSON:
 {{
   "categories": ["kategorie1", "kategorie2"],
@@ -183,7 +214,13 @@ Antworte NUR mit diesem JSON:
   "ai_fit_blurb": "Ideal für...",
   "summary_confidence": 0.9,
   "flags": {{"sensitive_content": false, "needs_escalation": false}},
-  "confidence": 0.85
+  "confidence": 0.85,
+  "extracted_start_datetime": "2026-03-15T14:00:00",
+  "extracted_end_datetime": "2026-03-15T18:00:00",
+  "datetime_confidence": 0.85,
+  "extracted_location_address": "Kaiserstraße 42, 76131 Karlsruhe",
+  "extracted_location_district": "Innenstadt",
+  "location_confidence": 0.9
 }}"""
 
 
@@ -214,7 +251,13 @@ Bitte antworte NUR mit validem JSON im korrekten Format:
   "ai_fit_blurb": "Gut für Familien",
   "summary_confidence": 0.7,
   "flags": {{"sensitive_content": false, "needs_escalation": false}},
-  "confidence": 0.7
+  "confidence": 0.7,
+  "extracted_start_datetime": null,
+  "extracted_end_datetime": null,
+  "datetime_confidence": 0.0,
+  "extracted_location_address": null,
+  "extracted_location_district": null,
+  "location_confidence": 0.0
 }}"""
 
 
@@ -263,12 +306,14 @@ class EventClassifier:
         title = PIIRedactor.redact_for_ai(title)
         description = PIIRedactor.redact_for_ai(description)
         
-        # Prepare user prompt
+        # Prepare user prompt with current date for datetime extraction
+        current_date = datetime.now().strftime("%Y-%m-%d")
         user_prompt = CLASSIFICATION_PROMPT_V4.format(
             title=title or "Unbekannt",
             description=description or "Keine Beschreibung",
             location=location or "Unbekannt",
-            price=self._format_price(event)
+            price=self._format_price(event),
+            current_date=current_date
         )
         
         # Call AI with retry
@@ -519,6 +564,13 @@ class EventClassifier:
             # Legacy fields
             description_short=data.get("description_short") or data.get("ai_summary_short"),
             family_reason=data.get("family_reason") or data.get("ai_fit_blurb"),
+            # Extracted event details
+            extracted_start_datetime=data.get("extracted_start_datetime"),
+            extracted_end_datetime=data.get("extracted_end_datetime"),
+            extracted_location_address=data.get("extracted_location_address"),
+            extracted_location_district=data.get("extracted_location_district"),
+            datetime_confidence=data.get("datetime_confidence", 0.0),
+            location_confidence=data.get("location_confidence", 0.0),
             # Metadata
             model=model,
             temperature=temperature,

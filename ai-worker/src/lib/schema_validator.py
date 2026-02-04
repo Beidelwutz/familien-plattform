@@ -57,7 +57,14 @@ CLASSIFICATION_SCHEMA = {
                 "sensitive_content": {"type": "boolean"},
                 "needs_escalation": {"type": "boolean"}
             }
-        }
+        },
+        # Extracted event details (v3.1)
+        "extracted_start_datetime": {"type": ["string", "null"]},
+        "extracted_end_datetime": {"type": ["string", "null"]},
+        "extracted_location_address": {"type": ["string", "null"]},
+        "extracted_location_district": {"type": ["string", "null"]},
+        "datetime_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "location_confidence": {"type": "number", "minimum": 0, "maximum": 1}
     },
     "additionalProperties": True
 }

@@ -829,6 +829,9 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
         description_short: true,
         description_long: true,
         location_address: true,
+        location_district: true,
+        start_datetime: true,
+        end_datetime: true,
         price_min: true,
         price_max: true,
         is_indoor: true,
@@ -887,21 +890,85 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
         const scores = await scoreRes.json();
         
         // Determine new status
-        const newStatus = determineStatusFromAIScores(
+        let newStatus = determineStatusFromAIScores(
           scores.family_fit_score,
           classification.confidence
         );
         
+        // Extract AI-extracted datetime/location
+        const extractedStartDatetime = classification.extracted_start_datetime;
+        const extractedEndDatetime = classification.extracted_end_datetime;
+        const extractedLocationAddress = classification.extracted_location_address;
+        const extractedLocationDistrict = classification.extracted_location_district;
+        const datetimeConfidence = classification.datetime_confidence || 0;
+        const locationConfidence = classification.location_confidence || 0;
+        
+        // Use event's existing datetime or AI-extracted (if confidence >= 0.7)
+        let effectiveStartDatetime = event.start_datetime;
+        if (!effectiveStartDatetime && extractedStartDatetime && datetimeConfidence >= 0.7) {
+          try {
+            effectiveStartDatetime = new Date(extractedStartDatetime);
+            logger.info(`Cron: Event ${event.id} - AI extracted start_datetime with confidence ${datetimeConfidence}`);
+          } catch {
+            logger.warn(`Cron: Event ${event.id} - Failed to parse extracted datetime: ${extractedStartDatetime}`);
+          }
+        }
+        
+        // Validate start_datetime before publishing
+        if (newStatus === 'published') {
+          if (!effectiveStartDatetime) {
+            newStatus = 'incomplete';
+            logger.warn(`Cron: Event ${event.id} has no start_datetime, setting to incomplete instead of published`);
+          } else if (new Date(effectiveStartDatetime) < new Date()) {
+            newStatus = 'archived';
+            logger.warn(`Cron: Event ${event.id} start_datetime is in the past, setting to archived instead of published`);
+          }
+        }
+        
+        // Build update data with extracted fields (only if not already present and confidence >= 0.7)
+        const updateData: Record<string, any> = {
+          status: newStatus,
+          age_min: classification.age_min ?? undefined,
+          age_max: classification.age_max ?? undefined,
+          is_indoor: classification.is_indoor,
+          is_outdoor: classification.is_outdoor,
+          // AI-generated summaries
+          ai_summary_short: classification.ai_summary_short ?? undefined,
+          ai_fit_blurb: classification.ai_fit_blurb ?? undefined,
+          ai_summary_highlights: classification.ai_summary_highlights ?? undefined,
+          ai_summary_confidence: classification.summary_confidence ?? undefined,
+          // Age fit buckets
+          age_fit_0_2: classification.age_fit_buckets?.["0_2"] ?? undefined,
+          age_fit_3_5: classification.age_fit_buckets?.["3_5"] ?? undefined,
+          age_fit_6_9: classification.age_fit_buckets?.["6_9"] ?? undefined,
+          age_fit_10_12: classification.age_fit_buckets?.["10_12"] ?? undefined,
+          age_fit_13_15: classification.age_fit_buckets?.["13_15"] ?? undefined,
+        };
+        
+        // Add extracted datetime if not already present and confidence >= 0.7
+        if (!event.start_datetime && extractedStartDatetime && datetimeConfidence >= 0.7) {
+          try {
+            updateData.start_datetime = new Date(extractedStartDatetime);
+          } catch { /* ignore parse errors */ }
+        }
+        if (!event.end_datetime && extractedEndDatetime && datetimeConfidence >= 0.7) {
+          try {
+            updateData.end_datetime = new Date(extractedEndDatetime);
+          } catch { /* ignore parse errors */ }
+        }
+        
+        // Add extracted location if not already present and confidence >= 0.7
+        if (!event.location_address && extractedLocationAddress && locationConfidence >= 0.7) {
+          updateData.location_address = extractedLocationAddress;
+        }
+        if (!event.location_district && extractedLocationDistrict && locationConfidence >= 0.7) {
+          updateData.location_district = extractedLocationDistrict;
+        }
+        
         // Update event
         await prisma.canonicalEvent.update({
           where: { id: event.id },
-          data: {
-            status: newStatus,
-            age_min: classification.age_min ?? undefined,
-            age_max: classification.age_max ?? undefined,
-            is_indoor: classification.is_indoor,
-            is_outdoor: classification.is_outdoor,
-          }
+          data: updateData
         });
         
         // Create/update EventScore

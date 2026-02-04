@@ -395,8 +395,9 @@ export async function processSingleCandidate(
     };
     initialStatus = determineStatusFromAI(completeness, aiScores);
   } else {
-    // No AI scores: set to pending_ai for later processing
-    initialStatus = completeness.score >= 50 ? 'pending_ai' : 'incomplete';
+    // No AI scores: ALL events go to AI processing regardless of completeness
+    // AI will extract missing data (datetime, location) from description
+    initialStatus = 'pending_ai';
   }
   
   // Build initial provenance
