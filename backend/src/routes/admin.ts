@@ -104,6 +104,7 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       totalEvents,
       publishedEvents,
       pendingReview,
+      pendingAi,
       rejectedEvents,
       todayImports,
       sources,
@@ -113,6 +114,7 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       prisma.canonicalEvent.count(),
       prisma.canonicalEvent.count({ where: { status: 'published' } }),
       prisma.canonicalEvent.count({ where: { status: 'pending_review' } }),
+      prisma.canonicalEvent.count({ where: { status: 'pending_ai' } }),
       prisma.canonicalEvent.count({ where: { status: 'rejected' } }),
       prisma.canonicalEvent.count({
         where: {
@@ -166,6 +168,7 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
           total: totalEvents,
           published: publishedEvents,
           pending_review: pendingReview,
+          pending_ai: pendingAi,
           rejected: rejectedEvents,
           today_imports: todayImports
         },
