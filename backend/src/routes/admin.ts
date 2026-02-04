@@ -104,12 +104,16 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       totalEvents,
       publishedEvents,
       pendingReview,
+      rejectedEvents,
       todayImports,
-      sources
+      sources,
+      // AI-processed stats: Events with scores (meaning AI processed them)
+      aiProcessedWithScores
     ] = await Promise.all([
       prisma.canonicalEvent.count(),
       prisma.canonicalEvent.count({ where: { status: 'published' } }),
       prisma.canonicalEvent.count({ where: { status: 'pending_review' } }),
+      prisma.canonicalEvent.count({ where: { status: 'rejected' } }),
       prisma.canonicalEvent.count({
         where: {
           created_at: {
@@ -120,8 +124,28 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
       prisma.source.groupBy({
         by: ['health_status'],
         _count: true
-      })
+      }),
+      // Get AI-processed events (events that have scores)
+      prisma.eventScore.count()
     ]);
+
+    // Get AI-published count (published events with scores = AI auto-published)
+    const aiPublished = await prisma.canonicalEvent.count({
+      where: {
+        status: 'published',
+        scores: { isNot: null }
+      }
+    });
+
+    // Get AI-rejected count (rejected events with low family_fit_score)
+    const aiRejected = await prisma.canonicalEvent.count({
+      where: {
+        status: 'rejected',
+        scores: {
+          family_fit_score: { lt: 30 }
+        }
+      }
+    });
 
     const sourceHealth = {
       healthy: 0,
@@ -142,7 +166,14 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
           total: totalEvents,
           published: publishedEvents,
           pending_review: pendingReview,
+          rejected: rejectedEvents,
           today_imports: todayImports
+        },
+        ai_stats: {
+          total_processed: aiProcessedWithScores,
+          ai_published: aiPublished,
+          ai_rejected: aiRejected,
+          ai_pending_review: aiProcessedWithScores - aiPublished - aiRejected
         },
         sources: sourceHealth
       }
