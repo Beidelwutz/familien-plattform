@@ -107,6 +107,26 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     </div>
   </div>
 
+  <!-- Active Fetches Banner -->
+  <div id="active-fetches-banner" class="hidden mb-6">
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="flex items-center justify-center w-8 h-8 bg-blue-500 rounded-full">
+          <svg class="w-4 h-4 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="font-semibold text-blue-900">Aktive Fetches</h3>
+          <p class="text-sm text-blue-700" id="active-fetches-count">0 Quellen werden gerade abgerufen</p>
+        </div>
+      </div>
+      <div id="active-fetches-list" class="space-y-2">
+        <!-- Active fetch items will be inserted here -->
+      </div>
+    </div>
+  </div>
+
   <!-- Loading State -->
   <div id="loading-state" class="text-center py-12">
     <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
@@ -132,9 +152,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Quelle</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Typ</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Letzter Erfolg</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Events/Fetch</th>
-            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Fehler</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Letzter Fetch</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Events</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Aktionen</th>
           </tr>
         </thead>
         <tbody id="source-tbody" class="divide-y divide-gray-100"></tbody>
@@ -325,6 +345,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   let expandedRows = new Set();
   let activePolling = {};
   let deleteSourceId = null;
+  let activeRunsBySource = {}; // Maps source_id -> active run data
+  let globalStatusInterval = null;
   const token = localStorage.getItem('auth_token');
 
   // Status config
@@ -419,6 +441,131 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
+  // Global status polling - checks all active fetches every 5 seconds
+  async function startGlobalStatusPolling() {
+    if (globalStatusInterval) {
+      clearInterval(globalStatusInterval);
+    }
+
+    // Initial fetch
+    await updateActiveRuns();
+
+    globalStatusInterval = setInterval(async () => {
+      await updateActiveRuns();
+    }, 5000);
+  }
+
+  async function updateActiveRuns() {
+    try {
+      const data = await apiFetch('/api/admin/ingest-runs/active');
+      const activeRuns = data.data || [];
+      
+      // Build map: source_id -> run
+      const newActiveRunsBySource = {};
+      activeRuns.forEach(run => {
+        if (run.source_id) {
+          newActiveRunsBySource[run.source_id] = run;
+        }
+      });
+      
+      // Check if something changed
+      const hadActiveRuns = Object.keys(activeRunsBySource).length > 0;
+      const hasActiveRuns = activeRuns.length > 0;
+      
+      activeRunsBySource = newActiveRunsBySource;
+      
+      // Update the active fetches banner
+      updateActiveFetchesBanner(activeRuns);
+      
+      // Re-render table if active runs changed
+      if (hadActiveRuns || hasActiveRuns) {
+        renderTable();
+      }
+    } catch (e) {
+      console.error('Failed to fetch active runs:', e);
+    }
+  }
+
+  function updateActiveFetchesBanner(activeRuns) {
+    const banner = document.getElementById('active-fetches-banner');
+    const countEl = document.getElementById('active-fetches-count');
+    const listEl = document.getElementById('active-fetches-list');
+    
+    if (!banner || !countEl || !listEl) return;
+    
+    if (activeRuns.length === 0) {
+      banner.classList.add('hidden');
+      return;
+    }
+    
+    banner.classList.remove('hidden');
+    countEl.textContent = `${activeRuns.length} ${activeRuns.length === 1 ? 'Quelle wird' : 'Quellen werden'} gerade abgerufen`;
+    
+    listEl.innerHTML = activeRuns.map(run => {
+      const elapsed = run.elapsed_seconds || 0;
+      const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+      const sourceName = run.source?.name || 'Unbekannte Quelle';
+      const eventsFound = run.events_found || 0;
+      
+      return `
+        <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-blue-100">
+          <div class="flex items-center gap-3">
+            <svg class="w-4 h-4 text-blue-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <div>
+              <span class="font-medium text-gray-900">${sourceName}</span>
+              <span class="text-sm text-gray-500 ml-2">Läuft seit ${elapsedStr}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm text-blue-600">${eventsFound} Events gefunden</span>
+            <button 
+              class="cancel-btn-banner px-3 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
+              data-id="${run.source_id}"
+            >
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    // Attach cancel event listeners for banner buttons
+    listEl.querySelectorAll('.cancel-btn-banner').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelFetch(btn.dataset.id);
+      });
+    });
+  }
+
+  // Cancel an active fetch
+  async function cancelFetch(sourceId) {
+    if (!confirm('Möchten Sie diesen Fetch wirklich abbrechen?')) {
+      return;
+    }
+    
+    try {
+      await apiFetch(`/api/sources/${sourceId}/cancel`, { method: 'POST' });
+      
+      // Remove from active runs immediately
+      delete activeRunsBySource[sourceId];
+      
+      // Clear any polling for this source
+      if (activePolling[sourceId]) {
+        clearInterval(activePolling[sourceId]);
+        delete activePolling[sourceId];
+      }
+      
+      // Update UI
+      await updateActiveRuns();
+      loadSources();
+    } catch (e) {
+      alert('Fehler beim Abbrechen: ' + e.message);
+    }
+  }
+
   // Apply filters
   function applyFilters() {
     const searchTerm = document.getElementById('search-input').value.toLowerCase();
@@ -456,9 +603,42 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const config = statusConfig[status];
       const isExpanded = expandedRows.has(source.id);
       const isActive = source.is_active !== false;
-      const lastSuccess = formatRelativeTime(source.last_success_at);
-      const avgEvents = source.avg_events_per_fetch?.toFixed(1) || '-';
+      const lastFetch = formatRelativeTime(source.last_fetch_at);
+      const lastSuccess = source.last_success_at ? formatRelativeTime(source.last_success_at) : null;
+      const avgEvents = source.avg_events_per_fetch?.toFixed(0) || '-';
       const errorCount = source.consecutive_failures || 0;
+      const isRunning = activeRunsBySource[source.id] != null;
+      const activeRun = activeRunsBySource[source.id];
+
+      // Determine fetch status display
+      let fetchStatusHtml;
+      if (isRunning && activeRun) {
+        const elapsed = activeRun.elapsed_seconds || 0;
+        const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+        fetchStatusHtml = `
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+              <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Läuft ${elapsedStr}
+            </span>
+            <span class="text-xs text-gray-500">${activeRun.events_found || 0} gefunden</span>
+          </div>
+        `;
+      } else if (lastSuccess) {
+        const statusIcon = errorCount === 0 ? '✓' : '⚠';
+        const statusColor = errorCount === 0 ? 'green' : 'yellow';
+        fetchStatusHtml = `
+          <div class="flex items-center gap-2">
+            <span class="text-${statusColor}-600">${statusIcon}</span>
+            <span class="text-sm text-gray-600">${lastFetch}</span>
+            ${errorCount > 0 ? `<span class="text-xs text-red-500">(${errorCount}x Fehler)</span>` : ''}
+          </div>
+        `;
+      } else {
+        fetchStatusHtml = `<span class="text-gray-400 text-sm">Noch nie</span>`;
+      }
 
       return `
         <tr class="source-row hover:bg-gray-50 cursor-pointer ${isExpanded ? 'expanded' : ''} ${!isActive ? 'opacity-60' : ''}" data-id="${source.id}">
@@ -481,13 +661,33 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <td class="px-4 py-3">
             <span class="type-badge ${source.type}">${source.type}</span>
           </td>
-          <td class="px-4 py-3 text-sm text-gray-600">${lastSuccess}</td>
+          <td class="px-4 py-3">${fetchStatusHtml}</td>
           <td class="px-4 py-3 text-sm text-gray-600">${avgEvents}</td>
           <td class="px-4 py-3">
-            ${errorCount > 0 
-              ? `<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">${errorCount}</span>` 
-              : '<span class="text-gray-400">0</span>'
-            }
+            <div class="flex items-center justify-end gap-2">
+              ${isRunning ? `
+                <button 
+                  class="cancel-btn px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition flex items-center gap-1"
+                  data-id="${source.id}"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Abbrechen
+                </button>
+              ` : `
+                <button 
+                  class="trigger-btn-quick px-3 py-1.5 text-xs font-medium text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                  data-id="${source.id}"
+                  ${!isActive ? 'disabled' : ''}
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Abrufen
+                </button>
+              `}
+            </div>
           </td>
         </tr>
         <tr class="expanded-content bg-gray-50 ${isExpanded ? '' : 'hidden'}" data-expanded-for="${source.id}">
@@ -623,11 +823,27 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       });
     });
 
-    // Trigger buttons
+    // Trigger buttons (both in expanded area and quick action)
     document.querySelectorAll('.trigger-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         triggerFetch(btn.dataset.id, btn);
+      });
+    });
+    
+    // Quick trigger buttons in table row
+    document.querySelectorAll('.trigger-btn-quick').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        triggerFetchQuick(btn.dataset.id);
+      });
+    });
+    
+    // Cancel buttons in table row
+    document.querySelectorAll('.cancel-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelFetch(btn.dataset.id);
       });
     });
 
@@ -715,7 +931,29 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
-  // Trigger fetch for a source
+  // Quick trigger fetch (from table row button)
+  async function triggerFetchQuick(id) {
+    const source = sources.find(s => s.id === id);
+    
+    try {
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
+      
+      if (response.success && response.data?.ingest_run_id) {
+        // Immediately update active runs to show the fetch started
+        await updateActiveRuns();
+        
+        // Also start polling for this specific run
+        pollRunStatus(id, response.data.ingest_run_id);
+      } else {
+        const errorDetail = response.error || response.message || 'Unbekannter Fehler';
+        alert(`Import fehlgeschlagen: ${errorDetail}`);
+      }
+    } catch (e) {
+      alert('Fehler beim Starten: ' + e.message);
+    }
+  }
+
+  // Trigger fetch for a source (from expanded area)
   async function triggerFetch(id, btn) {
     const source = sources.find(s => s.id === id);
     const sourceName = source?.name || 'diese Quelle';
@@ -1047,4 +1285,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // Initial load
   loadSources();
+  
+  // Start global status polling for active fetches
+  startGlobalStatusPolling();
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (globalStatusInterval) {
+      clearInterval(globalStatusInterval);
+    }
+    Object.values(activePolling).forEach(interval => clearInterval(interval));
+  });
 </script>

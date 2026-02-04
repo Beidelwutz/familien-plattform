@@ -813,6 +813,36 @@ router.post('/duplicates/:id/ignore', async (req: AuthRequest, res: Response, ne
 // INGEST RUNS (Observability)
 // ============================================
 
+// GET /api/admin/ingest-runs/active - Get all currently running fetches
+router.get('/ingest-runs/active', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activeRuns = await prisma.ingestRun.findMany({
+      where: { status: 'running' },
+      include: { 
+        source: { 
+          select: { id: true, name: true, type: true } 
+        } 
+      },
+      orderBy: { started_at: 'desc' }
+    });
+
+    // Calculate elapsed time for each run
+    const now = new Date();
+    const enrichedRuns = activeRuns.map(run => ({
+      ...run,
+      elapsed_seconds: Math.floor((now.getTime() - new Date(run.started_at).getTime()) / 1000),
+    }));
+
+    res.json({
+      success: true,
+      data: enrichedRuns,
+      count: enrichedRuns.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/ingest-runs - List ingest runs
 router.get('/ingest-runs', async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -224,6 +224,51 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
   }
 });
 
+// POST /api/sources/:id/cancel - Cancel active fetch for a source
+router.post('/:id/cancel', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    // Find any running ingest run for this source
+    const activeRun = await prisma.ingestRun.findFirst({
+      where: { 
+        source_id: id, 
+        status: 'running' 
+      },
+      orderBy: { started_at: 'desc' }
+    });
+
+    if (!activeRun) {
+      throw createError('Kein aktiver Fetch für diese Quelle gefunden', 404, 'NOT_FOUND');
+    }
+
+    // Mark the run as cancelled (using 'failed' status with specific message)
+    await prisma.ingestRun.update({
+      where: { id: activeRun.id },
+      data: {
+        status: 'failed',
+        finished_at: new Date(),
+        error_message: 'Manuell abgebrochen',
+        needs_attention: false, // Don't flag manual cancellations
+      }
+    });
+
+    logger.info(`Ingest run ${activeRun.id} cancelled manually for source ${id}`);
+
+    res.json({
+      success: true,
+      message: 'Fetch abgebrochen',
+      data: {
+        run_id: activeRun.id,
+        source_id: id,
+        cancelled_at: new Date().toISOString(),
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================
 // SOURCE CRUD (Admin only)
 // ============================================
@@ -565,6 +610,68 @@ router.post('/cron/check', async (req: Request, res: Response, next: NextFunctio
     }
 
     const now = new Date();
+    
+    // ============================================
+    // AUTO-CANCEL STUCK RUNS (> 10 minutes)
+    // ============================================
+    const STUCK_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+    
+    const stuckRuns = await prisma.ingestRun.findMany({
+      where: {
+        status: 'running',
+        started_at: { lt: new Date(now.getTime() - STUCK_TIMEOUT_MS) }
+      },
+      include: {
+        source: { select: { id: true, name: true } }
+      }
+    });
+    
+    if (stuckRuns.length > 0) {
+      logger.info(`Auto-cancelling ${stuckRuns.length} stuck ingest runs (> 10 min)`);
+      
+      for (const run of stuckRuns) {
+        // Mark the run as failed with timeout message
+        await prisma.ingestRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'failed',
+            finished_at: now,
+            error_message: 'Auto-abgebrochen: Timeout nach 10 Minuten ohne Abschluss',
+            needs_attention: true,
+          }
+        });
+        
+        // Update source health status
+        if (run.source_id) {
+          const source = await prisma.source.findUnique({ where: { id: run.source_id } });
+          if (source) {
+            const newFailures = (source.consecutive_failures || 0) + 1;
+            let newHealthStatus = source.health_status;
+            
+            if (newFailures >= 5) {
+              newHealthStatus = 'dead';
+            } else if (newFailures >= 3) {
+              newHealthStatus = 'failing';
+            } else {
+              newHealthStatus = 'degraded';
+            }
+            
+            await prisma.source.update({
+              where: { id: run.source_id },
+              data: {
+                consecutive_failures: newFailures,
+                health_status: newHealthStatus,
+                last_failure_at: now,
+              }
+            });
+            
+            logger.warn(`Source ${run.source?.name} (${run.source_id}) now has ${newFailures} consecutive failures, status: ${newHealthStatus}`);
+          }
+        }
+        
+        logger.info(`Auto-cancelled stuck run ${run.id} for source ${run.source?.name || run.source_id}`);
+      }
+    }
     
     // Find all active sources that are due for a fetch
     const dueSources = await prisma.source.findMany({
