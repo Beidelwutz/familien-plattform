@@ -144,17 +144,33 @@ async def process_feed(feed_url: str, source_type: str = "rss"):
     parser = FeedParser()
     
     try:
+        # parse_rss/parse_ics return (events, etag, last_modified, was_modified) tuple
         if source_type == "rss":
-            events = await parser.parse_rss(feed_url)
+            events, _, _, _ = await parser.parse_rss(feed_url)
         elif source_type == "ics":
-            events = await parser.parse_ics(feed_url)
+            events, _, _, _ = await parser.parse_ics(feed_url)
         else:
             raise HTTPException(status_code=400, detail=f"Unknown source type: {source_type}")
+        
+        # Convert ParsedEvent dataclasses to dicts for JSON serialization
+        events_preview = [
+            {
+                "external_id": e.external_id,
+                "title": e.title,
+                "description": e.description[:200] if e.description else None,
+                "start_datetime": e.start_datetime.isoformat() if e.start_datetime else None,
+                "end_datetime": e.end_datetime.isoformat() if e.end_datetime else None,
+                "location_address": e.location_address,
+                "source_url": e.source_url,
+                "fingerprint": e.fingerprint,
+            }
+            for e in events[:10]
+        ]
         
         return {
             "success": True,
             "events_found": len(events),
-            "events": events[:10]  # Return first 10 for preview
+            "events": events_preview
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Feed processing failed: {str(e)}")

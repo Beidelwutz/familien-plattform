@@ -365,7 +365,7 @@ export async function processSingleCandidate(
     title: candidate.data.title,
     description_short: candidate.data.description?.substring(0, 500) || null,
     description_long: candidate.data.description || null,
-    start_datetime: new Date(candidate.data.start_at),
+    start_datetime: candidate.data.start_at ? new Date(candidate.data.start_at) : null,
     end_datetime: candidate.data.end_at ? new Date(candidate.data.end_at) : null,
     timezone_original: candidate.data.timezone_original || null,
     location_address: candidate.data.address || null,
