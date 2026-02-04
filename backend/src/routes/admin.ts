@@ -1442,20 +1442,51 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
           const scores = await scoreRes.json();
           
           // Step 3: Determine new status based on AI scores
-          const newStatus = determineStatusFromAIScores(
+          let newStatus = determineStatusFromAIScores(
             scores.family_fit_score,
             classification.confidence
           );
           
-          // Step 4: Update the event
+          // Step 3.5: Validate start_datetime before publishing
+          // Fetch the full event to check start_datetime
+          const fullEvent = await prisma.canonicalEvent.findUnique({
+            where: { id: event.id },
+            select: { start_datetime: true }
+          });
+          
+          if (newStatus === 'published') {
+            if (!fullEvent?.start_datetime) {
+              newStatus = 'incomplete';
+              logger.warn(`Event ${event.id} has no start_datetime, setting to incomplete instead of published`);
+            } else if (new Date(fullEvent.start_datetime) < new Date()) {
+              newStatus = 'archived';
+              logger.warn(`Event ${event.id} start_datetime is in the past, setting to archived instead of published`);
+            }
+          }
+          
+          // Step 4: Update the event with AI-generated data
           await prisma.canonicalEvent.update({
             where: { id: event.id },
             data: {
               status: newStatus,
               age_min: classification.age_min ?? undefined,
               age_max: classification.age_max ?? undefined,
+              age_rating: classification.age_rating ?? undefined,
               is_indoor: classification.is_indoor,
               is_outdoor: classification.is_outdoor,
+              // AI-generated summaries
+              ai_summary_short: classification.ai_summary_short ?? undefined,
+              ai_fit_blurb: classification.ai_fit_blurb ?? undefined,
+              ai_summary_highlights: classification.ai_summary_highlights ?? undefined,
+              ai_summary_confidence: classification.summary_confidence ?? undefined,
+              // Age fit buckets
+              age_fit_0_2: classification.age_fit_buckets?.["0_2"] ?? undefined,
+              age_fit_3_5: classification.age_fit_buckets?.["3_5"] ?? undefined,
+              age_fit_6_9: classification.age_fit_buckets?.["6_9"] ?? undefined,
+              age_fit_10_12: classification.age_fit_buckets?.["10_12"] ?? undefined,
+              age_fit_13_15: classification.age_fit_buckets?.["13_15"] ?? undefined,
+              // AI flags
+              ai_flags: classification.flags ?? undefined,
             }
           });
           
@@ -1671,6 +1702,86 @@ router.get('/ai-worker/queue-stats', async (_req: Request, res: Response, next: 
       error: errorMessage,
       data: null
     });
+  }
+});
+
+// ============================================
+// EVENT MAINTENANCE ENDPOINTS
+// ============================================
+
+// POST /api/admin/archive-past-events - Archive events with past start_datetime
+router.post('/archive-past-events', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { dry_run } = req.query;
+    const now = new Date();
+    
+    // Find all published events with past start_datetime
+    const pastEvents = await prisma.canonicalEvent.findMany({
+      where: {
+        status: 'published',
+        start_datetime: { lt: now },
+        NOT: { start_datetime: null }
+      },
+      select: { id: true, title: true, start_datetime: true }
+    });
+    
+    logger.info(`Found ${pastEvents.length} past published events to archive`);
+    
+    if (dry_run !== 'true' && pastEvents.length > 0) {
+      await prisma.canonicalEvent.updateMany({
+        where: { id: { in: pastEvents.map(e => e.id) } },
+        data: { status: 'archived' }
+      });
+      logger.info(`Archived ${pastEvents.length} past events`);
+    }
+    
+    res.json({
+      success: true,
+      archived_count: pastEvents.length,
+      dry_run: dry_run === 'true',
+      events: pastEvents.slice(0, 20) // Limit response size
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/fix-null-date-events - Set events without start_datetime to incomplete
+router.post('/fix-null-date-events', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { dry_run } = req.query;
+    
+    // Find all published events with NULL start_datetime
+    const nullDateEvents = await prisma.canonicalEvent.findMany({
+      where: {
+        status: 'published',
+        start_datetime: null
+      },
+      select: { id: true, title: true }
+    });
+    
+    logger.info(`Found ${nullDateEvents.length} published events without start_datetime`);
+    
+    if (dry_run !== 'true' && nullDateEvents.length > 0) {
+      const result = await prisma.canonicalEvent.updateMany({
+        where: {
+          status: 'published',
+          start_datetime: null
+        },
+        data: { status: 'incomplete' }
+      });
+      logger.info(`Set ${result.count} events without start_datetime to incomplete`);
+    }
+    
+    res.json({
+      success: true,
+      updated_count: nullDateEvents.length,
+      dry_run: dry_run === 'true',
+      message: 'Events ohne Startdatum auf "incomplete" gesetzt',
+      events: nullDateEvents.slice(0, 20) // Limit response size
+    });
+  } catch (error) {
+    next(error);
   }
 });
 

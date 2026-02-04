@@ -143,8 +143,9 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
     });
 
     // Trigger AI-Worker crawl job
+    const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
     try {
-      const workerResponse = await fetch(`${AI_WORKER_URL}/crawl/trigger`, {
+      const workerResponse = await fetch(workerUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,6 +156,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
           source_type: source.type,
           ingest_run_id: ingestRun.id,
         }),
+        signal: AbortSignal.timeout(15000), // 15s timeout
       });
 
       if (!workerResponse.ok) {
@@ -182,7 +184,13 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
         throw fetchError;
       }
       
-      logger.error(`Failed to reach AI-Worker: ${fetchError.message}`);
+      const isTimeout = fetchError.name === 'AbortError' || fetchError.message?.includes('timeout');
+      const hint = `AI-Worker unter ${AI_WORKER_URL} starten: im Ordner ai-worker "start.bat" ausführen oder "python -m src.main" (Port 5000).`;
+      const errorDetail = isTimeout
+        ? 'Timeout – Worker antwortet nicht innerhalb von 15 Sekunden.'
+        : fetchError.message || 'Verbindung fehlgeschlagen';
+      
+      logger.error(`Failed to reach AI-Worker at ${workerUrl}: ${errorDetail}`);
       
       // Update ingest run - worker unreachable
       await prisma.ingestRun.update({
@@ -190,12 +198,16 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
         data: {
           status: 'failed',
           finished_at: new Date(),
-          error_message: `AI-Worker unreachable: ${fetchError.message}`,
+          error_message: `AI-Worker unreachable: ${errorDetail}. ${hint}`,
           needs_attention: true,
         }
       });
       
-      throw createError('AI-Worker service unavailable', 503, 'WORKER_UNAVAILABLE');
+      throw createError(
+        `AI-Worker nicht erreichbar (${AI_WORKER_URL}). Bitte AI-Worker starten.`,
+        503,
+        'WORKER_UNAVAILABLE'
+      );
     }
     
     res.json({
@@ -479,8 +491,9 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
     }
   });
 
+  const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
   try {
-    const workerResponse = await fetch(`${AI_WORKER_URL}/crawl/trigger`, {
+    const workerResponse = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -489,6 +502,7 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
         source_type: source.type,
         ingest_run_id: ingestRun.id,
       }),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!workerResponse.ok) {
@@ -506,12 +520,14 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
 
     return { ingestRunId: ingestRun.id, success: true };
   } catch (error: any) {
+    const hint = `AI-Worker unter ${AI_WORKER_URL} starten (z.B. ai-worker/start.bat).`;
+    const errorDetail = error.name === 'AbortError' ? 'Timeout (15s)' : (error.message || 'Verbindung fehlgeschlagen');
     await prisma.ingestRun.update({
       where: { id: ingestRun.id },
       data: {
         status: 'failed',
         finished_at: new Date(),
-        error_message: `AI-Worker unreachable: ${error.message}`,
+        error_message: `AI-Worker unreachable: ${errorDetail}. ${hint}`,
         needs_attention: true,
       }
     });

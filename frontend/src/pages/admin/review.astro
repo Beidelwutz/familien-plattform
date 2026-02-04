@@ -209,6 +209,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
     try {
       const data = await apiFetch(`/api/admin/review-queue?status=${status}&limit=50`);
+      console.log('API Response:', data); // Debug
       events = data.data || [];
       
       document.getElementById('event-count').textContent = `${events.length} Events`;
@@ -216,13 +217,20 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       if (events.length === 0) {
         document.getElementById('empty-state').classList.remove('hidden');
       } else {
-        renderEvents();
-        document.getElementById('review-list').classList.remove('hidden');
+        try {
+          renderEvents();
+          document.getElementById('review-list').classList.remove('hidden');
+        } catch (renderError) {
+          console.error('Render error:', renderError);
+          console.error('Events data:', JSON.stringify(events[0], null, 2));
+          document.getElementById('empty-state').classList.remove('hidden');
+          document.getElementById('empty-state').innerHTML = `<p class="text-red-500">Fehler beim Rendern: ${renderError.message}</p>`;
+        }
       }
     } catch (e) {
       console.error('Load error:', e);
       document.getElementById('empty-state').classList.remove('hidden');
-      document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Fehler beim Laden</p>';
+      document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Fehler beim Laden: ' + e.message + '</p>';
     } finally {
       document.getElementById('loading-state').classList.add('hidden');
     }
@@ -289,9 +297,17 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   function renderEvents() {
     const list = document.getElementById('review-list');
     list.innerHTML = events.map(event => {
-      const date = new Date(event.start_datetime).toLocaleDateString('de-DE', { 
-        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-      });
+      // Handle null/undefined start_datetime
+      let date = 'Kein Datum';
+      try {
+        if (event.start_datetime) {
+          date = new Date(event.start_datetime).toLocaleDateString('de-DE', { 
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+          });
+        }
+      } catch (e) {
+        console.error('Date parsing error:', e);
+      }
       const sourceName = event.primary_source?.source?.name || 'Unbekannt';
       const completenessScore = event.completeness_score || 0;
       const statusBadge = getStatusBadge(event.status);

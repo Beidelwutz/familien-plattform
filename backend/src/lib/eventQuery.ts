@@ -102,6 +102,14 @@ export function canPublish(event: CanPublishInput): CanPublishResult {
     };
   }
   
+  // Startdatum muss in der Zukunft liegen
+  if (new Date(event.start_datetime) < new Date()) {
+    return { 
+      valid: false, 
+      reason: 'Startdatum liegt in der Vergangenheit' 
+    };
+  }
+  
   // Location prüfen (Adresse ODER Koordinaten)
   const hasAddress = event.location_address && event.location_address.trim().length > 0;
   const hasCoords = event.location_lat != null && event.location_lng != null;

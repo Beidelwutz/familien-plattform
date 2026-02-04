@@ -1,4 +1,71 @@
-# Cron Setup für Trending-Berechnung
+# Cron Setup
+
+Diese Dokumentation beschreibt die Cron-Jobs für automatisierte Hintergrundaufgaben.
+
+---
+
+## 1. Event-Archivierung (Empfohlen: täglich)
+
+Archiviert automatisch Events, deren `start_datetime` in der Vergangenheit liegt.
+
+### Endpoint
+
+```
+POST /api/admin/archive-past-events
+```
+
+### Authentifizierung
+
+Erfordert Admin-Authentifizierung via Bearer Token oder Service Token.
+
+### Parameter
+
+| Query Parameter | Beschreibung |
+|-----------------|--------------|
+| `dry_run=true`  | Zeigt betroffene Events ohne sie zu ändern |
+
+### Beispiel: cURL Command
+
+```bash
+curl -X POST https://api.kiezling.com/api/admin/archive-past-events \
+  -H "Authorization: Bearer $SERVICE_TOKEN"
+```
+
+### Vercel Cron Configuration
+
+In `vercel.json`:
+
+```json
+{
+  "crons": [{
+    "path": "/api/cron/archive-past-events",
+    "schedule": "0 3 * * *"
+  }]
+}
+```
+
+### GitHub Actions
+
+```yaml
+name: Archive Past Events
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Täglich um 3:00 Uhr
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Archive Past Events
+        run: |
+          curl -X POST ${{ secrets.API_URL }}/api/admin/archive-past-events \
+            -H "Authorization: Bearer ${{ secrets.SERVICE_TOKEN }}"
+```
+
+---
+
+## 2. Trending-Berechnung (Empfohlen: alle 30 Minuten)
 
 Das Search Trending System benötigt regelmäßige Berechnung der Trending-Begriffe (alle 30-60 Minuten).
 

@@ -1,6 +1,3 @@
-// Prisma Schema for Familien-Lokal Platform
-// PostgreSQL with PostGIS extension
-
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
@@ -10,179 +7,639 @@ datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   directUrl  = env("DIRECT_URL")
-  extensions = [postgis]
+  extensions = [postgis, uuid_ossp(map: "uuid-ossp", schema: "extensions")]
 }
 
-// ============================================
-// CORE EVENT MODELS
-// ============================================
-
-// Canonical Events - THE single source of truth per event
 model CanonicalEvent {
-  id                String   @id @default(uuid())
-  title             String   @db.VarChar(200)
-  description_short String?  @db.VarChar(500)
-  description_long  String?  @db.Text
-  
-  // DateTime (optional - some sources don't provide real event dates)
-  start_datetime    DateTime? @db.Timestamptz
-  end_datetime      DateTime? @db.Timestamptz
-  is_all_day        Boolean   @default(false)
-  
-  // Location
-  location_address  String?  @db.VarChar(300)
-  location_district String?  @db.VarChar(100)
-  location_lat      Decimal? @db.Decimal(10, 8)
-  location_lng      Decimal? @db.Decimal(11, 8)
-  // PostGIS point will be added via raw SQL migration
-  
-  // Venue Details (structured)
-  venue_name        String?  @db.VarChar(200)
-  postal_code       String?  @db.VarChar(10)
-  city              String?  @db.VarChar(100)
-  
-  // Pricing
-  price_type        PriceType @default(unknown)
-  price_min         Decimal?  @db.Decimal(8, 2)
-  price_max         Decimal?  @db.Decimal(8, 2)
-  price_details     Json?     @default("{}") // {adult: {min, max}, child: {min, max}, family: {min, max}, currency: "EUR"}
-  
-  // Ticket/Booking Status
-  availability_status AvailabilityStatus @default(unknown)
-  registration_deadline DateTime? @db.Timestamptz
-  
-  // Age range
-  age_min           Int?      @db.SmallInt
-  age_max           Int?      @db.SmallInt
-  age_recommendation_text String? @db.VarChar(100) // "Empfohlen ab 6 Jahren"
-  sibling_friendly  Boolean?  // Für jüngere Geschwister okay?
-  
-  // Indoor/Outdoor
-  is_indoor         Boolean   @default(false)
-  is_outdoor        Boolean   @default(false)
-  
-  // Language & Comprehension
-  language          String?   @db.VarChar(50) // "Deutsch", "Englisch"
-  complexity_level  ComplexityLevel?
-  
-  // Stressfree Details (for family planning)
-  noise_level       NoiseLevel?
-  has_seating       Boolean?
-  typical_wait_minutes Int?   @db.SmallInt
-  food_drink_allowed Boolean?
-  
-  // Capacity
-  capacity          Int?
-  spots_limited     Boolean?
-  early_arrival_hint String?  @db.VarChar(100) // "Früh da sein empfohlen"
-  
-  // Series / Recurrence
-  recurrence_rule   String?   @db.VarChar(100) // iCal RRULE or "jeden Samstag"
-  parent_series_id  String?
-  parent_series     CanonicalEvent? @relation("EventSeries", fields: [parent_series_id], references: [id])
-  series_children   CanonicalEvent[] @relation("EventSeries")
-  next_occurrences  Json?     @default("[]") // Array of next 3 dates
-  
-  // Transit/Arrival Info
-  transit_stop      String?   @db.VarChar(100)
-  transit_walk_minutes Int?   @db.SmallInt
-  has_parking       Boolean?
-  
-  // Contact
-  booking_url       String?   @db.VarChar(500)
-  contact_email     String?   @db.VarChar(200)
-  contact_phone     String?   @db.VarChar(50)
-  
-  // Media
-  image_urls        Json?     @default("[]")
-  
-  // Source tracking
-  primary_source_id String?   @unique
-  primary_source    EventSource? @relation("PrimarySource", fields: [primary_source_id], references: [id])
-  merged_from       Json?     @default("[]") // Array of source IDs
-  
-  // Provider (if registered)
-  provider_id       String?
-  provider          Provider? @relation(fields: [provider_id], references: [id])
-  
-  // Status & Quality
-  status            EventStatus @default(raw)
-  is_complete       Boolean     @default(false)
-  is_verified       Boolean     @default(false)
-  completeness_score Int?       @db.SmallInt // 0-100
-  last_verified_at  DateTime?   @db.Timestamptz
-  
-  // AI Publishing Decision
-  age_rating            String?        @db.VarChar(10)  // "0+", "3+", "6+", "10+", "13+", "16+", "18+"
-  published_by          PublishMethod?
-  decision_reason       String?        @db.VarChar(255)
-  ai_flags              Json?          @default("{}")
-  
-  // AI Summary
-  ai_summary_short      String?        @db.VarChar(300)
-  ai_summary_highlights Json?          @default("[]")
-  ai_fit_blurb          String?        @db.VarChar(150)
-  ai_summary_confidence Decimal?       @db.Decimal(3, 2)
-  
-  // Age Fit Buckets (0-100 score per bucket)
-  age_fit_0_2           Int?           @db.SmallInt
-  age_fit_3_5           Int?           @db.SmallInt
-  age_fit_6_9           Int?           @db.SmallInt
-  age_fit_10_12         Int?           @db.SmallInt
-  age_fit_13_15         Int?           @db.SmallInt
-  
-  // Engagement Tracking
-  view_count        Int         @default(0)
-  save_count        Int         @default(0)
-  
-  // Cancel/Reschedule
-  is_cancelled              Boolean   @default(false)
-  cancelled_at              DateTime? @db.Timestamptz
-  cancellation_reason       String?   @db.Text
-  rescheduled_to_event_id   String?
-  rescheduled_to            CanonicalEvent? @relation("RescheduledTo", fields: [rescheduled_to_event_id], references: [id])
-  rescheduled_from          CanonicalEvent[] @relation("RescheduledTo")
-  previous_start_datetime   DateTime? @db.Timestamptz
-  
-  // Field locking (prevents AI/scraper from overwriting)
-  locked_fields     Json?     @default("[]")
-  
-  // Field-level provenance (tracks which source set each field)
-  // Format: {"title": "partner", "price_min": "rss", "lat": "api"}
-  field_provenance  Json?     @default("{}")
-  
-  // Field-level timestamps (when each field was last updated)
-  // Format: {"title": "2026-01-15T...", "price_min": "2026-01-20T..."}
-  field_updated_at  Json?     @default("{}")
-  
-  // Original timezone from source (for display purposes)
-  timezone_original String?   @db.VarChar(50)
-  
-  // Timestamps
-  created_at        DateTime    @default(now()) @db.Timestamptz
-  updated_at        DateTime    @updatedAt @db.Timestamptz
-  
-  // Relations
-  categories        EventCategory[]
-  scores            EventScore?
-  amenities         EventAmenity[]
-  event_sources     EventSource[] @relation("CanonicalEventSources")
-  saved_by          SavedEvent[]
-  plan_slots        PlanSlot[]
-  revisions         EventRevision[]
-  dup_candidates_a  DupCandidate[] @relation("DupCandidateA")
-  dup_candidates_b  DupCandidate[] @relation("DupCandidateB")
-  raw_event_items   RawEventItem[]
-  
+  id                      String                    @id @default(uuid())
+  title                   String                    @db.VarChar(200)
+  description_short       String?                   @db.VarChar(500)
+  description_long        String?
+  start_datetime          DateTime?                 @db.Timestamptz(6)
+  end_datetime            DateTime?                 @db.Timestamptz(6)
+  is_all_day              Boolean                   @default(false)
+  location_address        String?                   @db.VarChar(300)
+  location_district       String?                   @db.VarChar(100)
+  location_lat            Decimal?                  @db.Decimal(10, 8)
+  location_lng            Decimal?                  @db.Decimal(11, 8)
+  price_type              PriceType                 @default(unknown)
+  price_min               Decimal?                  @db.Decimal(8, 2)
+  price_max               Decimal?                  @db.Decimal(8, 2)
+  age_min                 Int?                      @db.SmallInt
+  age_max                 Int?                      @db.SmallInt
+  is_indoor               Boolean                   @default(false)
+  is_outdoor              Boolean                   @default(false)
+  booking_url             String?                   @db.VarChar(500)
+  contact_email           String?                   @db.VarChar(200)
+  contact_phone           String?                   @db.VarChar(50)
+  image_urls              Json?                     @default("[]")
+  primary_source_id       String?                   @unique
+  merged_from             Json?                     @default("[]")
+  provider_id             String?
+  status                  EventStatus               @default(raw)
+  is_complete             Boolean                   @default(false)
+  is_verified             Boolean                   @default(false)
+  completeness_score      Int?                      @db.SmallInt
+  last_verified_at        DateTime?                 @db.Timestamptz(6)
+  view_count              Int                       @default(0)
+  save_count              Int                       @default(0)
+  is_cancelled            Boolean                   @default(false)
+  cancelled_at            DateTime?                 @db.Timestamptz(6)
+  cancellation_reason     String?
+  rescheduled_to_event_id String?
+  previous_start_datetime DateTime?                 @db.Timestamptz(6)
+  locked_fields           Json?                     @default("[]")
+  field_provenance        Json?                     @default("{}")
+  field_updated_at        Json?                     @default("{}")
+  timezone_original       String?                   @db.VarChar(50)
+  created_at              DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime                  @updatedAt @db.Timestamptz(6)
+  age_rating              String?                   @db.VarChar(10)
+  published_by            PublishMethod?
+  decision_reason         String?                   @db.VarChar(255)
+  ai_flags                Json?                     @default("{}")
+  ai_summary_short        String?                   @db.VarChar(300)
+  ai_summary_highlights   Json?                     @default("[]")
+  ai_fit_blurb            String?                   @db.VarChar(150)
+  ai_summary_confidence   Decimal?                  @db.Decimal(3, 2)
+  age_fit_0_2             Int?                      @db.SmallInt
+  age_fit_3_5             Int?                      @db.SmallInt
+  age_fit_6_9             Int?                      @db.SmallInt
+  age_fit_10_12           Int?                      @db.SmallInt
+  age_fit_13_15           Int?                      @db.SmallInt
+  location_point          Unsupported("geography")?
+  primary_source          EventSource?              @relation("PrimarySource", fields: [primary_source_id], references: [id])
+  provider                Provider?                 @relation(fields: [provider_id], references: [id])
+  rescheduled_to          CanonicalEvent?           @relation("RescheduledTo", fields: [rescheduled_to_event_id], references: [id])
+  rescheduled_from        CanonicalEvent[]          @relation("RescheduledTo")
+  dup_candidates_a        DupCandidate[]            @relation("DupCandidateA")
+  dup_candidates_b        DupCandidate[]            @relation("DupCandidateB")
+  amenities               EventAmenity[]
+  categories              EventCategory[]
+  revisions               EventRevision[]
+  scores                  EventScore?
+  event_sources           EventSource[]             @relation("CanonicalEventSources")
+  plan_slots              PlanSlot[]
+  raw_event_items         RawEventItem[]
+  saved_by                SavedEvent[]
+
   @@index([status, start_datetime])
   @@index([start_datetime])
   @@index([provider_id])
   @@index([is_cancelled])
   @@index([age_rating])
-  @@index([availability_status])
-  @@index([parent_series_id])
-  @@index([city])
+  @@index([location_point], type: Gist)
   @@map("canonical_events")
+}
+
+model EventScore {
+  event_id         String         @id
+  relevance_score  Int?           @db.SmallInt
+  quality_score    Int?           @db.SmallInt
+  family_fit_score Int?           @db.SmallInt
+  stressfree_score Int?           @db.SmallInt
+  confidence       Decimal?       @db.Decimal(3, 2)
+  ai_model_version String?        @db.VarChar(50)
+  ai_reasoning     Json?
+  scored_at        DateTime       @default(now()) @db.Timestamptz(6)
+  fun_score        Int?           @db.SmallInt
+  event            CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("event_scores")
+}
+
+model EventSource {
+  id                 String          @id @default(uuid())
+  canonical_event_id String?
+  source_id          String
+  external_id        String?         @db.VarChar(255)
+  source_url         String?         @db.VarChar(500)
+  raw_data           Json?
+  normalized_data    Json?
+  fingerprint        String?         @db.VarChar(32)
+  fetched_at         DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime        @updatedAt @db.Timestamptz(6)
+  primary_for        CanonicalEvent? @relation("PrimarySource")
+  canonical_event    CanonicalEvent? @relation("CanonicalEventSources", fields: [canonical_event_id], references: [id])
+  source             Source          @relation(fields: [source_id], references: [id])
+
+  @@unique([source_id, external_id])
+  @@unique([fingerprint, source_id], name: "event_sources_fingerprint_source_unique")
+  @@index([fingerprint])
+  @@index([canonical_event_id])
+  @@map("event_sources")
+}
+
+model Source {
+  id                       String            @id @default(uuid())
+  name                     String            @db.VarChar(200)
+  type                     SourceType
+  url                      String?           @db.VarChar(500)
+  schedule_cron            String?           @db.VarChar(50)
+  last_fetch_at            DateTime?         @db.Timestamptz(6)
+  next_fetch_at            DateTime?         @db.Timestamptz(6)
+  last_success_at          DateTime?         @db.Timestamptz(6)
+  last_failure_at          DateTime?         @db.Timestamptz(6)
+  is_active                Boolean           @default(true)
+  consecutive_failures     Int               @default(0)
+  health_status            HealthStatus      @default(unknown)
+  avg_events_per_fetch     Float?
+  expected_event_count_min Int?
+  scrape_allowed           Boolean           @default(true)
+  rate_limit_ms            Int               @default(5000)
+  priority                 Int               @default(3)
+  scraper_config           Json?
+  source_etag              String?           @db.VarChar(255)
+  source_last_modified     DateTime?         @db.Timestamptz(6)
+  notes                    String?
+  created_at               DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime          @updatedAt @db.Timestamptz(6)
+  event_sources            EventSource[]
+  ingest_runs              IngestRun[]
+  raw_event_items          RawEventItem[]
+  compliance               SourceCompliance?
+  fetch_logs               SourceFetchLog[]
+
+  @@map("sources")
+}
+
+model SourceCompliance {
+  source_id             String            @id
+  robots_txt_checked_at DateTime?         @db.Timestamptz(6)
+  robots_txt_allows     Boolean?
+  tos_reviewed_at       DateTime?         @db.Timestamptz(6)
+  tos_allows_scraping   Boolean?
+  contact_attempted     Boolean           @default(false)
+  partnership_status    PartnershipStatus @default(none)
+  legal_notes           String?
+  updated_at            DateTime          @updatedAt @db.Timestamptz(6)
+  source                Source            @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+  @@map("source_compliance")
+}
+
+model SourceFetchLog {
+  id                  String      @id @default(uuid())
+  source_id           String
+  started_at          DateTime    @default(now()) @db.Timestamptz(6)
+  finished_at         DateTime?   @db.Timestamptz(6)
+  status              FetchStatus @default(running)
+  events_found        Int?
+  events_new          Int?
+  events_updated      Int?
+  error_message       String?
+  http_status_code    Int?
+  response_size_bytes Int?
+  source              Source      @relation(fields: [source_id], references: [id], onDelete: Cascade)
+
+  @@index([source_id, started_at])
+  @@map("source_fetch_logs")
+}
+
+model GeocodeCache {
+  address_hash       String   @id @db.VarChar(64)
+  original_address   String
+  normalized_address String?
+  lat                Decimal  @db.Decimal(10, 8)
+  lng                Decimal  @db.Decimal(11, 8)
+  confidence         Decimal? @db.Decimal(3, 2)
+  provider           String   @db.VarChar(50)
+  district_canonical String?  @db.VarChar(100)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("geocode_cache")
+}
+
+model DistrictAlias {
+  id             String   @id @default(uuid())
+  canonical_name String   @unique @db.VarChar(100)
+  aliases        Json     @default("[]")
+  center_lat     Decimal? @db.Decimal(10, 8)
+  center_lng     Decimal? @db.Decimal(11, 8)
+
+  @@map("district_aliases")
+}
+
+model AICache {
+  content_hash          String   @id @db.VarChar(64)
+  model_version         String   @db.VarChar(50)
+  classification_result Json?
+  scores                Json?
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  expires_at            DateTime @db.Timestamptz(6)
+  hit_count             Int      @default(0)
+
+  @@index([expires_at])
+  @@map("ai_cache")
+}
+
+model AIUsageLog {
+  id                  String   @id @default(uuid())
+  timestamp           DateTime @default(now()) @db.Timestamptz(6)
+  model               String   @db.VarChar(50)
+  operation           String   @db.VarChar(50)
+  input_tokens        Int?
+  output_tokens       Int?
+  estimated_cost_usd  Decimal? @db.Decimal(10, 6)
+  price_input_per_1k  Decimal? @db.Decimal(10, 6)
+  price_output_per_1k Decimal? @db.Decimal(10, 6)
+  pricing_version     String?  @db.VarChar(20)
+  event_id            String?
+  user_id             String?
+  request_id          String?  @db.VarChar(50)
+  response_time_ms    Int?
+  was_cached          Boolean  @default(false)
+  error_code          String?  @db.VarChar(50)
+
+  @@index([timestamp])
+  @@index([model, operation])
+  @@index([event_id])
+  @@map("ai_usage_log")
+}
+
+model Category {
+  id            String          @id @default(uuid())
+  slug          String          @unique @db.VarChar(50)
+  name_de       String          @db.VarChar(100)
+  icon          String?         @db.VarChar(10)
+  sort_order    Int             @default(0)
+  parent_id     String?
+  created_at    DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime        @updatedAt @db.Timestamptz(6)
+  updated_by_id String?
+  parent        Category?       @relation("CategoryHierarchy", fields: [parent_id], references: [id])
+  children      Category[]      @relation("CategoryHierarchy")
+  updated_by    User?           @relation("CategoryUpdatedBy", fields: [updated_by_id], references: [id])
+  events        EventCategory[]
+
+  @@index([parent_id, sort_order])
+  @@map("categories")
+}
+
+model EventCategory {
+  event_id    String
+  category_id String
+  category    Category       @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  event       CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@id([event_id, category_id])
+  @@map("event_categories")
+}
+
+model Amenity {
+  id            String         @id @default(uuid())
+  slug          String         @unique @db.VarChar(50)
+  name_de       String         @db.VarChar(100)
+  icon          String?        @db.VarChar(10)
+  sort_order    Int            @default(0)
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime       @updatedAt @db.Timestamptz(6)
+  updated_by_id String?
+  updated_by    User?          @relation("AmenityUpdatedBy", fields: [updated_by_id], references: [id])
+  events        EventAmenity[]
+
+  @@index([sort_order])
+  @@map("amenities")
+}
+
+model EventAmenity {
+  event_id     String
+  amenity_id   String
+  is_confirmed Boolean        @default(false)
+  amenity      Amenity        @relation(fields: [amenity_id], references: [id], onDelete: Cascade)
+  event        CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@id([event_id, amenity_id])
+  @@map("event_amenities")
+}
+
+model Provider {
+  id                String           @id @default(uuid())
+  name              String           @db.VarChar(200)
+  type              ProviderType
+  website           String?          @db.VarChar(500)
+  email             String?          @db.VarChar(200)
+  phone             String?          @db.VarChar(50)
+  address           String?          @db.VarChar(300)
+  lat               Decimal?         @db.Decimal(10, 8)
+  lng               Decimal?         @db.Decimal(11, 8)
+  logo_url          String?          @db.VarChar(500)
+  subscription_tier SubscriptionTier @default(free)
+  is_verified       Boolean          @default(false)
+  verified_at       DateTime?        @db.Timestamptz(6)
+  user_id           String?          @unique
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime         @updatedAt @db.Timestamptz(6)
+  events            CanonicalEvent[]
+  user              User?            @relation(fields: [user_id], references: [id])
+
+  @@map("providers")
+}
+
+model User {
+  id                    String               @id @default(uuid())
+  email                 String               @unique @db.VarChar(255)
+  password_hash         String?              @db.VarChar(255)
+  role                  UserRole             @default(parent)
+  email_verified        Boolean              @default(false)
+  email_verified_at     DateTime?            @db.Timestamptz(6)
+  failed_login_attempts Int                  @default(0)
+  locked_until          DateTime?            @db.Timestamptz(6)
+  last_login_at         DateTime?            @db.Timestamptz(6)
+  created_at            DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime             @updatedAt @db.Timestamptz(6)
+  admin_audit_logs      AdminAuditLog[]      @relation("AdminAuditLogs")
+  amenities_updated     Amenity[]            @relation("AmenityUpdatedBy")
+  categories_updated    Category[]           @relation("CategoryUpdatedBy")
+  dup_resolutions       DupCandidate[]
+  revisions_created     EventRevision[]      @relation("RevisionCreator")
+  revisions_reviewed    EventRevision[]      @relation("RevisionReviewer")
+  family_profile        FamilyProfile?
+  password_reset_tokens PasswordResetToken[]
+  plans                 Plan[]
+  provider              Provider?
+  saved_events          SavedEvent[]
+
+  @@index([email_verified])
+  @@map("users")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String    @db.VarChar(255)
+  expires_at DateTime  @db.Timestamptz(6)
+  used_at    DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@index([expires_at])
+  @@map("password_reset_tokens")
+}
+
+model FamilyProfile {
+  id                   String   @id @default(uuid())
+  user_id              String   @unique
+  children_ages        Json?    @default("[]")
+  preferred_radius_km  Int?     @db.SmallInt
+  preferred_categories Json?    @default("[]")
+  home_lat             Decimal? @db.Decimal(10, 8)
+  home_lng             Decimal? @db.Decimal(11, 8)
+  updated_at           DateTime @updatedAt @db.Timestamptz(6)
+  user                 User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("family_profiles")
+}
+
+model SavedEvent {
+  user_id  String
+  event_id String
+  saved_at DateTime       @default(now()) @db.Timestamptz(6)
+  event    CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, event_id])
+  @@map("saved_events")
+}
+
+model Plan {
+  id            String     @id @default(uuid())
+  user_id       String?
+  title         String?    @db.VarChar(200)
+  date          DateTime   @db.Date
+  children_ages Json?      @default("[]")
+  budget        Decimal?   @db.Decimal(8, 2)
+  preferences   Json?
+  route_data    Json?
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  plan_b_slots  PlanSlot[] @relation("PlanBSlots")
+  slots         PlanSlot[]
+  user          User?      @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@map("plans")
+}
+
+model PlanSlot {
+  id               String          @id @default(uuid())
+  plan_id          String
+  plan_b_for_id    String?
+  event_id         String?
+  slot_type        SlotType        @default(activity)
+  start_time       DateTime        @db.Timestamptz(6)
+  end_time         DateTime        @db.Timestamptz(6)
+  duration_minutes Int
+  notes            String?
+  event            CanonicalEvent? @relation(fields: [event_id], references: [id])
+  plan_b_for       Plan?           @relation("PlanBSlots", fields: [plan_b_for_id], references: [id])
+  plan             Plan            @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+
+  @@index([plan_id])
+  @@map("plan_slots")
+}
+
+model EventRevision {
+  id               String         @id @default(uuid())
+  event_id         String
+  changeset        Json
+  created_by       String?
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  status           RevisionStatus @default(pending)
+  reviewed_by      String?
+  reviewed_at      DateTime?      @db.Timestamptz(6)
+  review_note      String?
+  created_by_user  User?          @relation("RevisionCreator", fields: [created_by], references: [id])
+  event            CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  reviewed_by_user User?          @relation("RevisionReviewer", fields: [reviewed_by], references: [id])
+
+  @@index([event_id])
+  @@index([status])
+  @@map("event_revisions")
+}
+
+model IngestRun {
+  id               String         @id @default(uuid())
+  correlation_id   String         @db.VarChar(50)
+  source_id        String?
+  started_at       DateTime       @default(now()) @db.Timestamptz(6)
+  finished_at      DateTime?      @db.Timestamptz(6)
+  status           IngestStatus   @default(running)
+  events_found     Int            @default(0)
+  events_created   Int            @default(0)
+  events_updated   Int            @default(0)
+  events_skipped   Int            @default(0)
+  events_unchanged Int            @default(0)
+  events_ignored   Int            @default(0)
+  merge_stats      Json?
+  error_message    String?
+  error_details    Json?
+  retry_count      Int            @default(0)
+  needs_attention  Boolean        @default(false)
+  acknowledged_at  DateTime?      @db.Timestamptz(6)
+  source           Source?        @relation(fields: [source_id], references: [id])
+  raw_event_items  RawEventItem[]
+
+  @@index([status])
+  @@index([needs_attention])
+  @@index([source_id, started_at])
+  @@map("ingest_runs")
+}
+
+model RawEventItem {
+  id                 String          @id @default(uuid())
+  source_id          String
+  run_id             String
+  raw_hash           String          @db.VarChar(64)
+  raw_payload        Json?
+  extracted_fields   Json
+  source_url         String          @db.VarChar(500)
+  external_id        String?         @db.VarChar(255)
+  fingerprint        String          @db.VarChar(32)
+  parser_version     String          @db.VarChar(20)
+  normalizer_version String          @db.VarChar(20)
+  ai_suggestions     Json?
+  canonical_event_id String?
+  ingest_status      String?         @db.VarChar(20)
+  ingest_result      Json?
+  first_seen_at      DateTime        @default(now()) @db.Timestamptz(6)
+  last_seen_at       DateTime        @default(now()) @db.Timestamptz(6)
+  seen_count         Int             @default(1)
+  fetched_at         DateTime        @db.Timestamptz(6)
+  created_at         DateTime        @default(now()) @db.Timestamptz(6)
+  canonical_event    CanonicalEvent? @relation(fields: [canonical_event_id], references: [id])
+  run                IngestRun       @relation(fields: [run_id], references: [id])
+  source             Source          @relation(fields: [source_id], references: [id])
+
+  @@unique([source_id, raw_hash])
+  @@index([run_id])
+  @@index([source_id, fetched_at])
+  @@index([fingerprint])
+  @@index([canonical_event_id])
+  @@map("raw_event_items")
+}
+
+model DupCandidate {
+  id               String         @id @default(uuid())
+  event_a_id       String
+  event_b_id       String
+  confidence       DupConfidence
+  score            Decimal?       @db.Decimal(3, 2)
+  detected_at      DateTime       @default(now()) @db.Timestamptz(6)
+  resolved_at      DateTime?      @db.Timestamptz(6)
+  resolution       DupResolution?
+  resolved_by      String?
+  event_a          CanonicalEvent @relation("DupCandidateA", fields: [event_a_id], references: [id], onDelete: Cascade)
+  event_b          CanonicalEvent @relation("DupCandidateB", fields: [event_b_id], references: [id], onDelete: Cascade)
+  resolved_by_user User?          @relation(fields: [resolved_by], references: [id])
+
+  @@unique([event_a_id, event_b_id])
+  @@index([confidence])
+  @@index([resolution])
+  @@map("dup_candidates")
+}
+
+model SearchQueryLog {
+  id        String   @id @default(cuid())
+  queryNorm String   @db.VarChar(120)
+  city      String?  @db.VarChar(80)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([city, createdAt])
+  @@index([queryNorm])
+  @@map("search_query_logs")
+}
+
+model TrendingTerm {
+  id          String   @id @default(cuid())
+  term        String   @db.VarChar(120)
+  city        String?  @db.VarChar(80)
+  score       Float
+  trendRatio  Float
+  searches24h Int
+  baseline7d  Float
+  computedAt  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([city, score])
+  @@index([computedAt])
+  @@map("trending_terms")
+}
+
+model TrendOverride {
+  id          String      @id @default(cuid())
+  term        String      @db.VarChar(120)
+  termNorm    String      @db.VarChar(120)
+  city        String?     @db.VarChar(80)
+  action      TrendAction
+  boost       Int?
+  replacement String?     @db.VarChar(120)
+  label       String?     @db.VarChar(50)
+  startsAt    DateTime?   @db.Timestamptz(6)
+  endsAt      DateTime?   @db.Timestamptz(6)
+  priority    Int         @default(0)
+  isActive    Boolean     @default(true)
+  createdById String?
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(6)
+
+  @@unique([termNorm, city, action], name: "unique_override_per_action")
+  @@index([city, isActive])
+  @@index([startsAt, endsAt])
+  @@index([action])
+  @@map("trend_overrides")
+}
+
+model AdminAuditLog {
+  id          String      @id @default(cuid())
+  timestamp   DateTime    @default(now()) @db.Timestamptz(6)
+  user_id     String
+  action      AuditAction
+  entity_type String      @db.VarChar(50)
+  entity_id   String      @db.VarChar(50)
+  entity_name String?     @db.VarChar(200)
+  changes     Json?
+  metadata    Json?
+  ip_address  String?     @db.VarChar(45)
+  user_agent  String?     @db.VarChar(500)
+  user        User        @relation("AdminAuditLogs", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([timestamp])
+  @@index([entity_type, entity_id])
+  @@index([action])
+  @@map("admin_audit_logs")
+}
+
+model JobQueueEntry {
+  id            String    @id @default(cuid())
+  job_type      String    @db.VarChar(50)
+  job_key       String    @db.VarChar(200)
+  status        JobStatus @default(QUEUED)
+  priority      Int       @default(0)
+  payload       Json
+  scheduled_at  DateTime  @default(now()) @db.Timestamptz(6)
+  started_at    DateTime? @db.Timestamptz(6)
+  completed_at  DateTime? @db.Timestamptz(6)
+  result        Json?
+  error_message String?
+  attempts      Int       @default(0)
+  created_by_id String?
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([job_type, job_key])
+  @@index([status, priority, scheduled_at])
+  @@index([job_type, status])
+  @@map("job_queue")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model spatial_ref_sys {
+  srid      Int     @id
+  auth_name String? @db.VarChar(256)
+  auth_srid Int?
+  srtext    String? @db.VarChar(2048)
+  proj4text String? @db.VarChar(2048)
 }
 
 enum EventStatus {
@@ -230,108 +687,6 @@ enum PublishMethod {
   provider_direct
 }
 
-// Event Scores from AI
-model EventScore {
-  event_id          String   @id
-  event             CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  
-  relevance_score   Int?     @db.SmallInt // 0-100
-  quality_score     Int?     @db.SmallInt // 0-100
-  family_fit_score  Int?     @db.SmallInt // 0-100
-  stressfree_score  Int?     @db.SmallInt // 0-100
-  fun_score         Int?     @db.SmallInt // 0-100
-  confidence        Decimal? @db.Decimal(3, 2) // 0.00-1.00
-  
-  ai_model_version  String?  @db.VarChar(50)
-  ai_reasoning      Json?    // Reasoning for scores
-  scored_at         DateTime @default(now()) @db.Timestamptz
-  
-  @@map("event_scores")
-}
-
-// ============================================
-// SOURCE & INGESTION MODELS
-// ============================================
-
-// Raw event data from each source
-model EventSource {
-  id                  String   @id @default(uuid())
-  canonical_event_id  String?
-  canonical_event     CanonicalEvent? @relation("CanonicalEventSources", fields: [canonical_event_id], references: [id])
-  
-  source_id           String
-  source              Source   @relation(fields: [source_id], references: [id])
-  
-  external_id         String?  @db.VarChar(255) // ID at the source
-  source_url          String?  @db.VarChar(500)
-  
-  raw_data            Json?    // Original data as received
-  normalized_data     Json?    // After parsing/normalization
-  
-  fingerprint         String?  @db.VarChar(32) // For deduplication
-  
-  fetched_at          DateTime @default(now()) @db.Timestamptz
-  updated_at          DateTime @updatedAt @db.Timestamptz
-  
-  // Canonical events that use this as primary source
-  primary_for         CanonicalEvent? @relation("PrimarySource")
-  
-  @@unique([source_id, external_id])
-  @@unique([fingerprint, source_id], name: "event_sources_fingerprint_source_unique")
-  @@index([fingerprint])
-  @@index([canonical_event_id])
-  @@map("event_sources")
-}
-
-// Data Sources (RSS feeds, APIs, scrapers, etc.)
-model Source {
-  id                    String       @id @default(uuid())
-  name                  String       @db.VarChar(200)
-  type                  SourceType
-  url                   String?      @db.VarChar(500)
-  
-  // Scheduling
-  schedule_cron         String?      @db.VarChar(50)
-  last_fetch_at         DateTime?    @db.Timestamptz
-  next_fetch_at         DateTime?    @db.Timestamptz
-  last_success_at       DateTime?    @db.Timestamptz
-  last_failure_at       DateTime?    @db.Timestamptz
-  
-  // Health monitoring
-  is_active             Boolean      @default(true)
-  consecutive_failures  Int          @default(0)
-  health_status         HealthStatus @default(unknown)
-  avg_events_per_fetch  Float?
-  expected_event_count_min Int?
-  
-  // Rate limiting & compliance
-  scrape_allowed        Boolean      @default(true)
-  rate_limit_ms         Int          @default(5000)
-  priority              Int          @default(3) // 1=partner, 2=api, 3=feed, 4=scraper
-  
-  // Scraper configuration (for type='scraper')
-  // Contains: selectors, dateFormat, pagination, etc.
-  scraper_config        Json?
-  
-  // HTTP caching (for conditional requests)
-  source_etag           String?      @db.VarChar(255)
-  source_last_modified  DateTime?    @db.Timestamptz
-  
-  notes                 String?      @db.Text
-  
-  created_at            DateTime     @default(now()) @db.Timestamptz
-  updated_at            DateTime     @updatedAt @db.Timestamptz
-  
-  // Relations
-  event_sources         EventSource[]
-  fetch_logs            SourceFetchLog[]
-  compliance            SourceCompliance?
-  ingest_runs           IngestRun[]
-  raw_event_items       RawEventItem[]
-  
-  @@map("sources")
-}
-
 enum SourceType {
   api
   rss
@@ -349,26 +704,6 @@ enum HealthStatus {
   unknown
 }
 
-// Legal compliance tracking for sources
-model SourceCompliance {
-  source_id             String   @id
-  source                Source   @relation(fields: [source_id], references: [id], onDelete: Cascade)
-  
-  robots_txt_checked_at DateTime? @db.Timestamptz
-  robots_txt_allows     Boolean?
-  
-  tos_reviewed_at       DateTime? @db.Timestamptz
-  tos_allows_scraping   Boolean?
-  
-  contact_attempted     Boolean   @default(false)
-  partnership_status    PartnershipStatus @default(none)
-  
-  legal_notes           String?   @db.Text
-  updated_at            DateTime  @updatedAt @db.Timestamptz
-  
-  @@map("source_compliance")
-}
-
 enum PartnershipStatus {
   none
   pending
@@ -376,216 +711,11 @@ enum PartnershipStatus {
   rejected
 }
 
-// Fetch logs for monitoring
-model SourceFetchLog {
-  id                String   @id @default(uuid())
-  source_id         String
-  source            Source   @relation(fields: [source_id], references: [id], onDelete: Cascade)
-  
-  started_at        DateTime @default(now()) @db.Timestamptz
-  finished_at       DateTime? @db.Timestamptz
-  
-  status            FetchStatus @default(running)
-  events_found      Int?
-  events_new        Int?
-  events_updated    Int?
-  
-  error_message     String?  @db.Text
-  http_status_code  Int?
-  response_size_bytes Int?
-  
-  @@index([source_id, started_at])
-  @@map("source_fetch_logs")
-}
-
 enum FetchStatus {
   running
   success
   partial
   error
-}
-
-// ============================================
-// GEOCODING & LOCATION
-// ============================================
-
-model GeocodeCache {
-  address_hash        String   @id @db.VarChar(64)
-  original_address    String   @db.Text
-  normalized_address  String?  @db.Text
-  
-  lat                 Decimal  @db.Decimal(10, 8)
-  lng                 Decimal  @db.Decimal(11, 8)
-  confidence          Decimal? @db.Decimal(3, 2)
-  
-  provider            String   @db.VarChar(50) // nominatim, google, manual
-  district_canonical  String?  @db.VarChar(100)
-  
-  created_at          DateTime @default(now()) @db.Timestamptz
-  
-  @@map("geocode_cache")
-}
-
-model DistrictAlias {
-  id                String   @id @default(uuid())
-  canonical_name    String   @unique @db.VarChar(100)
-  aliases           Json     @default("[]") // Array of alternative names
-  center_lat        Decimal? @db.Decimal(10, 8)
-  center_lng        Decimal? @db.Decimal(11, 8)
-  
-  @@map("district_aliases")
-}
-
-// ============================================
-// AI & CACHING
-// ============================================
-
-model AICache {
-  content_hash         String   @id @db.VarChar(64)
-  model_version        String   @db.VarChar(50)
-  
-  classification_result Json?
-  scores               Json?
-  
-  created_at           DateTime @default(now()) @db.Timestamptz
-  expires_at           DateTime @db.Timestamptz
-  hit_count            Int      @default(0)
-  
-  @@index([expires_at])
-  @@map("ai_cache")
-}
-
-model AIUsageLog {
-  id                  String   @id @default(uuid())
-  timestamp           DateTime @default(now()) @db.Timestamptz
-  
-  model               String   @db.VarChar(50)
-  operation           String   @db.VarChar(50) // classify, score, enrich, plan
-  
-  input_tokens        Int?
-  output_tokens       Int?
-  estimated_cost_usd  Decimal? @db.Decimal(10, 6)
-  
-  // Pricing snapshot for cost recalculation
-  price_input_per_1k  Decimal? @db.Decimal(10, 6)  // Price per 1k input tokens at time of call
-  price_output_per_1k Decimal? @db.Decimal(10, 6)  // Price per 1k output tokens at time of call
-  pricing_version     String?  @db.VarChar(20)     // e.g., "2024-01" for auditing
-  
-  // Context (no PII!)
-  event_id            String?
-  user_id             String?
-  request_id          String?  @db.VarChar(50)     // Correlation ID
-  
-  // Response metadata
-  response_time_ms    Int?
-  was_cached          Boolean  @default(false)
-  error_code          String?  @db.VarChar(50)
-  
-  @@index([timestamp])
-  @@index([model, operation])
-  @@index([event_id])
-  @@map("ai_usage_log")
-}
-
-// ============================================
-// CATEGORIES & AMENITIES
-// ============================================
-
-model Category {
-  id          String   @id @default(uuid())
-  slug        String   @unique @db.VarChar(50)
-  name_de     String   @db.VarChar(100)
-  icon        String?  @db.VarChar(10)
-  sort_order  Int      @default(0)
-  parent_id   String?
-  parent      Category? @relation("CategoryHierarchy", fields: [parent_id], references: [id])
-  children    Category[] @relation("CategoryHierarchy")
-  
-  // Audit fields
-  created_at    DateTime @default(now()) @db.Timestamptz
-  updated_at    DateTime @updatedAt @db.Timestamptz
-  updated_by_id String?
-  updated_by    User?    @relation("CategoryUpdatedBy", fields: [updated_by_id], references: [id], onDelete: SetNull)
-  
-  events      EventCategory[]
-  
-  @@index([parent_id, sort_order])
-  @@map("categories")
-}
-
-model EventCategory {
-  event_id    String
-  event       CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  category_id String
-  category    Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
-  
-  @@id([event_id, category_id])
-  @@map("event_categories")
-}
-
-model Amenity {
-  id          String   @id @default(uuid())
-  slug        String   @unique @db.VarChar(50)
-  name_de     String   @db.VarChar(100)
-  icon        String?  @db.VarChar(10)
-  sort_order  Int      @default(0)
-  
-  // Audit fields
-  created_at    DateTime @default(now()) @db.Timestamptz
-  updated_at    DateTime @updatedAt @db.Timestamptz
-  updated_by_id String?
-  updated_by    User?    @relation("AmenityUpdatedBy", fields: [updated_by_id], references: [id], onDelete: SetNull)
-  
-  events      EventAmenity[]
-  
-  @@index([sort_order])
-  @@map("amenities")
-}
-
-model EventAmenity {
-  event_id    String
-  event       CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  amenity_id  String
-  amenity     Amenity @relation(fields: [amenity_id], references: [id], onDelete: Cascade)
-  is_confirmed Boolean @default(false)
-  
-  @@id([event_id, amenity_id])
-  @@map("event_amenities")
-}
-
-// ============================================
-// PROVIDERS (B2B)
-// ============================================
-
-model Provider {
-  id                String   @id @default(uuid())
-  name              String   @db.VarChar(200)
-  type              ProviderType
-  
-  website           String?  @db.VarChar(500)
-  email             String?  @db.VarChar(200)
-  phone             String?  @db.VarChar(50)
-  
-  address           String?  @db.VarChar(300)
-  lat               Decimal? @db.Decimal(10, 8)
-  lng               Decimal? @db.Decimal(11, 8)
-  
-  logo_url          String?  @db.VarChar(500)
-  subscription_tier SubscriptionTier @default(free)
-  
-  // Verification status
-  is_verified       Boolean  @default(false)
-  verified_at       DateTime? @db.Timestamptz
-  
-  user_id           String?  @unique
-  user              User?    @relation(fields: [user_id], references: [id])
-  
-  created_at        DateTime @default(now()) @db.Timestamptz
-  updated_at        DateTime @updatedAt @db.Timestamptz
-  
-  events            CanonicalEvent[]
-  
-  @@map("providers")
 }
 
 enum ProviderType {
@@ -603,144 +733,10 @@ enum SubscriptionTier {
   pro
 }
 
-// ============================================
-// USERS & AUTH
-// ============================================
-
-model User {
-  id            String   @id @default(uuid())
-  email         String   @unique @db.VarChar(255)
-  password_hash String?  @db.VarChar(255)
-  role          UserRole @default(parent)
-  
-  // Email verification
-  email_verified    Boolean   @default(false)
-  email_verified_at DateTime? @db.Timestamptz
-  
-  // Account lockout
-  failed_login_attempts Int       @default(0)
-  locked_until          DateTime? @db.Timestamptz
-  last_login_at         DateTime? @db.Timestamptz
-  
-  created_at    DateTime @default(now()) @db.Timestamptz
-  updated_at    DateTime @updatedAt @db.Timestamptz
-  
-  provider      Provider?
-  family_profile FamilyProfile?
-  saved_events  SavedEvent[]
-  plans         Plan[]
-  password_reset_tokens PasswordResetToken[]
-  
-  // Revision relations
-  revisions_created  EventRevision[] @relation("RevisionCreator")
-  revisions_reviewed EventRevision[] @relation("RevisionReviewer")
-  dup_resolutions    DupCandidate[]
-  
-  // Admin audit relations
-  categories_updated Category[] @relation("CategoryUpdatedBy")
-  amenities_updated  Amenity[]  @relation("AmenityUpdatedBy")
-  admin_audit_logs   AdminAuditLog[] @relation("AdminAuditLogs")
-  
-  @@map("users")
-}
-
 enum UserRole {
   parent
   provider
   admin
-}
-
-// Password Reset Tokens for secure token management
-model PasswordResetToken {
-  id          String    @id @default(uuid())
-  user_id     String
-  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  token_hash  String    @db.VarChar(255)
-  expires_at  DateTime  @db.Timestamptz
-  used_at     DateTime? @db.Timestamptz
-  created_at  DateTime  @default(now()) @db.Timestamptz
-
-  @@index([user_id])
-  @@index([token_hash])
-  @@index([expires_at])
-  @@map("password_reset_tokens")
-}
-
-model FamilyProfile {
-  id                   String   @id @default(uuid())
-  user_id              String   @unique
-  user                 User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  
-  children_ages        Json?    @default("[]") // [{name, birthdate}]
-  preferred_radius_km  Int?     @db.SmallInt
-  preferred_categories Json?    @default("[]")
-  
-  home_lat             Decimal? @db.Decimal(10, 8)
-  home_lng             Decimal? @db.Decimal(11, 8)
-  
-  updated_at           DateTime @updatedAt @db.Timestamptz
-  
-  @@map("family_profiles")
-}
-
-// ============================================
-// USER FEATURES
-// ============================================
-
-model SavedEvent {
-  user_id   String
-  user      User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  event_id  String
-  event     CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  
-  saved_at  DateTime @default(now()) @db.Timestamptz
-  
-  @@id([user_id, event_id])
-  @@map("saved_events")
-}
-
-model Plan {
-  id            String   @id @default(uuid())
-  user_id       String?
-  user          User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
-  
-  title         String?  @db.VarChar(200)
-  date          DateTime @db.Date
-  
-  children_ages Json?    @default("[]")
-  budget        Decimal? @db.Decimal(8, 2)
-  preferences   Json?
-  
-  route_data    Json?
-  
-  created_at    DateTime @default(now()) @db.Timestamptz
-  
-  slots         PlanSlot[]
-  plan_b_slots  PlanSlot[] @relation("PlanBSlots")
-  
-  @@index([user_id])
-  @@map("plans")
-}
-
-model PlanSlot {
-  id              String   @id @default(uuid())
-  plan_id         String
-  plan            Plan     @relation(fields: [plan_id], references: [id], onDelete: Cascade)
-  plan_b_for_id   String?
-  plan_b_for      Plan?    @relation("PlanBSlots", fields: [plan_b_for_id], references: [id])
-  
-  event_id        String?
-  event           CanonicalEvent? @relation(fields: [event_id], references: [id])
-  
-  slot_type       SlotType @default(activity)
-  start_time      DateTime @db.Timestamptz
-  end_time        DateTime @db.Timestamptz
-  duration_minutes Int
-  
-  notes           String?  @db.Text
-  
-  @@index([plan_id])
-  @@map("plan_slots")
 }
 
 enum SlotType {
@@ -749,80 +745,10 @@ enum SlotType {
   travel
 }
 
-// ============================================
-// EVENT REVISIONS (Draft/Audit System)
-// ============================================
-
-model EventRevision {
-  id            String   @id @default(uuid())
-  event_id      String
-  event         CanonicalEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  
-  // Changeset (only changed fields as JSON)
-  changeset     Json
-  
-  // Audit
-  created_by    String?
-  created_by_user User? @relation("RevisionCreator", fields: [created_by], references: [id])
-  created_at    DateTime @default(now()) @db.Timestamptz
-  
-  // Review status
-  status        RevisionStatus @default(pending)
-  reviewed_by   String?
-  reviewed_by_user User? @relation("RevisionReviewer", fields: [reviewed_by], references: [id])
-  reviewed_at   DateTime? @db.Timestamptz
-  review_note   String?  @db.Text
-  
-  @@index([event_id])
-  @@index([status])
-  @@map("event_revisions")
-}
-
 enum RevisionStatus {
   pending
   approved
   rejected
-}
-
-// ============================================
-// INGEST RUNS (Observability)
-// ============================================
-
-model IngestRun {
-  id              String   @id @default(uuid())
-  correlation_id  String   @db.VarChar(50)
-  source_id       String?
-  source          Source?  @relation(fields: [source_id], references: [id])
-  
-  started_at      DateTime @default(now()) @db.Timestamptz
-  finished_at     DateTime? @db.Timestamptz
-  
-  status          IngestStatus @default(running)
-  
-  events_found    Int      @default(0)
-  events_created  Int      @default(0)
-  events_updated  Int      @default(0)
-  events_skipped  Int      @default(0)
-  events_unchanged Int     @default(0)
-  events_ignored  Int      @default(0)
-  
-  // Merge statistics for debugging
-  merge_stats     Json?    // { "top_reasons": [...], "field_updates": {...} }
-  
-  error_message   String?  @db.Text
-  error_details   Json?
-  
-  retry_count     Int      @default(0)
-  needs_attention Boolean  @default(false)
-  acknowledged_at DateTime? @db.Timestamptz
-  
-  // Relations
-  raw_event_items RawEventItem[]
-  
-  @@index([status])
-  @@index([needs_attention])
-  @@index([source_id, started_at])
-  @@map("ingest_runs")
 }
 
 enum IngestStatus {
@@ -830,85 +756,6 @@ enum IngestStatus {
   success
   partial
   failed
-}
-
-// ============================================
-// RAW EVENT ITEMS (for Reprocessing & Audit)
-// ============================================
-
-model RawEventItem {
-  id                 String   @id @default(uuid())
-  
-  // Source identification
-  source_id          String
-  source             Source   @relation(fields: [source_id], references: [id])
-  run_id             String
-  run                IngestRun @relation(fields: [run_id], references: [id])
-  
-  // Raw data
-  raw_hash           String   @db.VarChar(64)   // SHA256 hash of extracted fields
-  raw_payload        Json?                       // Optional: original HTML/JSON
-  extracted_fields   Json                        // Normalized snapshot
-  source_url         String   @db.VarChar(500)
-  external_id        String?  @db.VarChar(255)
-  fingerprint        String   @db.VarChar(32)
-  
-  // Versioning for reprocessing
-  parser_version     String   @db.VarChar(20)
-  normalizer_version String   @db.VarChar(20)
-  
-  // AI suggestions (if applied before ingest)
-  ai_suggestions     Json?    // { classification, scores, geocode }
-  
-  // Link to canonical event (after merge)
-  canonical_event_id String?
-  canonical_event    CanonicalEvent? @relation(fields: [canonical_event_id], references: [id])
-  
-  // Ingest result
-  ingest_status      String?  @db.VarChar(20)   // created/updated/unchanged/ignored
-  ingest_result      Json?    // { applied_fields, ignored_fields, merge_reasons }
-  
-  // Tracking for deduplication analytics
-  first_seen_at      DateTime @default(now()) @db.Timestamptz
-  last_seen_at       DateTime @default(now()) @db.Timestamptz
-  seen_count         Int      @default(1)
-  
-  // Timestamps
-  fetched_at         DateTime @db.Timestamptz
-  created_at         DateTime @default(now()) @db.Timestamptz
-  
-  @@unique([source_id, raw_hash])
-  @@index([run_id])
-  @@index([source_id, fetched_at])
-  @@index([fingerprint])
-  @@index([canonical_event_id])
-  @@map("raw_event_items")
-}
-
-// ============================================
-// DUPLICATE CANDIDATES (Dedup Quality)
-// ============================================
-
-model DupCandidate {
-  id            String   @id @default(uuid())
-  event_a_id    String
-  event_a       CanonicalEvent @relation("DupCandidateA", fields: [event_a_id], references: [id], onDelete: Cascade)
-  event_b_id    String
-  event_b       CanonicalEvent @relation("DupCandidateB", fields: [event_b_id], references: [id], onDelete: Cascade)
-  
-  confidence    DupConfidence
-  score         Decimal? @db.Decimal(3, 2) // 0.00-1.00
-  
-  detected_at   DateTime @default(now()) @db.Timestamptz
-  resolved_at   DateTime? @db.Timestamptz
-  resolution    DupResolution?
-  resolved_by   String?
-  resolved_by_user User? @relation(fields: [resolved_by], references: [id])
-  
-  @@unique([event_a_id, event_b_id])
-  @@index([confidence])
-  @@index([resolution])
-  @@map("dup_candidates")
 }
 
 enum DupConfidence {
@@ -923,76 +770,13 @@ enum DupResolution {
   ignored
 }
 
-// ============================================
-// SEARCH & TRENDING
-// ============================================
-
-// Search query logs for trending analysis
-model SearchQueryLog {
-  id        String   @id @default(cuid())
-  queryNorm String   @db.VarChar(120)  // lowercase, trimmed, normalized
-  city      String?  @db.VarChar(80)   // 'karlsruhe' hardcoded for MVP
-  createdAt DateTime @default(now()) @db.Timestamptz
-
-  @@index([city, createdAt])
-  @@index([queryNorm])
-  @@map("search_query_logs")
-}
-
-// Computed trending terms
-model TrendingTerm {
-  id          String   @id @default(cuid())
-  term        String   @db.VarChar(120)
-  city        String?  @db.VarChar(80)
-  score       Float                      // current * trendRatio
-  trendRatio  Float                      // (current + 1) / (baseline + 1)
-  searches24h Int                        // count last 24h
-  baseline7d  Float                      // avg per 24h over 7d
-  computedAt  DateTime @default(now()) @db.Timestamptz
-
-  @@index([city, score])
-  @@index([computedAt])
-  @@map("trending_terms")
-}
-
-// Admin override actions for trending
 enum TrendAction {
-  PIN      // Always show at top
-  BOOST    // Increase score
-  HIDE     // Remove from lists
-  REPLACE  // Replace term with another
-  PUSH     // Insert into trending (even if not trending)
+  PIN
+  BOOST
+  HIDE
+  REPLACE
+  PUSH
 }
-
-// Admin-controlled trending overrides
-model TrendOverride {
-  id          String      @id @default(cuid())
-  term        String      @db.VarChar(120)
-  termNorm    String      @db.VarChar(120)  // Normalized term for deduplication
-  city        String?     @db.VarChar(80)
-  action      TrendAction
-  boost       Int?                       // 1-100 for BOOST
-  replacement String?     @db.VarChar(120)  // Required for REPLACE
-  label       String?     @db.VarChar(50)   // Custom badge text (e.g. "🔥")
-  startsAt    DateTime?   @db.Timestamptz
-  endsAt      DateTime?   @db.Timestamptz
-  priority    Int         @default(0)
-  isActive    Boolean     @default(true)
-
-  createdById String?
-  createdAt   DateTime    @default(now()) @db.Timestamptz
-  updatedAt   DateTime    @updatedAt @db.Timestamptz
-
-  @@unique([termNorm, city, action], name: "unique_override_per_action")
-  @@index([city, isActive])
-  @@index([startsAt, endsAt])
-  @@index([action])
-  @@map("trend_overrides")
-}
-
-// ============================================
-// ADMIN AUDIT LOG
-// ============================================
 
 enum AuditAction {
   CREATE
@@ -1005,74 +789,9 @@ enum AuditAction {
   CONFIRM
 }
 
-model AdminAuditLog {
-  id          String      @id @default(cuid())
-  timestamp   DateTime    @default(now()) @db.Timestamptz
-  
-  // Who
-  user_id     String
-  user        User        @relation("AdminAuditLogs", fields: [user_id], references: [id], onDelete: Cascade)
-  
-  // What
-  action      AuditAction
-  entity_type String      @db.VarChar(50)  // 'category', 'amenity', 'event', 'source', etc.
-  entity_id   String      @db.VarChar(50)
-  entity_name String?     @db.VarChar(200) // Human-readable name at time of action
-  
-  // Details
-  changes     Json?       // { field: { old: x, new: y } }
-  metadata    Json?       // Additional context (e.g., batch operation info)
-  ip_address  String?     @db.VarChar(45)
-  user_agent  String?     @db.VarChar(500)
-  
-  @@index([user_id])
-  @@index([timestamp])
-  @@index([entity_type, entity_id])
-  @@index([action])
-  @@map("admin_audit_logs")
-}
-
-// ============================================
-// JOB QUEUE (Simple DB-based)
-// ============================================
-
 enum JobStatus {
   QUEUED
   RUNNING
   SUCCESS
   FAILED
-}
-
-model JobQueueEntry {
-  id            String    @id @default(cuid())
-  
-  // Job identification (for idempotency)
-  job_type      String    @db.VarChar(50)   // 'source_fetch', 'trend_compute', etc.
-  job_key       String    @db.VarChar(200)  // Unique key for deduplication (e.g., sourceId + date)
-  
-  // Status
-  status        JobStatus @default(QUEUED)
-  priority      Int       @default(0)
-  
-  // Payload
-  payload       Json
-  
-  // Timing
-  scheduled_at  DateTime  @default(now()) @db.Timestamptz
-  started_at    DateTime? @db.Timestamptz
-  completed_at  DateTime? @db.Timestamptz
-  
-  // Results
-  result        Json?
-  error_message String?   @db.Text
-  attempts      Int       @default(0)
-  
-  // Metadata
-  created_by_id String?
-  created_at    DateTime  @default(now()) @db.Timestamptz
-  
-  @@unique([job_type, job_key])
-  @@index([status, priority, scheduled_at])
-  @@index([job_type, status])
-  @@map("job_queue")
 }
