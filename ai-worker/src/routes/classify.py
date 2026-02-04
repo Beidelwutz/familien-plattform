@@ -37,10 +37,35 @@ class ClassificationResult(BaseModel):
     age_max: Optional[int]
     is_indoor: bool
     is_outdoor: bool
-    description_short: Optional[str]
-    family_reason: Optional[str]
     confidence: float
     used_ai: bool
+    
+    # Legacy fields (kept for backward compatibility)
+    description_short: Optional[str] = None
+    family_reason: Optional[str] = None
+    
+    # Age rating (FSK-style)
+    age_rating: Optional[str] = None
+    
+    # Age fit buckets (0-100 score per age group)
+    age_fit_buckets: Optional[dict] = None
+    
+    # AI Summary fields
+    ai_summary_short: Optional[str] = None
+    ai_summary_highlights: Optional[list[str]] = None
+    ai_fit_blurb: Optional[str] = None
+    summary_confidence: Optional[float] = None
+    
+    # Extracted datetime/location
+    extracted_start_datetime: Optional[str] = None
+    extracted_end_datetime: Optional[str] = None
+    extracted_location_address: Optional[str] = None
+    extracted_location_district: Optional[str] = None
+    datetime_confidence: Optional[float] = None
+    location_confidence: Optional[float] = None
+    
+    # Flags
+    flags: Optional[dict] = None
 
 
 class ScoringResult(BaseModel):
@@ -73,8 +98,6 @@ async def classify_event(event: EventInput):
             age_max=None,
             is_indoor=event.is_indoor or False,
             is_outdoor=event.is_outdoor or False,
-            description_short=None,
-            family_reason=None,
             confidence=0.9 if rule_result.is_relevant else 0.95,
             used_ai=False
         )
@@ -82,6 +105,7 @@ async def classify_event(event: EventInput):
     # Step 2: AI classification needed
     try:
         ai_result = await classifier.classify(event.dict())
+        
         return ClassificationResult(
             is_relevant=True,  # If AI classified it, assume relevant
             rule_matched=None,
@@ -90,10 +114,27 @@ async def classify_event(event: EventInput):
             age_max=ai_result.age_max,
             is_indoor=ai_result.is_indoor,
             is_outdoor=ai_result.is_outdoor,
+            confidence=ai_result.confidence,
+            used_ai=True,
+            # Legacy fields
             description_short=ai_result.description_short,
             family_reason=ai_result.family_reason,
-            confidence=ai_result.confidence,
-            used_ai=True
+            # New AI fields
+            age_rating=ai_result.age_rating,
+            age_fit_buckets=ai_result.age_fit_buckets,
+            ai_summary_short=ai_result.ai_summary_short,
+            ai_summary_highlights=ai_result.ai_summary_highlights,
+            ai_fit_blurb=ai_result.ai_fit_blurb,
+            summary_confidence=ai_result.summary_confidence,
+            # Extracted datetime/location
+            extracted_start_datetime=ai_result.extracted_start_datetime,
+            extracted_end_datetime=ai_result.extracted_end_datetime,
+            extracted_location_address=ai_result.extracted_location_address,
+            extracted_location_district=ai_result.extracted_location_district,
+            datetime_confidence=ai_result.datetime_confidence,
+            location_confidence=ai_result.location_confidence,
+            # Flags
+            flags=ai_result.flags,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
