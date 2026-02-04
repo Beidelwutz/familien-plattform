@@ -24,7 +24,7 @@ export interface CanonicalCandidate {
   data: {
     title: string;
     description?: string;
-    start_at: string;
+    start_at?: string;  // Optional - RSS feeds often don't have event dates
     end_at?: string;
     timezone_original?: string;
     venue_name?: string;
