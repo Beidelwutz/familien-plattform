@@ -26,7 +26,7 @@ import {
 } from '../lib/eventRevision.js';
 import { searchEventsWithinRadius, addDistanceToEvents } from '../lib/geo.js';
 import { whereDisplayable, whereDisplayableWith, RESTRICTED_AGE_RATINGS } from '../lib/eventQuery.js';
-import { optionalAuth, requireAuth, type AuthRequest } from '../middleware/auth.js';
+import { optionalAuth, requireAuth, requireServiceToken, type AuthRequest } from '../middleware/auth.js';
 import crypto from 'crypto';
 import { sendEventSubmittedEmail } from '../lib/email.js';
 
@@ -984,8 +984,8 @@ interface IngestBatchRequest {
   candidates: CanonicalCandidate[];
 }
 
-// POST /api/events/ingest/batch - Batch ingest events from AI-Worker
-router.post('/ingest/batch', async (req: Request, res: Response, next: NextFunction) => {
+// POST /api/events/ingest/batch - Batch ingest events from AI-Worker (requires SERVICE_TOKEN)
+router.post('/ingest/batch', requireServiceToken, async (req: Request, res: Response, next: NextFunction) => {
   const correlationId = req.headers['x-correlation-id'] as string || crypto.randomUUID().substring(0, 8);
   
   try {

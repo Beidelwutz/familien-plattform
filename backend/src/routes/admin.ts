@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
-import { requireAuth, requireAdmin, type AuthRequest } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, requireServiceToken, type AuthRequest } from '../middleware/auth.js';
 import { approveRevision, rejectRevision } from '../lib/eventRevision.js';
 import { sendEventApprovedEmail, sendEventRejectedEmail } from '../lib/email.js';
 import { AI_THRESHOLDS, calculateCompleteness } from '../lib/eventCompleteness.js';
@@ -13,6 +13,86 @@ import { redis, isRedisAvailable } from '../lib/redis.js';
 const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 
 const router = Router();
+
+// PATCH /api/admin/ingest-runs/:id - Update ingest run (called by AI-Worker with SERVICE_TOKEN)
+// Must be registered BEFORE router.use(requireAuth, requireAdmin) so it accepts Bearer SERVICE_TOKEN
+router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const {
+      status,
+      events_found,
+      events_created,
+      events_updated,
+      events_skipped,
+      error_message,
+      error_details,
+      needs_attention,
+      finished_at,
+    } = req.body;
+
+    const updateData: Record<string, any> = {};
+    if (status !== undefined) updateData.status = status;
+    if (events_found !== undefined) updateData.events_found = events_found;
+    if (events_created !== undefined) updateData.events_created = events_created;
+    if (events_updated !== undefined) updateData.events_updated = events_updated;
+    if (events_skipped !== undefined) updateData.events_skipped = events_skipped;
+    if (error_message !== undefined) updateData.error_message = error_message;
+    if (error_details !== undefined) updateData.error_details = error_details;
+    if (needs_attention !== undefined) updateData.needs_attention = needs_attention;
+    if (finished_at === 'now') {
+      updateData.finished_at = new Date();
+    } else if (finished_at) {
+      updateData.finished_at = new Date(finished_at);
+    }
+    if (['success', 'partial', 'failed'].includes(status) && !updateData.finished_at) {
+      updateData.finished_at = new Date();
+    }
+    if (status === 'failed' && needs_attention === undefined) {
+      updateData.needs_attention = true;
+    }
+
+    const run = await prisma.ingestRun.update({
+      where: { id },
+      data: updateData,
+      include: { source: { select: { id: true, name: true } } }
+    });
+
+    if (run.source_id && ['success', 'partial', 'failed'].includes(status)) {
+      const sourceUpdate: Record<string, any> = {};
+      if (status === 'success') {
+        sourceUpdate.last_success_at = new Date();
+        sourceUpdate.consecutive_failures = 0;
+        sourceUpdate.health_status = 'healthy';
+        if (events_found !== undefined) {
+          const source = await prisma.source.findUnique({ where: { id: run.source_id } });
+          if (source) {
+            const currentAvg = source.avg_events_per_fetch || 0;
+            sourceUpdate.avg_events_per_fetch = currentAvg === 0 ? events_found : (currentAvg * 0.7 + events_found * 0.3);
+          }
+        }
+      } else if (status === 'failed') {
+        sourceUpdate.last_failure_at = new Date();
+        const source = await prisma.source.findUnique({ where: { id: run.source_id } });
+        if (source) {
+          const failures = (source.consecutive_failures || 0) + 1;
+          sourceUpdate.consecutive_failures = failures;
+          sourceUpdate.health_status = failures >= 5 ? 'dead' : failures >= 3 ? 'failing' : 'degraded';
+        }
+      } else if (status === 'partial') {
+        sourceUpdate.last_success_at = new Date();
+        sourceUpdate.health_status = 'degraded';
+      }
+      if (Object.keys(sourceUpdate).length > 0) {
+        await prisma.source.update({ where: { id: run.source_id }, data: sourceUpdate });
+      }
+    }
+
+    res.json({ success: true, message: 'Ingest run updated', data: run });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // All admin routes require auth + admin role
 router.use(requireAuth, requireAdmin);
@@ -1072,123 +1152,6 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
           merge_reasons: (item.ingest_result as any)?.merge_reasons || [],
         })),
       }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// PATCH /api/admin/ingest-runs/:id - Update ingest run (called by AI-Worker)
-// This endpoint is used by the AI-Worker to report progress and completion
-router.patch('/ingest-runs/:id', async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { id } = req.params;
-    const {
-      status,
-      events_found,
-      events_created,
-      events_updated,
-      events_skipped,
-      error_message,
-      error_details,
-      needs_attention,
-      finished_at,
-    } = req.body;
-
-    // Build update data
-    const updateData: Record<string, any> = {};
-    
-    if (status !== undefined) updateData.status = status;
-    if (events_found !== undefined) updateData.events_found = events_found;
-    if (events_created !== undefined) updateData.events_created = events_created;
-    if (events_updated !== undefined) updateData.events_updated = events_updated;
-    if (events_skipped !== undefined) updateData.events_skipped = events_skipped;
-    if (error_message !== undefined) updateData.error_message = error_message;
-    if (error_details !== undefined) updateData.error_details = error_details;
-    if (needs_attention !== undefined) updateData.needs_attention = needs_attention;
-    
-    // Handle finished_at
-    if (finished_at === 'now') {
-      updateData.finished_at = new Date();
-    } else if (finished_at) {
-      updateData.finished_at = new Date(finished_at);
-    }
-
-    // If status is success/partial/failed and no finished_at, set it
-    if (['success', 'partial', 'failed'].includes(status) && !updateData.finished_at) {
-      updateData.finished_at = new Date();
-    }
-
-    // Auto-set needs_attention for failed runs
-    if (status === 'failed' && needs_attention === undefined) {
-      updateData.needs_attention = true;
-    }
-
-    const run = await prisma.ingestRun.update({
-      where: { id },
-      data: updateData,
-      include: {
-        source: {
-          select: { id: true, name: true }
-        }
-      }
-    });
-
-    // Also update the source health status based on the result
-    if (run.source_id && ['success', 'partial', 'failed'].includes(status)) {
-      const sourceUpdate: Record<string, any> = {};
-      
-      if (status === 'success') {
-        sourceUpdate.last_success_at = new Date();
-        sourceUpdate.consecutive_failures = 0;
-        sourceUpdate.health_status = 'healthy';
-        
-        // Update avg_events_per_fetch
-        if (events_found !== undefined) {
-          const source = await prisma.source.findUnique({ where: { id: run.source_id } });
-          if (source) {
-            const currentAvg = source.avg_events_per_fetch || 0;
-            // Simple moving average
-            sourceUpdate.avg_events_per_fetch = currentAvg === 0 
-              ? events_found 
-              : (currentAvg * 0.7 + events_found * 0.3);
-          }
-        }
-      } else if (status === 'failed') {
-        sourceUpdate.last_failure_at = new Date();
-        
-        // Increment consecutive failures
-        const source = await prisma.source.findUnique({ where: { id: run.source_id } });
-        if (source) {
-          const failures = (source.consecutive_failures || 0) + 1;
-          sourceUpdate.consecutive_failures = failures;
-          
-          // Update health status based on failure count
-          if (failures >= 5) {
-            sourceUpdate.health_status = 'dead';
-          } else if (failures >= 3) {
-            sourceUpdate.health_status = 'failing';
-          } else {
-            sourceUpdate.health_status = 'degraded';
-          }
-        }
-      } else if (status === 'partial') {
-        sourceUpdate.last_success_at = new Date();
-        sourceUpdate.health_status = 'degraded';
-      }
-      
-      if (Object.keys(sourceUpdate).length > 0) {
-        await prisma.source.update({
-          where: { id: run.source_id },
-          data: sourceUpdate
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      message: 'Ingest run updated',
-      data: run
     });
   } catch (error) {
     next(error);
