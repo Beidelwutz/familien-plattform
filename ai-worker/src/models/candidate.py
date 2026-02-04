@@ -107,6 +107,16 @@ class AIClassification:
     typical_wait_minutes: Optional[int] = None
     food_drink_allowed: Optional[bool] = None
     
+    # AI-extracted datetime (from description text, e.g. "17 Uhr")
+    extracted_start_datetime: Optional[str] = None  # ISO-8601 format
+    extracted_end_datetime: Optional[str] = None    # ISO-8601 format
+    datetime_confidence: float = 0.0
+    
+    # AI-extracted location (from description text)
+    extracted_location_address: Optional[str] = None
+    extracted_location_district: Optional[str] = None
+    location_confidence: float = 0.0
+    
     confidence: float = 0.0
     model: Optional[str] = None
     prompt_version: Optional[str] = None

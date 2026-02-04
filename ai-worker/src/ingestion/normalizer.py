@@ -95,6 +95,38 @@ class EventNormalizer:
             raw_data.get('end_datetime') or raw_data.get('dtend')
         )
         
+        # If we have a date but no time (or wrong time), try to extract time from description
+        # This handles cases like "17 Uhr" or "11 bis 12 Uhr" in the text
+        if description:
+            extracted_start, extracted_end = self._extract_time_from_text(description, start_dt)
+            
+            # Only use extracted time if:
+            # 1. We have a start date but time seems like midnight/default (00:00)
+            # 2. Or we have no start datetime at all
+            if extracted_start:
+                if start_dt is None:
+                    start_dt = extracted_start
+                elif start_dt.hour == 0 and start_dt.minute == 0:
+                    # Combine existing date with extracted time
+                    start_dt = start_dt.replace(
+                        hour=extracted_start.hour, 
+                        minute=extracted_start.minute,
+                        second=0,
+                        microsecond=0
+                    )
+            
+            if extracted_end:
+                if end_dt is None:
+                    end_dt = extracted_end
+                elif end_dt.hour == 0 and end_dt.minute == 0:
+                    # Combine existing date with extracted time
+                    end_dt = end_dt.replace(
+                        hour=extracted_end.hour, 
+                        minute=extracted_end.minute,
+                        second=0,
+                        microsecond=0
+                    )
+        
         # Location / Venue
         location_address = self._normalize_address(
             raw_data.get('location_address') or raw_data.get('location', '')
@@ -300,20 +332,20 @@ class EventNormalizer:
         # Try to extract from text
         text = f"{title} {description}".lower()
         
-        # Pattern: "X-Y Jahre" or "X bis Y Jahre"
-        range_pattern = r'(\d+)\s*[-–bis]\s*(\d+)\s*(?:jahre|j\.)'
+        # Pattern: "X-Y Jahre" or "X bis Y Jahre" or "X-Y Jahren"
+        range_pattern = r'(\d+)\s*[-–bis]\s*(\d+)\s*(?:jahren?|j\.?)'
         match = re.search(range_pattern, text)
         if match:
             return int(match.group(1)), int(match.group(2))
         
-        # Pattern: "ab X Jahren"
-        ab_pattern = r'ab\s*(\d+)\s*(?:jahre|j\.)'
+        # Pattern: "ab X Jahren" / "ab X Jahre" / "ab X J."
+        ab_pattern = r'ab\s*(\d+)\s*(?:jahren?|j\.?)'
         match = re.search(ab_pattern, text)
         if match:
             return int(match.group(1)), 99
         
-        # Pattern: "bis X Jahre"
-        bis_pattern = r'bis\s*(\d+)\s*(?:jahre|j\.)'
+        # Pattern: "bis X Jahre" / "bis X Jahren"
+        bis_pattern = r'bis\s*(\d+)\s*(?:jahren?|j\.?)'
         match = re.search(bis_pattern, text)
         if match:
             return 0, int(match.group(1))
@@ -360,21 +392,22 @@ class EventNormalizer:
         return url
     
     def _extract_email(self, raw_data: dict) -> Optional[str]:
-        """Extract email from data."""
+        """Extract email from data or description text."""
         email = raw_data.get('contact_email') or raw_data.get('email')
         
         if email:
             return email.strip()[:200]
         
-        # Try to find in text
+        # Try to find in description text
         text = raw_data.get('description', '')
-        email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
+        # Standard email pattern
+        email_pattern = r'[\w\.\-+]+@[\w\.-]+\.[a-zA-Z]{2,}'
         match = re.search(email_pattern, text)
         
         return match.group(0) if match else None
     
     def _extract_phone(self, raw_data: dict) -> Optional[str]:
-        """Extract phone from data."""
+        """Extract phone from data or description text."""
         phone = raw_data.get('contact_phone') or raw_data.get('phone')
         
         if phone:
@@ -382,7 +415,100 @@ class EventNormalizer:
             phone = re.sub(r'[^\d+\-\s()]', '', str(phone))
             return phone.strip()[:50] or None
         
+        # Try to find in description text
+        text = raw_data.get('description', '')
+        
+        # German phone patterns:
+        # - "0721 133 4401" (with spaces)
+        # - "0721/1334401" (with slash)
+        # - "(0721) 133-4401" (with parentheses and dash)
+        # - "+49 721 1334401" (international)
+        # - "0721-133-4401" (with dashes)
+        phone_patterns = [
+            # International format: +49 ...
+            r'\+49[\s\-/]?\d{2,4}[\s\-/]?\d{2,4}[\s\-/]?\d{2,6}',
+            # German format with area code: 0721 ...
+            r'0\d{2,4}[\s\-/]?\d{2,4}[\s\-/]?\d{2,6}',
+            # With parentheses: (0721) ...
+            r'\(0\d{2,4}\)[\s\-/]?\d{2,4}[\s\-/]?\d{2,6}',
+        ]
+        
+        for pattern in phone_patterns:
+            match = re.search(pattern, text)
+            if match:
+                phone = match.group(0)
+                # Basic normalization - keep digits and formatting chars
+                phone = re.sub(r'[^\d+\-\s()/]', '', phone)
+                return phone.strip()[:50] or None
+        
         return None
+    
+    def _extract_time_from_text(
+        self, 
+        text: str, 
+        base_date: Optional[datetime] = None
+    ) -> tuple[Optional[datetime], Optional[datetime]]:
+        """
+        Extract time information from text.
+        
+        Patterns supported:
+        - "11 Uhr" / "11:30 Uhr"
+        - "11 bis 12 Uhr" / "11-12 Uhr" / "von 11 bis 12 Uhr"
+        - "14:00 - 16:30 Uhr"
+        - "ab 17 Uhr"
+        
+        Args:
+            text: Text to search in
+            base_date: Date to combine with extracted time (defaults to today)
+            
+        Returns:
+            Tuple of (start_datetime, end_datetime), either can be None
+        """
+        if not text:
+            return None, None
+        
+        text_lower = text.lower()
+        
+        if base_date is None:
+            base_date = datetime.now(self.TIMEZONE)
+        
+        # Ensure base_date has timezone
+        if base_date.tzinfo is None:
+            base_date = self.TIMEZONE.localize(base_date)
+        
+        start_time = None
+        end_time = None
+        
+        # Pattern 1: Time range "11 bis 12 Uhr" / "11-12 Uhr" / "von 11 bis 12 Uhr"
+        # Also matches: "11:30 bis 14:00 Uhr", "11.30 - 14.00 Uhr"
+        time_range_pattern = r'(?:von\s+)?(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr\s*)?(?:bis|[-–])\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*uhr'
+        match = re.search(time_range_pattern, text_lower)
+        if match:
+            start_hour = int(match.group(1))
+            start_minute = int(match.group(2)) if match.group(2) else 0
+            end_hour = int(match.group(3))
+            end_minute = int(match.group(4)) if match.group(4) else 0
+            
+            if 0 <= start_hour <= 23 and 0 <= start_minute <= 59:
+                start_time = base_date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+            if 0 <= end_hour <= 23 and 0 <= end_minute <= 59:
+                end_time = base_date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+            
+            return start_time, end_time
+        
+        # Pattern 2: Single time "11 Uhr" / "11:30 Uhr" / "ab 17 Uhr" / "um 14 Uhr"
+        single_time_pattern = r'(?:ab|um|gegen)?\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*uhr'
+        match = re.search(single_time_pattern, text_lower)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2)) if match.group(2) else 0
+            
+            if 0 <= hour <= 23 and 0 <= minute <= 59:
+                start_time = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            return start_time, None
+        
+        return None, None
     
     def _extract_images(self, raw_data: dict) -> list[str]:
         """Extract image URLs from data."""

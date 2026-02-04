@@ -132,27 +132,45 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
             # Classification
             classification_result = await event_classifier.classify(event_data)
             
+            # Note: classification_result is a ClassificationResult dataclass, not a dict!
             classification = AIClassification(
-                categories=classification_result.get('categories', []),
-                age_min=classification_result.get('age_min'),
-                age_max=classification_result.get('age_max'),
-                is_indoor=classification_result.get('is_indoor'),
-                is_outdoor=classification_result.get('is_outdoor'),
-                confidence=classification_result.get('confidence', 0.0),
-                model=classification_result.get('model', 'unknown'),
-                prompt_version="1.0.0",
+                categories=classification_result.categories or [],
+                age_min=classification_result.age_min,
+                age_max=classification_result.age_max,
+                age_recommendation_text=classification_result.age_recommendation_text,
+                sibling_friendly=classification_result.sibling_friendly,
+                is_indoor=classification_result.is_indoor,
+                is_outdoor=classification_result.is_outdoor,
+                language=classification_result.language,
+                complexity_level=classification_result.complexity_level,
+                noise_level=classification_result.noise_level,
+                has_seating=classification_result.has_seating,
+                typical_wait_minutes=classification_result.typical_wait_minutes,
+                food_drink_allowed=classification_result.food_drink_allowed,
+                # AI-extracted datetime (e.g. "17 Uhr" from description)
+                extracted_start_datetime=classification_result.extracted_start_datetime,
+                extracted_end_datetime=classification_result.extracted_end_datetime,
+                datetime_confidence=classification_result.datetime_confidence or 0.0,
+                # AI-extracted location
+                extracted_location_address=classification_result.extracted_location_address,
+                extracted_location_district=classification_result.extracted_location_district,
+                location_confidence=classification_result.location_confidence or 0.0,
+                confidence=classification_result.confidence or 0.0,
+                model=classification_result.model or 'unknown',
+                prompt_version=classification_result.prompt_version or "4.0.0",
             )
             
             # Scoring
             scoring_result = await event_scorer.score(event_data)
             
+            # Note: scoring_result is a ScoringResult dataclass, not a dict!
             scores = AIScores(
-                relevance=scoring_result.get('relevance_score', 50),
-                quality=scoring_result.get('quality_score', 50),
-                family_fit=scoring_result.get('family_fit_score', 50),
-                stressfree=scoring_result.get('stressfree_score'),
-                confidence=scoring_result.get('confidence', 0.0),
-                model=scoring_result.get('model', 'unknown'),
+                relevance=scoring_result.relevance_score,
+                quality=scoring_result.quality_score,
+                family_fit=scoring_result.family_fit_score,
+                stressfree=scoring_result.stressfree_score,
+                confidence=scoring_result.confidence or 0.0,
+                model=scoring_result.model or 'unknown',
             )
             
             # Update candidate with AI suggestions
