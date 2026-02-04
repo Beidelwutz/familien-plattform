@@ -116,18 +116,33 @@ class JobQueue:
         self.visibility_timeout = 300  # 5 minutes
         self._settings = get_settings()
         self._cost_tracker = None  # Lazy loaded
+        self._connected = False
     
-    async def connect(self) -> None:
-        """Connect to Redis."""
+    @property
+    def is_connected(self) -> bool:
+        """Check if Redis is connected."""
+        return self._connected and self._redis is not None
+    
+    async def connect(self) -> bool:
+        """Connect to Redis. Returns True if connected, False if unavailable."""
         if self._redis is None:
-            self._redis = redis.from_url(
-                self.redis_url,
-                encoding="utf-8",
-                decode_responses=True
-            )
-            # Test connection
-            await self._redis.ping()
-            logger.info(f"Connected to Redis at {self.redis_url}")
+            try:
+                self._redis = redis.from_url(
+                    self.redis_url,
+                    encoding="utf-8",
+                    decode_responses=True
+                )
+                # Test connection
+                await self._redis.ping()
+                logger.info(f"Connected to Redis at {self.redis_url}")
+                self._connected = True
+                return True
+            except Exception as e:
+                logger.warning(f"Redis unavailable at {self.redis_url}: {e}")
+                self._redis = None
+                self._connected = False
+                return False
+        return self._connected
     
     # ==================== Concurrency Control ====================
     
@@ -331,8 +346,13 @@ class JobQueue:
         
         Returns:
             Created Job object, or None if budget exceeded for AI jobs
+        
+        Raises:
+            ConnectionError: If Redis is unavailable
         """
-        await self.connect()
+        connected = await self.connect()
+        if not connected:
+            raise ConnectionError("Redis unavailable - cannot enqueue job")
         
         # Budget check for AI jobs
         if job_type in ['classify', 'score'] and not skip_budget_check:
@@ -682,6 +702,10 @@ job_queue = JobQueue()
 
 
 async def get_queue() -> JobQueue:
-    """Get the job queue instance (for dependency injection)."""
-    await job_queue.connect()
+    """Get the job queue instance (for dependency injection).
+    
+    Note: This will NOT throw if Redis is unavailable - routes should
+    check job_queue.is_connected() or handle None returns from enqueue().
+    """
+    await job_queue.connect()  # Returns False if unavailable, doesn't throw
     return job_queue
