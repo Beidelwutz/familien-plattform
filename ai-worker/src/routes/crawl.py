@@ -38,11 +38,20 @@ class CrawlStatus(BaseModel):
 async def run_crawl_sync(payload: dict):
     """Run crawl job synchronously (fallback when Redis unavailable)."""
     from src.queue.worker import process_crawl_job
+    # #region agent log - Production debug logging
+    logger.info(f"[SYNC] run_crawl_sync STARTED with payload: {payload}")
+    # #endregion
     try:
         logger.info(f"Running crawl synchronously for source {payload.get('source_id')}")
         result = await process_crawl_job(payload)
+        # #region agent log
+        logger.info(f"[SYNC] run_crawl_sync COMPLETED: {result}")
+        # #endregion
         logger.info(f"Sync crawl completed: {result}")
     except Exception as e:
+        # #region agent log
+        logger.error(f"[SYNC] run_crawl_sync FAILED: type={type(e).__name__}, message={str(e)}")
+        # #endregion
         logger.error(f"Sync crawl failed: {e}")
 
 
@@ -60,6 +69,10 @@ async def trigger_crawl(
     
     If Redis is unavailable, falls back to synchronous background processing.
     """
+    # #region agent log - Production debug logging
+    logger.info(f"[TRIGGER] /crawl/trigger called: source_id={request.source_id}, source_type={request.source_type}, source_url={request.source_url}")
+    # #endregion
+    
     payload = {
         "source_id": request.source_id,
         "source_url": request.source_url,
@@ -76,6 +89,10 @@ async def trigger_crawl(
             queue=QUEUE_CRAWL
         )
         
+        # #region agent log
+        logger.info(f"[TRIGGER] Job queued via Redis: job_id={job.id}")
+        # #endregion
+        
         return {
             "job_id": job.id,
             "source_id": request.source_id,
@@ -83,6 +100,9 @@ async def trigger_crawl(
             "message": "Crawl job queued successfully"
         }
     except Exception as e:
+        # #region agent log
+        logger.warning(f"[TRIGGER] Redis failed, using sync fallback: {type(e).__name__}: {e}")
+        # #endregion
         logger.warning(f"Redis unavailable, falling back to sync processing: {e}")
         
         # Fallback: process synchronously in background
@@ -90,6 +110,10 @@ async def trigger_crawl(
         
         # Run the crawl in background (non-blocking)
         background_tasks.add_task(run_crawl_sync, payload)
+        
+        # #region agent log
+        logger.info(f"[TRIGGER] Sync job started: job_id={job_id}")
+        # #endregion
         
         return {
             "job_id": job_id,

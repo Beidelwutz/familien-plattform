@@ -184,6 +184,11 @@ async def send_batch_to_backend(
     Returns:
         Backend response with results and summary
     """
+    # #region agent log - Production debug logging
+    logger.info(f"[BATCH] send_batch_to_backend called: source_id={source_id}, num_candidates={len(candidates)}, run_id={run_id}")
+    logger.info(f"[BATCH] Config check: backend_url={settings.backend_url}, has_service_token={bool(settings.service_token)}")
+    # #endregion
+    
     client = await get_http_client()
     
     # Build request payload
@@ -197,12 +202,21 @@ async def send_batch_to_backend(
     if settings.service_token:
         headers["Authorization"] = f"Bearer {settings.service_token}"
     
+    # #region agent log
+    target_url = f"{settings.backend_url}/api/events/ingest/batch"
+    logger.info(f"[BATCH] Sending POST to: {target_url}")
+    # #endregion
+    
     try:
         response = await client.post(
-            f"{settings.backend_url}/api/events/ingest/batch",
+            target_url,
             json=request.to_dict(),
             headers=headers,
         )
+        
+        # #region agent log
+        logger.info(f"[BATCH] Response received: status_code={response.status_code}")
+        # #endregion
         
         if response.status_code in (200, 201):
             data = response.json()
@@ -215,6 +229,9 @@ async def send_batch_to_backend(
             )
             return data
         else:
+            # #region agent log
+            logger.error(f"[BATCH] Error response body (first 1000 chars): {response.text[:1000]}")
+            # #endregion
             logger.error(f"Batch ingest failed: {response.status_code} - {response.text[:500]}")
             return {
                 "success": False,
@@ -222,6 +239,9 @@ async def send_batch_to_backend(
                 "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
             }
     except Exception as e:
+        # #region agent log
+        logger.error(f"[BATCH] Exception during POST: type={type(e).__name__}, message={str(e)}")
+        # #endregion
         logger.error(f"Failed to send batch to backend: {e}")
         return {
             "success": False,
@@ -295,6 +315,10 @@ async def process_crawl_job(payload: dict) -> dict:
     Returns:
         Result dict with summary
     """
+    # #region agent log - Production debug logging
+    logger.info(f"[CRAWL] process_crawl_job STARTED with payload: {payload}")
+    # #endregion
+    
     source_id = payload.get("source_id")
     source_url = payload.get("source_url")
     source_type = payload.get("source_type", "rss")
