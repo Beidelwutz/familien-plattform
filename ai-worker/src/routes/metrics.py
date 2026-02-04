@@ -38,18 +38,20 @@ async def get_metrics():
         Metrics including queue depths, DLQ count, budget status, etc.
     """
     try:
-        await job_queue.connect()
+        redis_connected = await job_queue.connect()
         
-        # Queue depths
-        queue_depths = {
-            "crawl": await job_queue.get_queue_length(QUEUE_CRAWL),
-            "classify": await job_queue.get_queue_length(QUEUE_CLASSIFY),
-            "score": await job_queue.get_queue_length(QUEUE_SCORE),
-            "geocode": await job_queue.get_queue_length(QUEUE_GEOCODE),
-        }
-        
-        # DLQ count
-        dlq_count = await job_queue.get_dlq_count()
+        # Queue depths - only if Redis is connected
+        if redis_connected and job_queue.is_connected:
+            queue_depths = {
+                "crawl": await job_queue.get_queue_length(QUEUE_CRAWL),
+                "classify": await job_queue.get_queue_length(QUEUE_CLASSIFY),
+                "score": await job_queue.get_queue_length(QUEUE_SCORE),
+                "geocode": await job_queue.get_queue_length(QUEUE_GEOCODE),
+            }
+            dlq_count = await job_queue.get_dlq_count()
+        else:
+            queue_depths = {"crawl": 0, "classify": 0, "score": 0, "geocode": 0}
+            dlq_count = 0
         
         # Budget status
         cost_tracker = get_cost_tracker()
@@ -60,6 +62,7 @@ async def get_metrics():
         
         return {
             "timestamp": datetime.utcnow().isoformat() + "Z",
+            "redis_connected": redis_connected,
             "queues": {
                 "depths": queue_depths,
                 "total_pending": sum(queue_depths.values()),
@@ -111,19 +114,33 @@ async def get_prometheus_metrics():
         Prometheus-compatible text format metrics
     """
     try:
-        await job_queue.connect()
+        redis_connected = await job_queue.connect()
+        
+        # Get queue depths only if Redis is connected
+        if redis_connected and job_queue.is_connected:
+            crawl_depth = await job_queue.get_queue_length(QUEUE_CRAWL)
+            classify_depth = await job_queue.get_queue_length(QUEUE_CLASSIFY)
+            score_depth = await job_queue.get_queue_length(QUEUE_SCORE)
+            geocode_depth = await job_queue.get_queue_length(QUEUE_GEOCODE)
+            dlq_count = await job_queue.get_dlq_count()
+        else:
+            crawl_depth = classify_depth = score_depth = geocode_depth = dlq_count = 0
         
         lines = [
             "# HELP kiezling_queue_depth Number of jobs in queue",
             "# TYPE kiezling_queue_depth gauge",
-            f'kiezling_queue_depth{{queue="crawl"}} {await job_queue.get_queue_length(QUEUE_CRAWL)}',
-            f'kiezling_queue_depth{{queue="classify"}} {await job_queue.get_queue_length(QUEUE_CLASSIFY)}',
-            f'kiezling_queue_depth{{queue="score"}} {await job_queue.get_queue_length(QUEUE_SCORE)}',
-            f'kiezling_queue_depth{{queue="geocode"}} {await job_queue.get_queue_length(QUEUE_GEOCODE)}',
+            f'kiezling_queue_depth{{queue="crawl"}} {crawl_depth}',
+            f'kiezling_queue_depth{{queue="classify"}} {classify_depth}',
+            f'kiezling_queue_depth{{queue="score"}} {score_depth}',
+            f'kiezling_queue_depth{{queue="geocode"}} {geocode_depth}',
             "",
             "# HELP kiezling_dlq_count Number of jobs in dead letter queue",
             "# TYPE kiezling_dlq_count gauge",
-            f"kiezling_dlq_count {await job_queue.get_dlq_count()}",
+            f"kiezling_dlq_count {dlq_count}",
+            "",
+            "# HELP kiezling_redis_connected Whether Redis is connected (1=yes, 0=no)",
+            "# TYPE kiezling_redis_connected gauge",
+            f"kiezling_redis_connected {1 if redis_connected else 0}",
             "",
         ]
         
@@ -160,15 +177,20 @@ async def get_health_summary():
         Simple health status with key indicators
     """
     try:
-        await job_queue.connect()
+        redis_connected = await job_queue.connect()
         
-        dlq_count = await job_queue.get_dlq_count()
-        total_pending = sum([
-            await job_queue.get_queue_length(QUEUE_CRAWL),
-            await job_queue.get_queue_length(QUEUE_CLASSIFY),
-            await job_queue.get_queue_length(QUEUE_SCORE),
-            await job_queue.get_queue_length(QUEUE_GEOCODE),
-        ])
+        # Get queue stats only if Redis is connected
+        dlq_count = 0
+        total_pending = 0
+        
+        if redis_connected and job_queue.is_connected:
+            dlq_count = await job_queue.get_dlq_count()
+            total_pending = sum([
+                await job_queue.get_queue_length(QUEUE_CRAWL),
+                await job_queue.get_queue_length(QUEUE_CLASSIFY),
+                await job_queue.get_queue_length(QUEUE_SCORE),
+                await job_queue.get_queue_length(QUEUE_GEOCODE),
+            ])
         
         cost_tracker = get_cost_tracker()
         budget = cost_tracker.check_budget()
@@ -176,6 +198,10 @@ async def get_health_summary():
         # Determine overall status
         status = "healthy"
         issues = []
+        
+        # Redis not connected is informational, not a failure
+        if not redis_connected:
+            issues.append("Redis nicht verbunden (Queue-Features deaktiviert)")
         
         if dlq_count > 10:
             status = "degraded"
@@ -198,6 +224,7 @@ async def get_health_summary():
                 "dlq_count": dlq_count,
                 "budget_status": budget.status.value,
                 "ai_enabled": get_settings().enable_ai,
+                "redis_connected": redis_connected,
             },
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }

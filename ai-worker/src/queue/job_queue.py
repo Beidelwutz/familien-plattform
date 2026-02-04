@@ -609,12 +609,16 @@ class JobQueue:
     
     async def get_queue_length(self, queue: str = QUEUE_CRAWL) -> int:
         """Get the number of jobs in a queue."""
-        await self.connect()
+        connected = await self.connect()
+        if not connected or self._redis is None:
+            return 0
         return await self._redis.zcard(queue)
     
     async def get_dlq_count(self) -> int:
         """Get the number of jobs in the Dead Letter Queue."""
-        await self.connect()
+        connected = await self.connect()
+        if not connected or self._redis is None:
+            return 0
         return await self._redis.zcard(QUEUE_DLQ)
     
     async def get_queue_stats(self) -> dict:
