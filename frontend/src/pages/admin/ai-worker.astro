@@ -79,6 +79,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         </div>
       </div>
 
+      <!-- Last Activity Info -->
+      <div id="last-activity" class="bg-gray-50 rounded-xl p-3 hidden">
+        <div class="flex items-center gap-2 text-sm text-gray-500">
+          <span>🕒</span>
+          <span>Letzte Verarbeitung: <span id="last-processed-at" class="font-medium text-gray-700">--</span></span>
+        </div>
+      </div>
+
       <!-- Batch Processing Section -->
       <div class="bg-white rounded-2xl shadow-card p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">Batch-Verarbeitung</h2>
@@ -190,6 +198,81 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         </div>
       </div>
 
+      <!-- Diagnostics Section -->
+      <div id="diagnostics-section" class="bg-white rounded-2xl shadow-card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            🔍 Diagnose
+          </h3>
+          <button id="refresh-diagnostics-btn" class="px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors font-medium">
+            ↻ Aktualisieren
+          </button>
+        </div>
+
+        <!-- Loading State -->
+        <div id="diagnostics-loading" class="text-center py-8">
+          <div class="animate-spin inline-block w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+          <p class="text-gray-500 mt-2 text-sm">Prüfe AI-Worker...</p>
+        </div>
+
+        <!-- Diagnostics Content -->
+        <div id="diagnostics-content" class="hidden space-y-4">
+          <!-- Connection Status -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <!-- Worker Reachable -->
+            <div id="diag-worker" class="p-3 rounded-xl bg-gray-50">
+              <div class="flex items-center gap-2 mb-1">
+                <span id="diag-worker-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                <span class="text-sm font-medium text-gray-700">AI-Worker</span>
+              </div>
+              <span id="diag-worker-status" class="text-xs text-gray-500">Prüfe...</span>
+            </div>
+
+            <!-- Redis Status -->
+            <div id="diag-redis" class="p-3 rounded-xl bg-gray-50">
+              <div class="flex items-center gap-2 mb-1">
+                <span id="diag-redis-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                <span class="text-sm font-medium text-gray-700">Redis</span>
+              </div>
+              <span id="diag-redis-status" class="text-xs text-gray-500">Prüfe...</span>
+            </div>
+
+            <!-- OpenAI Status -->
+            <div id="diag-openai" class="p-3 rounded-xl bg-gray-50">
+              <div class="flex items-center gap-2 mb-1">
+                <span id="diag-openai-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                <span class="text-sm font-medium text-gray-700">OpenAI API</span>
+              </div>
+              <span id="diag-openai-status" class="text-xs text-gray-500">Prüfe...</span>
+            </div>
+          </div>
+
+          <!-- Issues/Warnings -->
+          <div id="diag-issues" class="hidden">
+            <h4 class="text-sm font-medium text-gray-700 mb-2">⚠️ Probleme</h4>
+            <ul id="diag-issues-list" class="space-y-1 text-sm text-red-600 bg-red-50 p-3 rounded-lg"></ul>
+          </div>
+
+          <!-- Config Info -->
+          <div class="text-xs text-gray-400 pt-2 border-t border-gray-100">
+            <div class="flex flex-wrap gap-4">
+              <span>Worker: <span id="diag-worker-url" class="font-mono">--</span></span>
+              <span>Version: <span id="diag-version" class="font-mono">--</span></span>
+              <span>Budget: <span id="diag-budget" class="font-mono">--</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="diagnostics-error" class="hidden text-center py-6">
+          <p class="text-red-500 mb-2">❌ AI-Worker nicht erreichbar</p>
+          <p id="diagnostics-error-msg" class="text-sm text-gray-500 mb-4">--</p>
+          <button onclick="loadDiagnostics()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">
+            Erneut versuchen
+          </button>
+        </div>
+      </div>
+
       <!-- Quick Links -->
       <div class="bg-white rounded-2xl shadow-card p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">Schnellzugriff</h3>
@@ -199,6 +282,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </a>
           <a href="/admin/review?status=pending_review" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
             👁️ Review Queue
+          </a>
+          <a href="/admin/review?status=rejected" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium">
+            🚫 Abgelehnte Events
           </a>
           <a href="/admin/ai-usage" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
             📊 AI Usage Monitor
@@ -393,6 +479,32 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           elements.processedToday.textContent = statsData.data.processedToday || 0;
           elements.successRate.textContent = statsData.data.successRate ? `${statsData.data.successRate}%` : '--%';
           elements.avgTime.textContent = statsData.data.avgProcessingTime ? `${statsData.data.avgProcessingTime} ms` : '-- ms';
+          
+          // Show last processed time
+          const lastActivityEl = document.getElementById('last-activity');
+          const lastProcessedAtEl = document.getElementById('last-processed-at');
+          if (statsData.data.lastProcessedAt) {
+            const lastTime = new Date(statsData.data.lastProcessedAt);
+            const now = new Date();
+            const diffMs = now - lastTime;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            let timeAgo;
+            if (diffMins < 1) {
+              timeAgo = 'gerade eben';
+            } else if (diffMins < 60) {
+              timeAgo = `vor ${diffMins} Minute${diffMins !== 1 ? 'n' : ''}`;
+            } else if (diffHours < 24) {
+              timeAgo = `vor ${diffHours} Stunde${diffHours !== 1 ? 'n' : ''}`;
+            } else {
+              timeAgo = `vor ${diffDays} Tag${diffDays !== 1 ? 'en' : ''}`;
+            }
+            
+            lastProcessedAtEl.textContent = timeAgo;
+            lastActivityEl.classList.remove('hidden');
+          }
         }
       }
 
@@ -693,11 +805,143 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     elements.resultsSection.classList.add('hidden');
   }
 
+  // Diagnostics functions
+  async function loadDiagnostics() {
+    const diagLoading = document.getElementById('diagnostics-loading');
+    const diagContent = document.getElementById('diagnostics-content');
+    const diagError = document.getElementById('diagnostics-error');
+    const diagErrorMsg = document.getElementById('diagnostics-error-msg');
+    
+    diagLoading.classList.remove('hidden');
+    diagContent.classList.add('hidden');
+    diagError.classList.add('hidden');
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ai-worker/diagnostics`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) throw new Error('Failed to fetch diagnostics');
+      
+      const { data, success, error } = await res.json();
+      
+      if (!success || !data.reachable) {
+        throw new Error(error || 'AI-Worker nicht erreichbar');
+      }
+
+      // Update UI elements
+      updateDiagnosticsUI(data);
+      
+      diagLoading.classList.add('hidden');
+      diagContent.classList.remove('hidden');
+      
+    } catch (e) {
+      console.error('Diagnostics error:', e);
+      diagLoading.classList.add('hidden');
+      diagError.classList.remove('hidden');
+      diagErrorMsg.textContent = e.message || 'Unbekannter Fehler';
+    }
+  }
+
+  function updateDiagnosticsUI(data) {
+    // Worker status
+    const workerDot = document.getElementById('diag-worker-dot');
+    const workerStatus = document.getElementById('diag-worker-status');
+    
+    if (data.reachable) {
+      workerDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+      workerStatus.textContent = data.status === 'ok' ? 'Verbunden & OK' : `Status: ${data.status}`;
+      document.getElementById('diag-worker').className = 'p-3 rounded-xl bg-green-50';
+    } else {
+      workerDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+      workerStatus.textContent = 'Nicht erreichbar';
+      document.getElementById('diag-worker').className = 'p-3 rounded-xl bg-red-50';
+    }
+
+    // Redis status
+    const redisDot = document.getElementById('diag-redis-dot');
+    const redisStatus = document.getElementById('diag-redis-status');
+    const redisCheck = data.checks?.redis;
+    
+    if (redisCheck) {
+      if (redisCheck.status === 'ok') {
+        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+        redisStatus.textContent = 'Verbunden';
+        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-green-50';
+      } else {
+        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+        redisStatus.textContent = redisCheck.error || redisCheck.status;
+        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-red-50';
+      }
+    } else {
+      redisDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+      redisStatus.textContent = 'Status unbekannt';
+    }
+
+    // OpenAI status
+    const openaiDot = document.getElementById('diag-openai-dot');
+    const openaiStatus = document.getElementById('diag-openai-status');
+    const openaiCheck = data.checks?.openai;
+    
+    if (openaiCheck) {
+      if (openaiCheck.status === 'ok') {
+        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+        openaiStatus.textContent = 'API erreichbar';
+        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-green-50';
+      } else if (openaiCheck.status === 'not_configured') {
+        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+        openaiStatus.textContent = 'Nicht konfiguriert';
+        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-gray-50';
+      } else {
+        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+        openaiStatus.textContent = openaiCheck.error || openaiCheck.status;
+        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-red-50';
+      }
+    } else {
+      openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+      openaiStatus.textContent = 'Status unbekannt';
+    }
+
+    // Issues
+    const issuesSection = document.getElementById('diag-issues');
+    const issuesList = document.getElementById('diag-issues-list');
+    const issues = data.metrics?.issues || [];
+    
+    if (issues.length > 0) {
+      issuesSection.classList.remove('hidden');
+      issuesList.innerHTML = issues.map(issue => `<li>• ${issue}</li>`).join('');
+    } else {
+      issuesSection.classList.add('hidden');
+    }
+
+    // Config info
+    document.getElementById('diag-worker-url').textContent = data.worker_url || '--';
+    document.getElementById('diag-version').textContent = data.basic?.version || '--';
+    document.getElementById('diag-budget').textContent = data.metrics?.budget_status || '--';
+
+    // Update main health badge based on detailed status
+    if (data.status === 'ok') {
+      elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-sm font-medium';
+      elements.healthDot.className = 'w-2 h-2 rounded-full bg-green-500';
+      elements.healthText.textContent = 'OK';
+    } else if (data.status === 'degraded') {
+      elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-medium';
+      elements.healthDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+      elements.healthText.textContent = 'Eingeschränkt';
+    } else {
+      elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-sm font-medium';
+      elements.healthDot.className = 'w-2 h-2 rounded-full bg-red-500';
+      elements.healthText.textContent = 'Fehler';
+    }
+  }
+
   // Event listeners
   elements.startBatchBtn.addEventListener('click', startBatch);
   elements.cancelBtn.addEventListener('click', cancelProcessing);
   elements.clearResultsBtn.addEventListener('click', clearResults);
+  document.getElementById('refresh-diagnostics-btn').addEventListener('click', loadDiagnostics);
 
   // Initial load
   loadData();
+  loadDiagnostics();
 </script>

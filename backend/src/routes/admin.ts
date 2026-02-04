@@ -1734,6 +1734,154 @@ router.get('/ai-worker/health', async (_req: Request, res: Response, next: NextF
   }
 });
 
+// GET /api/admin/ai-worker/diagnostics - Detailed diagnostics from AI Worker
+router.get('/ai-worker/diagnostics', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Fetch both basic health and detailed readiness in parallel
+    const [healthResponse, readyResponse, metricsResponse] = await Promise.all([
+      fetch(`${AI_WORKER_URL}/health`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => null),
+      fetch(`${AI_WORKER_URL}/health/ready`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(10000), // Longer timeout for full check
+      }).catch(() => null),
+      fetch(`${AI_WORKER_URL}/metrics/health-summary`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => null),
+    ]);
+
+    // Process responses
+    const basicHealth = healthResponse?.ok ? await healthResponse.json() : null;
+    const readiness = readyResponse?.ok ? await readyResponse.json() : null;
+    const metrics = metricsResponse?.ok ? await metricsResponse.json() : null;
+
+    // Build diagnostic response
+    const diagnostics: any = {
+      reachable: basicHealth !== null,
+      timestamp: new Date().toISOString(),
+      worker_url: AI_WORKER_URL,
+    };
+
+    if (basicHealth) {
+      diagnostics.basic = {
+        status: basicHealth.status,
+        version: basicHealth.version,
+        service: basicHealth.service,
+      };
+    }
+
+    if (readiness) {
+      diagnostics.status = readiness.status;
+      diagnostics.checks = readiness.checks;
+      diagnostics.config = readiness.config;
+    } else {
+      diagnostics.status = basicHealth ? 'unknown' : 'unreachable';
+      diagnostics.checks = {};
+    }
+
+    if (metrics) {
+      diagnostics.metrics = {
+        queue_pending: metrics.indicators?.queue_pending || 0,
+        dlq_count: metrics.indicators?.dlq_count || 0,
+        ai_enabled: metrics.indicators?.ai_enabled ?? true,
+        budget_status: metrics.indicators?.budget_status || 'unknown',
+        issues: metrics.issues || [],
+      };
+    }
+
+    res.json({
+      success: true,
+      data: diagnostics
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.warn(`AI Worker diagnostics failed: ${errorMessage}`);
+    
+    res.json({
+      success: false,
+      error: errorMessage,
+      data: {
+        reachable: false,
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        worker_url: AI_WORKER_URL,
+      }
+    });
+  }
+});
+
+// GET /api/admin/ai-worker/stats - Get AI Worker processing statistics
+router.get('/ai-worker/stats', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Get today's start
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Count events processed today (events with EventScore created today)
+    const processedToday = await prisma.eventScore.count({
+      where: {
+        scored_at: { gte: today }
+      }
+    });
+
+    // Get processing statistics for success rate
+    const last7Days = new Date();
+    last7Days.setDate(last7Days.getDate() - 7);
+
+    const recentScores = await prisma.eventScore.findMany({
+      where: {
+        scored_at: { gte: last7Days }
+      },
+      select: {
+        family_fit_score: true,
+        confidence: true,
+        processing_time_ms: true,
+      }
+    });
+
+    // Calculate success rate (events with confidence >= 0.5 that got a family_fit_score)
+    const successfulProcessing = recentScores.filter(s => 
+      s.confidence !== null && s.confidence >= 0.5 && s.family_fit_score !== null
+    ).length;
+    const successRate = recentScores.length > 0 
+      ? Math.round((successfulProcessing / recentScores.length) * 100)
+      : 0;
+
+    // Calculate average processing time
+    const timesWithValues = recentScores
+      .map(s => s.processing_time_ms)
+      .filter((t): t is number => t !== null && t > 0);
+    const avgProcessingTime = timesWithValues.length > 0
+      ? Math.round(timesWithValues.reduce((a, b) => a + b, 0) / timesWithValues.length)
+      : null;
+
+    // Get last processing time for display
+    const lastProcessed = await prisma.eventScore.findFirst({
+      orderBy: { scored_at: 'desc' },
+      select: { scored_at: true }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        processedToday,
+        successRate,
+        avgProcessingTime,
+        totalLast7Days: recentScores.length,
+        lastProcessedAt: lastProcessed?.scored_at || null
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/ai-worker/queue-stats - Proxy to AI Worker queue stats endpoint
 router.get('/ai-worker/queue-stats', async (_req: Request, res: Response, next: NextFunction) => {
   try {
