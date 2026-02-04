@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+import asyncio
 import logging
 
 from src.queue import job_queue, get_queue, JobQueue, JobStatus, QUEUE_CRAWL
@@ -34,25 +35,44 @@ class CrawlStatus(BaseModel):
     error: Optional[str]
 
 
+async def run_crawl_sync(payload: dict):
+    """Run crawl job synchronously (fallback when Redis unavailable)."""
+    from src.queue.worker import process_crawl_job
+    try:
+        logger.info(f"Running crawl synchronously for source {payload.get('source_id')}")
+        result = await process_crawl_job(payload)
+        logger.info(f"Sync crawl completed: {result}")
+    except Exception as e:
+        logger.error(f"Sync crawl failed: {e}")
+
+
 @router.post("/trigger")
-async def trigger_crawl(request: CrawlRequest, queue: JobQueue = Depends(get_queue)):
+async def trigger_crawl(
+    request: CrawlRequest, 
+    background_tasks: BackgroundTasks,
+    queue: JobQueue = Depends(get_queue)
+):
     """
     Trigger a crawl for a specific source.
     
     The crawl runs in the background and results can be checked via /status.
     Uses batch ingest to send events to backend.
+    
+    If Redis is unavailable, falls back to synchronous background processing.
     """
+    payload = {
+        "source_id": request.source_id,
+        "source_url": request.source_url,
+        "source_type": request.source_type,
+        "force": request.force,
+        "enable_ai": request.enable_ai,
+        "ingest_run_id": request.ingest_run_id,
+    }
+    
     try:
         job = await queue.enqueue(
             job_type="crawl",
-            payload={
-                "source_id": request.source_id,
-                "source_url": request.source_url,
-                "source_type": request.source_type,
-                "force": request.force,
-                "enable_ai": request.enable_ai,
-                "ingest_run_id": request.ingest_run_id,
-            },
+            payload=payload,
             queue=QUEUE_CRAWL
         )
         
@@ -63,15 +83,19 @@ async def trigger_crawl(request: CrawlRequest, queue: JobQueue = Depends(get_que
             "message": "Crawl job queued successfully"
         }
     except Exception as e:
-        logger.exception("Failed to queue crawl job")
-        # Fallback: return a mock job ID if Redis is unavailable
-        job_id = f"crawl_{request.source_id}_{datetime.utcnow().timestamp()}"
+        logger.warning(f"Redis unavailable, falling back to sync processing: {e}")
+        
+        # Fallback: process synchronously in background
+        job_id = f"sync_{request.source_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        
+        # Run the crawl in background (non-blocking)
+        background_tasks.add_task(run_crawl_sync, payload)
+        
         return {
             "job_id": job_id,
             "source_id": request.source_id,
-            "status": "queued",
-            "message": "Crawl job queued (Redis unavailable, processing synchronously)",
-            "warning": str(e)
+            "status": "running",
+            "message": "Crawl started (sync mode - Redis unavailable)",
         }
 
 
