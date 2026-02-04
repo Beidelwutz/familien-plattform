@@ -52,7 +52,8 @@ async def get_http_client() -> httpx.AsyncClient:
     """Get or create HTTP client."""
     global http_client
     if http_client is None:
-        http_client = httpx.AsyncClient(timeout=60.0)
+        # Increased timeout for large batch operations (329+ events can take a while)
+        http_client = httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=30.0))
     return http_client
 
 
@@ -238,14 +239,25 @@ async def send_batch_to_backend(
                 "error": response.text[:500],
                 "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
             }
+    except httpx.TimeoutException as e:
+        # #region agent log
+        logger.error(f"[BATCH] Timeout during POST: type={type(e).__name__}, after sending {len(candidates)} candidates")
+        # #endregion
+        logger.error(f"Batch ingest timed out for {len(candidates)} candidates - consider smaller batches")
+        return {
+            "success": False,
+            "error": f"Timeout after sending {len(candidates)} candidates",
+            "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
+        }
     except Exception as e:
         # #region agent log
-        logger.error(f"[BATCH] Exception during POST: type={type(e).__name__}, message={str(e)}")
+        import traceback
+        logger.error(f"[BATCH] Exception during POST: type={type(e).__name__}, message={str(e)}, traceback={traceback.format_exc()}")
         # #endregion
         logger.error(f"Failed to send batch to backend: {e}")
         return {
             "success": False,
-            "error": str(e),
+            "error": str(e) or f"Unknown error: {type(e).__name__}",
             "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
         }
 
