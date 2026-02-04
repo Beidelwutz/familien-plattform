@@ -1,144 +1,542 @@
 ---
-import BaseLayout from "../../layouts/BaseLayout.astro";
-import StickyHeader from "../../components/layout/StickyHeader.astro";
-
-const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:5000";
 ---
 
-<BaseLayout title="Test Crawl - Admin - kiezling">
-  <StickyHeader />
-  <main class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
-        <h1 class="text-2xl font-bold text-gray-900">Test Crawl</h1>
-        <p class="text-gray-500">URL-Parsing und Datenextraktion testen</p>
-      </header>
+<AdminLayout title="Test Crawl - kiezling Admin" currentPage="test-crawl">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Test Crawl</h1>
+      <p class="text-gray-500 mt-1">URL-Parsing und Datenextraktion testen</p>
+    </div>
 
-      <!-- Input Section -->
-      <div class="bg-white rounded-lg shadow p-6 mb-6">
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">URL zum Testen</label>
-          <div class="flex flex-col sm:flex-row gap-3">
-            <input 
-              type="url" 
-              id="test-url" 
-              placeholder="https://example.com/events.rss"
-              class="flex-1 px-4 py-2 border-2 border-gray-200 rounded-lg focus:border-primary-500 focus:ring-primary-500"
-            />
-            <select id="feed-type" class="px-4 py-2 border-2 border-gray-200 rounded-lg bg-white">
+    <!-- Input Section -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="space-y-4">
+        <!-- URL Input -->
+        <div>
+          <label for="test-url" class="block text-sm font-medium text-gray-700 mb-2">
+            URL zum Testen
+          </label>
+          <input 
+            type="url" 
+            id="test-url" 
+            placeholder="https://example.com/events.rss oder /calendar.ics"
+            class="w-full px-4 py-3 text-lg border-2 border-gray-200 rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition"
+          />
+        </div>
+
+        <!-- Options Row -->
+        <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <!-- Feed Type Dropdown -->
+          <div class="flex-1 min-w-[200px]">
+            <label for="feed-type" class="block text-sm font-medium text-gray-700 mb-2">
+              Feed-Typ
+            </label>
+            <select 
+              id="feed-type" 
+              class="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition"
+            >
               <option value="auto">Auto-Detect</option>
               <option value="rss">RSS Feed</option>
               <option value="ics">ICS Calendar</option>
-              <option value="scrape">HTML Scrape</option>
+              <option value="scrape">HTML Scraper</option>
             </select>
           </div>
-        </div>
 
-        <div class="flex flex-wrap gap-3">
-          <button id="test-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium">
-            Testen
-          </button>
-          <button id="test-ai-btn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium">
-            Mit AI analysieren
-          </button>
-        </div>
-      </div>
-
-      <!-- Quick Examples -->
-      <div class="bg-white rounded-lg shadow p-6 mb-6">
-        <h3 class="font-semibold text-gray-900 mb-4">Beispiel-URLs</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <button class="example-url text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition" data-url="https://www.karlsruhe.de/index.php?type=1568705400&id=34">
-            <div class="font-medium text-sm">Karlsruhe Events RSS</div>
-            <div class="text-xs text-gray-500">RSS Feed</div>
-          </button>
-          <button class="example-url text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition" data-url="https://zkm.de/de/veranstaltungen">
-            <div class="font-medium text-sm">ZKM Veranstaltungen</div>
-            <div class="text-xs text-gray-500">HTML Scrape</div>
-          </button>
-        </div>
-      </div>
-
-      <!-- Results Section -->
-      <div id="results-section" class="hidden">
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="font-semibold text-gray-900">Ergebnis</h3>
-            <div id="result-status" class="text-sm px-3 py-1 rounded-full bg-gray-100">-</div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-4 mb-6">
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="events-count" class="text-2xl font-bold text-primary-600">0</div>
-              <div class="text-sm text-gray-500">Events gefunden</div>
-            </div>
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="parse-time" class="text-2xl font-bold text-gray-900">-</div>
-              <div class="text-sm text-gray-500">Parse-Zeit</div>
-            </div>
-            <div class="text-center p-4 bg-gray-50 rounded">
-              <div id="detected-type" class="text-2xl font-bold text-gray-900">-</div>
-              <div class="text-sm text-gray-500">Erkannter Typ</div>
-            </div>
-          </div>
-
-          <div class="mb-4">
-            <h4 class="font-medium text-gray-700 mb-2">Gefundene Events (Vorschau)</h4>
-            <div id="events-preview" class="max-h-96 overflow-y-auto border rounded-lg"></div>
+          <!-- AI Checkbox -->
+          <div class="flex items-center mt-6 sm:mt-8">
+            <input 
+              type="checkbox" 
+              id="with-ai" 
+              class="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <label for="with-ai" class="ml-2 text-sm font-medium text-gray-700">
+              Mit AI analysieren
+            </label>
+            <span class="ml-2 text-xs text-gray-400" title="KI-Klassifizierung und Scoring aktivieren">
+              (Klassifizierung & Scoring)
+            </span>
           </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="font-semibold text-gray-900">Raw Data</h3>
-            <button id="copy-json" class="text-sm text-primary-600 hover:text-primary-800">JSON kopieren</button>
-          </div>
-          <pre id="raw-data" class="bg-gray-100 p-4 rounded text-xs overflow-x-auto max-h-96"></pre>
-        </div>
-      </div>
-
-      <!-- Loading State -->
-      <div id="loading" class="hidden">
-        <div class="bg-white rounded-lg shadow p-12 text-center">
-          <div class="animate-spin h-8 w-8 border-4 border-primary-600 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <div class="text-gray-600">Crawle URL...</div>
-        </div>
-      </div>
-
-      <!-- Error State -->
-      <div id="error-section" class="hidden">
-        <div class="bg-red-50 border border-red-200 rounded-lg p-6">
-          <div class="text-red-800 font-semibold mb-2">Fehler beim Crawlen</div>
-          <div id="error-message" class="text-red-600 text-sm"></div>
+        <!-- Test Button -->
+        <div class="pt-2">
+          <button 
+            id="test-btn" 
+            class="px-6 py-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition font-medium text-base flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Test starten
+          </button>
         </div>
       </div>
     </div>
-  </main>
 
-  <script is:inline define:vars={{ API_URL, WORKER_URL }}>
+    <!-- Example URLs Section -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <h3 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Beispiel-URLs
+      </h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <button 
+          class="example-url text-left p-4 bg-gradient-to-br from-orange-50 to-orange-100/50 border border-orange-200 rounded-xl hover:border-orange-300 hover:shadow-sm transition group"
+          data-url="https://www.karlsruhe.de/index.php?type=1568705400&id=34"
+          data-type="rss"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-orange-500 text-lg">📰</span>
+            <div class="font-medium text-sm text-gray-900 group-hover:text-orange-700">RSS Karlsruhe</div>
+          </div>
+          <div class="text-xs text-gray-500">Karlsruhe Events RSS Feed</div>
+        </button>
+
+        <button 
+          class="example-url text-left p-4 bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200 rounded-xl hover:border-purple-300 hover:shadow-sm transition group"
+          data-url="https://www.karlsruhe.de/kalender.ics"
+          data-type="ics"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-purple-500 text-lg">📅</span>
+            <div class="font-medium text-sm text-gray-900 group-hover:text-purple-700">ICS Kultur</div>
+          </div>
+          <div class="text-xs text-gray-500">Kultur-Kalender ICS Export</div>
+        </button>
+
+        <button 
+          class="example-url text-left p-4 bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-xl hover:border-blue-300 hover:shadow-sm transition group"
+          data-url="https://zkm.de/de/veranstaltungen"
+          data-type="scrape"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-blue-500 text-lg">🔍</span>
+            <div class="font-medium text-sm text-gray-900 group-hover:text-blue-700">HTML Scraper</div>
+          </div>
+          <div class="text-xs text-gray-500">ZKM Veranstaltungen (HTML)</div>
+        </button>
+
+        <button 
+          class="example-url text-left p-4 bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200 rounded-xl hover:border-green-300 hover:shadow-sm transition group"
+          data-url="https://www.badisches-landesmuseum.de/kalender/ical/"
+          data-type="ics"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-green-500 text-lg">🏛️</span>
+            <div class="font-medium text-sm text-gray-900 group-hover:text-green-700">Museum ICS</div>
+          </div>
+          <div class="text-xs text-gray-500">Badisches Landesmuseum</div>
+        </button>
+
+        <button 
+          class="example-url text-left p-4 bg-gradient-to-br from-rose-50 to-rose-100/50 border border-rose-200 rounded-xl hover:border-rose-300 hover:shadow-sm transition group"
+          data-url="https://www.staatstheater.karlsruhe.de/programm/rss/"
+          data-type="rss"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-rose-500 text-lg">🎭</span>
+            <div class="font-medium text-sm text-gray-900 group-hover:text-rose-700">Theater RSS</div>
+          </div>
+          <div class="text-xs text-gray-500">Staatstheater Programm</div>
+        </button>
+
+        <button 
+          class="example-url text-left p-4 bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200 rounded-xl hover:border-amber-300 hover:shadow-sm transition group"
+          data-url="https://www.jubez.de/veranstaltungen/rss"
+          data-type="rss"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-amber-500 text-lg">🎪</span>
+            <div class="font-medium text-sm text-gray-900 group-hover:text-amber-700">Jubez RSS</div>
+          </div>
+          <div class="text-xs text-gray-500">Jugendzentrum Karlsruhe</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-full mb-4">
+          <svg class="animate-spin h-8 w-8 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <div class="text-lg font-medium text-gray-900 mb-1" id="loading-text">Teste URL...</div>
+        <div class="text-sm text-gray-500" id="loading-subtext">Lade und parse Feed-Daten</div>
+      </div>
+    </div>
+
+    <!-- Results Section (Tabbed) -->
+    <div id="results-section" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <!-- Stats Bar -->
+        <div class="bg-gray-50 border-b border-gray-200 px-6 py-4">
+          <div class="flex flex-wrap items-center gap-4">
+            <div id="result-status" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
+              <span class="status-icon">●</span>
+              <span class="status-text">-</span>
+            </div>
+            <div class="flex items-center gap-6 text-sm">
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">Events:</span>
+                <span id="events-count" class="font-semibold text-gray-900">0</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">Zeit:</span>
+                <span id="parse-time" class="font-semibold text-gray-900">-</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400">Typ:</span>
+                <span id="detected-type" class="font-semibold text-gray-900">-</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="border-b border-gray-200">
+          <nav class="flex -mb-px px-6" aria-label="Tabs">
+            <button 
+              class="tab-btn active px-4 py-3 text-sm font-medium border-b-2 border-primary-500 text-primary-600"
+              data-tab="events"
+            >
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Parsed Events
+                <span id="events-badge" class="hidden bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full text-xs">0</span>
+              </span>
+            </button>
+            <button 
+              class="tab-btn px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              data-tab="json"
+            >
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+                Raw JSON
+              </span>
+            </button>
+            <button 
+              id="error-tab"
+              class="tab-btn hidden px-4 py-3 text-sm font-medium border-b-2 border-transparent text-red-500 hover:text-red-700 hover:border-red-300"
+              data-tab="error"
+            >
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Fehler
+              </span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+          <!-- Events Tab -->
+          <div id="tab-events" class="tab-panel p-6">
+            <div id="events-list" class="space-y-4">
+              <!-- Events will be rendered here -->
+            </div>
+            <div id="no-events" class="hidden text-center py-12 text-gray-500">
+              <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <p>Keine Events gefunden</p>
+            </div>
+          </div>
+
+          <!-- JSON Tab -->
+          <div id="tab-json" class="tab-panel hidden">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+              <span class="text-sm text-gray-500">Response JSON</span>
+              <div class="flex items-center gap-2">
+                <button id="expand-all" class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-200 rounded transition">
+                  Alle aufklappen
+                </button>
+                <button id="collapse-all" class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-200 rounded transition">
+                  Alle zuklappen
+                </button>
+                <button id="copy-json" class="flex items-center gap-1 px-3 py-1.5 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Kopieren
+                </button>
+              </div>
+            </div>
+            <div class="p-4 max-h-[600px] overflow-auto">
+              <pre id="raw-data" class="text-sm font-mono text-gray-800 whitespace-pre-wrap"></pre>
+            </div>
+          </div>
+
+          <!-- Error Tab -->
+          <div id="tab-error" class="tab-panel hidden p-6">
+            <div class="bg-red-50 border border-red-200 rounded-xl p-6">
+              <div class="flex items-start gap-4">
+                <div class="flex-shrink-0">
+                  <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="text-lg font-semibold text-red-800 mb-2">Fehler beim Crawlen</h3>
+                  <div id="error-message" class="text-red-700 text-sm whitespace-pre-wrap"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* JSON Syntax Highlighting */
+    .json-key { color: #7c3aed; }
+    .json-string { color: #059669; }
+    .json-number { color: #d97706; }
+    .json-boolean { color: #dc2626; }
+    .json-null { color: #6b7280; }
+    .json-bracket { color: #374151; font-weight: 500; }
+    
+    /* Collapsible JSON */
+    .json-collapsible {
+      cursor: pointer;
+      user-select: none;
+    }
+    .json-collapsible::before {
+      content: '▼';
+      display: inline-block;
+      margin-right: 4px;
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+    .json-collapsible.collapsed::before {
+      transform: rotate(-90deg);
+    }
+    .json-collapsible.collapsed + .json-content {
+      display: none;
+    }
+    
+    /* Tab transitions */
+    .tab-panel {
+      animation: fadeIn 0.2s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Event card hover */
+    .event-card {
+      transition: all 0.2s;
+    }
+    .event-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+  </style>
+
+  <script is:inline define:vars={{ WORKER_URL }}>
     const workerUrl = WORKER_URL;
     let lastResult = null;
+    let currentTab = 'events';
 
+    // Example URL buttons
     document.querySelectorAll('.example-url').forEach(btn => {
       btn.addEventListener('click', () => {
         document.getElementById('test-url').value = btn.dataset.url;
+        const typeSelect = document.getElementById('feed-type');
+        if (btn.dataset.type) {
+          typeSelect.value = btn.dataset.type;
+        }
       });
     });
 
-    async function runTest(withAI = false) {
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        switchTab(btn.dataset.tab);
+      });
+    });
+
+    function switchTab(tabId) {
+      currentTab = tabId;
+      
+      // Update tab buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        const isActive = btn.dataset.tab === tabId;
+        btn.classList.toggle('active', isActive);
+        btn.classList.toggle('border-primary-500', isActive);
+        btn.classList.toggle('text-primary-600', isActive);
+        btn.classList.toggle('border-transparent', !isActive);
+        if (!isActive && !btn.classList.contains('text-red-500')) {
+          btn.classList.toggle('text-gray-500', !isActive);
+        }
+      });
+      
+      // Update tab panels
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('hidden');
+      });
+      document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+    }
+
+    // Format date for display
+    function formatDate(dateStr) {
+      if (!dateStr) return 'Kein Datum';
+      try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('de-DE', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch {
+        return dateStr;
+      }
+    }
+
+    // Truncate text
+    function truncate(text, maxLength = 150) {
+      if (!text) return '';
+      return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    }
+
+    // Render events list
+    function renderEvents(events) {
+      const listEl = document.getElementById('events-list');
+      const noEventsEl = document.getElementById('no-events');
+      const badgeEl = document.getElementById('events-badge');
+      
+      if (!events || events.length === 0) {
+        listEl.innerHTML = '';
+        noEventsEl.classList.remove('hidden');
+        badgeEl.classList.add('hidden');
+        return;
+      }
+      
+      noEventsEl.classList.add('hidden');
+      badgeEl.textContent = events.length;
+      badgeEl.classList.remove('hidden');
+      
+      listEl.innerHTML = events.map((event, i) => `
+        <div class="event-card bg-gray-50 border border-gray-200 rounded-xl p-4 hover:bg-gray-100">
+          <div class="flex gap-4">
+            ${event.image_url ? `
+              <div class="flex-shrink-0">
+                <img 
+                  src="${event.image_url}" 
+                  alt="" 
+                  class="w-24 h-24 object-cover rounded-lg bg-gray-200"
+                  onerror="this.style.display='none'"
+                />
+              </div>
+            ` : ''}
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-2 mb-2">
+                <h4 class="font-semibold text-gray-900 text-base">${event.title || 'Kein Titel'}</h4>
+                <span class="flex-shrink-0 text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">#${i + 1}</span>
+              </div>
+              <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
+                <div class="flex items-center gap-1">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  ${formatDate(event.start_datetime || event.start_date)}
+                </div>
+                ${event.location_name || event.address ? `
+                  <div class="flex items-center gap-1">
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    ${event.location_name || event.address || 'Kein Ort'}
+                  </div>
+                ` : ''}
+              </div>
+              ${event.description ? `
+                <p class="text-sm text-gray-500 line-clamp-2">${truncate(event.description, 200)}</p>
+              ` : ''}
+              ${event.categories?.length ? `
+                <div class="flex flex-wrap gap-1 mt-2">
+                  ${event.categories.slice(0, 3).map(cat => `
+                    <span class="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">${cat}</span>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Syntax highlight JSON
+    function syntaxHighlight(json) {
+      if (typeof json !== 'string') {
+        json = JSON.stringify(json, null, 2);
+      }
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'json-number';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'json-key';
+          } else {
+            cls = 'json-string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'json-boolean';
+        } else if (/null/.test(match)) {
+          cls = 'json-null';
+        }
+        return '<span class="' + cls + '">' + match + '</span>';
+      });
+    }
+
+    // Update loading text
+    function updateLoading(text, subtext) {
+      document.getElementById('loading-text').textContent = text;
+      document.getElementById('loading-subtext').textContent = subtext;
+    }
+
+    // Run test
+    async function runTest() {
       const url = document.getElementById('test-url').value.trim();
       const feedType = document.getElementById('feed-type').value;
+      const withAI = document.getElementById('with-ai').checked;
       
       if (!url) {
         alert('Bitte URL eingeben');
         return;
       }
 
+      const testBtn = document.getElementById('test-btn');
+      testBtn.disabled = true;
+
       document.getElementById('loading').classList.remove('hidden');
       document.getElementById('results-section').classList.add('hidden');
-      document.getElementById('error-section').classList.add('hidden');
+      document.getElementById('error-tab').classList.add('hidden');
+      
+      updateLoading(
+        withAI ? 'Analysiere mit AI...' : 'Teste URL...',
+        withAI ? 'Crawle und klassifiziere Events' : 'Lade und parse Feed-Daten'
+      );
 
       try {
         const startTime = Date.now();
@@ -146,13 +544,18 @@ const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:500
         const response = await fetch(`${workerUrl}/crawl/test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, type: feedType, with_ai: withAI })
+          body: JSON.stringify({ 
+            url, 
+            type: feedType, 
+            with_ai: withAI 
+          })
         });
 
         const parseTime = Date.now() - startTime;
 
         if (!response.ok) {
-          throw new Error(await response.text());
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP ${response.status}`);
         }
 
         const data = await response.json();
@@ -161,50 +564,106 @@ const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:500
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('results-section').classList.remove('hidden');
 
-        document.getElementById('events-count').textContent = data.events?.length || 0;
+        // Update stats
+        const eventsCount = data.events?.length || 0;
+        document.getElementById('events-count').textContent = eventsCount;
         document.getElementById('parse-time').textContent = `${parseTime}ms`;
         document.getElementById('detected-type').textContent = data.detected_type || feedType;
         
+        // Update status badge
         const statusEl = document.getElementById('result-status');
-        if (data.events?.length > 0) {
-          statusEl.textContent = 'Erfolgreich';
-          statusEl.className = 'text-sm px-3 py-1 rounded-full bg-green-100 text-green-800';
+        if (eventsCount > 0) {
+          statusEl.innerHTML = '<span class="status-icon text-green-500">●</span><span class="status-text">Erfolgreich</span>';
+          statusEl.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800';
         } else {
-          statusEl.textContent = 'Keine Events';
-          statusEl.className = 'text-sm px-3 py-1 rounded-full bg-yellow-100 text-yellow-800';
+          statusEl.innerHTML = '<span class="status-icon text-yellow-500">●</span><span class="status-text">Keine Events</span>';
+          statusEl.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800';
         }
 
-        const previewEl = document.getElementById('events-preview');
-        if (data.events?.length > 0) {
-          previewEl.innerHTML = data.events.slice(0, 10).map((event, i) => `
-            <div class="p-4 border-b last:border-b-0 hover:bg-gray-50">
-              <div class="font-medium text-gray-900">${i + 1}. ${event.title || 'Kein Titel'}</div>
-              <div class="text-sm text-gray-500 mt-1">
-                ${event.start_datetime ? new Date(event.start_datetime).toLocaleDateString('de-DE') : 'Kein Datum'}
-              </div>
-            </div>
-          `).join('');
-        } else {
-          previewEl.innerHTML = '<div class="p-4 text-gray-500 text-center">Keine Events gefunden</div>';
-        }
+        // Render events
+        renderEvents(data.events);
 
-        document.getElementById('raw-data').textContent = JSON.stringify(data, null, 2);
+        // Render JSON
+        document.getElementById('raw-data').innerHTML = syntaxHighlight(data);
+
+        // Show events tab by default
+        switchTab('events');
 
       } catch (error) {
         document.getElementById('loading').classList.add('hidden');
-        document.getElementById('error-section').classList.remove('hidden');
+        document.getElementById('results-section').classList.remove('hidden');
+        
+        // Show error tab
+        document.getElementById('error-tab').classList.remove('hidden');
         document.getElementById('error-message').textContent = error.message;
+        
+        // Update status
+        const statusEl = document.getElementById('result-status');
+        statusEl.innerHTML = '<span class="status-icon text-red-500">●</span><span class="status-text">Fehler</span>';
+        statusEl.className = 'inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-red-100 text-red-800';
+        
+        document.getElementById('events-count').textContent = '0';
+        document.getElementById('parse-time').textContent = '-';
+        document.getElementById('detected-type').textContent = '-';
+        
+        // Clear events and JSON
+        document.getElementById('events-list').innerHTML = '';
+        document.getElementById('no-events').classList.add('hidden');
+        document.getElementById('events-badge').classList.add('hidden');
+        document.getElementById('raw-data').innerHTML = syntaxHighlight({ error: error.message });
+        
+        // Switch to error tab
+        switchTab('error');
+      } finally {
+        testBtn.disabled = false;
       }
     }
 
-    document.getElementById('test-btn')?.addEventListener('click', () => runTest(false));
-    document.getElementById('test-ai-btn')?.addEventListener('click', () => runTest(true));
+    // Event listeners
+    document.getElementById('test-btn')?.addEventListener('click', runTest);
 
-    document.getElementById('copy-json')?.addEventListener('click', () => {
-      if (lastResult) {
-        navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
-        alert('JSON kopiert!');
+    // Enter key in URL input
+    document.getElementById('test-url')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        runTest();
       }
     });
+
+    // Copy JSON
+    document.getElementById('copy-json')?.addEventListener('click', () => {
+      if (lastResult) {
+        navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2))
+          .then(() => {
+            const btn = document.getElementById('copy-json');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Kopiert!
+            `;
+            btn.classList.add('bg-green-600');
+            btn.classList.remove('bg-primary-600');
+            setTimeout(() => {
+              btn.innerHTML = originalText;
+              btn.classList.remove('bg-green-600');
+              btn.classList.add('bg-primary-600');
+            }, 2000);
+          });
+      }
+    });
+
+    // Expand/Collapse all JSON
+    document.getElementById('expand-all')?.addEventListener('click', () => {
+      document.querySelectorAll('.json-collapsible').forEach(el => {
+        el.classList.remove('collapsed');
+      });
+    });
+
+    document.getElementById('collapse-all')?.addEventListener('click', () => {
+      document.querySelectorAll('.json-collapsible').forEach(el => {
+        el.classList.add('collapsed');
+      });
+    });
   </script>
-</BaseLayout>
+</AdminLayout>

@@ -1,133 +1,342 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Quellen-Status - Admin - kiezling">
-  <StickyHeader />
-  <main class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
-        <h1 class="text-2xl font-bold text-gray-900">Quellen-Status</h1>
-        <p class="text-gray-500">Übersicht und Gesundheit aller Datenquellen</p>
-      </header>
+<AdminLayout title="Quellen - kiezling Admin" currentPage="sources">
+  <!-- Header Section -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Quellen</h1>
+      <p class="text-gray-500 text-sm mt-1">Verwaltung und Status aller Datenquellen</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button 
+        id="trigger-all-btn" 
+        class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium flex items-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Trigger All
+      </button>
+      <button 
+        id="add-source-btn" 
+        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex items-center gap-2"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        + Neue Quelle
+      </button>
+    </div>
+  </div>
 
-      <!-- Summary Cards -->
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-        <div class="bg-white rounded-xl p-4 border-l-4 border-green-500">
-          <span id="healthy-count" class="block text-2xl font-bold text-green-600">--</span>
-          <span class="text-sm text-gray-500">Gesund</span>
-        </div>
-        <div class="bg-white rounded-xl p-4 border-l-4 border-yellow-500">
-          <span id="degraded-count" class="block text-2xl font-bold text-yellow-600">--</span>
-          <span class="text-sm text-gray-500">Eingeschränkt</span>
-        </div>
-        <div class="bg-white rounded-xl p-4 border-l-4 border-orange-500">
-          <span id="failing-count" class="block text-2xl font-bold text-orange-600">--</span>
-          <span class="text-sm text-gray-500">Fehlerhaft</span>
-        </div>
-        <div class="bg-white rounded-xl p-4 border-l-4 border-red-500">
-          <span id="dead-count" class="block text-2xl font-bold text-red-600">--</span>
-          <span class="text-sm text-gray-500">Tot</span>
-        </div>
-        <div class="bg-white rounded-xl p-4 border-l-4 border-gray-400">
-          <span id="unknown-count" class="block text-2xl font-bold text-gray-500">--</span>
-          <span class="text-sm text-gray-500">Unbekannt</span>
-        </div>
-      </div>
+  <!-- Search and Filter Row -->
+  <div class="flex flex-col sm:flex-row gap-4 mb-6">
+    <div class="flex-1 relative">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input 
+        id="search-input" 
+        type="text" 
+        placeholder="Suche nach Name oder URL..." 
+        class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm"
+      />
+    </div>
+    <select 
+      id="status-filter" 
+      class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm bg-white min-w-[150px]"
+    >
+      <option value="all">Alle Status</option>
+      <option value="healthy">Healthy</option>
+      <option value="degraded">Degraded</option>
+      <option value="failing">Failing</option>
+      <option value="dead">Dead</option>
+      <option value="unknown">Unknown</option>
+    </select>
+  </div>
 
-      <!-- Loading State -->
-      <div id="loading-state" class="text-center py-12">
-        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-        <p class="text-gray-500 mt-4">Lade Quellen...</p>
-      </div>
-
-      <!-- Source Table -->
-      <div class="bg-white rounded-xl shadow-sm overflow-hidden hidden" id="source-table">
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quelle</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Typ</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Letzter Erfolg</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events/Fetch</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fehler</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aktionen</th>
-              </tr>
-            </thead>
-            <tbody id="source-tbody" class="divide-y divide-gray-200"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Detail Panel (Slide-over) -->
-      <div class="fixed inset-0 bg-black/50 hidden z-50" id="detail-overlay">
-        <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
-          <div class="p-4 border-b flex items-center justify-between">
-            <h2 id="panel-title" class="text-lg font-semibold">Quelle</h2>
-            <button id="panel-close" class="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
-          </div>
-          
-          <div class="flex-1 overflow-y-auto p-4 space-y-6">
-            <!-- Status & Info -->
-            <div>
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Info</h3>
-              <div id="panel-info" class="space-y-2"></div>
-            </div>
-
-            <!-- Error Info -->
-            <div id="panel-error-section" class="hidden">
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Letzter Fehler</h3>
-              <div id="panel-error" class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700"></div>
-            </div>
-
-            <!-- Recent Fetches -->
-            <div>
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Letzte Fetches</h3>
-              <div id="panel-fetches" class="space-y-2 text-sm text-gray-500">Keine Daten</div>
-            </div>
-          </div>
-
-          <!-- Import Status -->
-          <div id="panel-run-status" class="hidden px-4 py-3 bg-gray-50 border-t">
-            <div class="flex items-center gap-2">
-              <span id="panel-run-indicator" class="animate-pulse text-blue-500">●</span>
-              <span id="panel-run-label" class="text-sm font-medium">Import läuft...</span>
-            </div>
-            <div id="panel-run-counts" class="text-xs text-gray-500 mt-1 hidden"></div>
-          </div>
-
-          <div class="p-4 border-t flex flex-wrap gap-2">
-            <button id="trigger-btn" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed">
-              🔄 Jetzt abrufen
-            </button>
-            <button id="toggle-btn" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-              ⏸️ Deaktivieren
-            </button>
-          </div>
+  <!-- Summary Stats Row -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+    <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+        <div>
+          <span id="healthy-count" class="block text-xl font-bold text-green-600">--</span>
+          <span class="text-xs text-gray-500">Healthy</span>
         </div>
       </div>
     </div>
-  </main>
-</BaseLayout>
+    <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+        <div>
+          <span id="degraded-count" class="block text-xl font-bold text-yellow-600">--</span>
+          <span class="text-xs text-gray-500">Degraded</span>
+        </div>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-orange-500"></div>
+        <div>
+          <span id="failing-count" class="block text-xl font-bold text-orange-600">--</span>
+          <span class="text-xs text-gray-500">Failing</span>
+        </div>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+        <div>
+          <span id="dead-count" class="block text-xl font-bold text-red-600">--</span>
+          <span class="text-xs text-gray-500">Dead</span>
+        </div>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-gray-400"></div>
+        <div>
+          <span id="unknown-count" class="block text-xl font-bold text-gray-500">--</span>
+          <span class="text-xs text-gray-500">Unknown</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loading-state" class="text-center py-12">
+    <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+    <p class="text-gray-500 mt-4">Lade Quellen...</p>
+  </div>
+
+  <!-- Empty State -->
+  <div id="empty-state" class="hidden text-center py-12 bg-white rounded-xl border border-gray-200">
+    <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+    <h3 class="text-lg font-medium text-gray-900 mb-1">Keine Quellen gefunden</h3>
+    <p class="text-gray-500 text-sm">Passen Sie die Filter an oder fügen Sie eine neue Quelle hinzu.</p>
+  </div>
+
+  <!-- Sources Table -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hidden" id="source-table">
+    <div class="overflow-x-auto">
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="w-8 px-4 py-3"></th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Quelle</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Typ</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Letzter Erfolg</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Events/Fetch</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Fehler</th>
+          </tr>
+        </thead>
+        <tbody id="source-tbody" class="divide-y divide-gray-100"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="edit-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="p-4 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+        <h2 id="modal-title" class="text-lg font-semibold text-gray-900">Quelle bearbeiten</h2>
+        <button id="modal-close" class="p-1 hover:bg-gray-100 rounded-lg transition">
+          <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="edit-form" class="p-4 space-y-4">
+        <input type="hidden" id="edit-id" />
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+          <input 
+            type="text" 
+            id="edit-name" 
+            required
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm"
+          />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">URL *</label>
+          <input 
+            type="url" 
+            id="edit-url" 
+            required
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm"
+          />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Typ</label>
+          <select 
+            id="edit-type"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm bg-white"
+          >
+            <option value="rss">RSS</option>
+            <option value="html">HTML</option>
+            <option value="ics">ICS</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Priorität</label>
+          <input 
+            type="number" 
+            id="edit-priority" 
+            min="1" 
+            max="10"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Fetch Interval (Minuten)</label>
+          <input 
+            type="number" 
+            id="edit-interval" 
+            min="5"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition text-sm"
+          />
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <input 
+            type="checkbox" 
+            id="edit-active" 
+            class="w-4 h-4 text-primary-500 border-gray-300 rounded focus:ring-primary-500"
+          />
+          <label for="edit-active" class="text-sm font-medium text-gray-700">Aktiv</label>
+        </div>
+        
+        <div class="flex gap-2 pt-4 border-t border-gray-200">
+          <button 
+            type="button" 
+            id="modal-cancel" 
+            class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+          >
+            Abbrechen
+          </button>
+          <button 
+            type="submit" 
+            class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium"
+          >
+            Speichern
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="delete-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-sm">
+      <div class="p-6 text-center">
+        <div class="w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+          <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Quelle löschen?</h3>
+        <p id="delete-message" class="text-sm text-gray-500 mb-6">
+          Möchten Sie diese Quelle wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.
+        </p>
+        <div class="flex gap-2">
+          <button 
+            id="delete-cancel" 
+            class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+          >
+            Abbrechen
+          </button>
+          <button 
+            id="delete-confirm" 
+            class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium"
+          >
+            Löschen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .source-row.expanded .expand-chevron {
+    transform: rotate(180deg);
+  }
+  
+  .source-row .expanded-content {
+    display: none;
+  }
+  
+  .source-row.expanded .expanded-content {
+    display: table-row;
+  }
+  
+  .type-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 0.375rem;
+    text-transform: uppercase;
+  }
+  
+  .type-badge.rss { background: #dbeafe; color: #1e40af; }
+  .type-badge.html { background: #fef3c7; color: #92400e; }
+  .type-badge.ics { background: #d1fae5; color: #065f46; }
+  
+  .status-dot {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+  
+  .status-dot.healthy { background: #22c55e; }
+  .status-dot.degraded { background: #eab308; }
+  .status-dot.failing { background: #f97316; }
+  .status-dot.dead { background: #ef4444; }
+  .status-dot.unknown { background: #9ca3af; }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  .animate-spin-slow {
+    animation: spin 1s linear infinite;
+  }
+</style>
 
 <script is:inline define:vars={{ API_URL }}>
   let sources = [];
-  let currentSourceId = null;
-  let activePolling = {}; // Track active polling intervals by source ID
+  let filteredSources = [];
+  let expandedRows = new Set();
+  let activePolling = {};
+  let deleteSourceId = null;
   const token = localStorage.getItem('auth_token');
 
-  // Auth check
-  if (!token) {
-    window.location.href = '/login?redirect=/admin/sources';
-  }
+  // Status config
+  const statusConfig = {
+    healthy: { color: 'green', label: 'Healthy', dotClass: 'healthy' },
+    degraded: { color: 'yellow', label: 'Degraded', dotClass: 'degraded' },
+    failing: { color: 'orange', label: 'Failing', dotClass: 'failing' },
+    dead: { color: 'red', label: 'Dead', dotClass: 'dead' },
+    unknown: { color: 'gray', label: 'Unknown', dotClass: 'unknown' },
+  };
 
-  // Fetch helper
+  // API helper
   async function apiFetch(endpoint, options = {}) {
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -142,34 +351,54 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       window.location.href = '/login?redirect=/admin/sources';
       throw new Error('Unauthorized');
     }
-    return res.json();
+    const data = await res.json();
+    // Throw error for non-success responses so they're caught in try/catch
+    if (!res.ok && data.error) {
+      throw new Error(data.error.message || `HTTP ${res.status}`);
+    }
+    return data;
   }
 
-  // Status display helpers
-  const runStatusLabels = {
-    running: 'Läuft...',
-    success: 'Erfolgreich',
-    partial: 'Teilweise erfolgreich',
-    failed: 'Fehlgeschlagen',
-  };
+  // Format relative time
+  function formatRelativeTime(dateStr) {
+    if (!dateStr) return 'Nie';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'Gerade eben';
+    if (diffMins < 60) return `vor ${diffMins} Min.`;
+    if (diffHours < 24) return `vor ${diffHours} Std.`;
+    if (diffDays < 7) return `vor ${diffDays} Tagen`;
+    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  }
 
-  const runStatusColors = {
-    running: 'bg-blue-100 text-blue-700',
-    success: 'bg-green-100 text-green-700',
-    partial: 'bg-yellow-100 text-yellow-700',
-    failed: 'bg-red-100 text-red-700',
-  };
+  // Format full date
+  function formatFullDate(dateStr) {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
 
   // Load sources
   async function loadSources() {
     document.getElementById('loading-state').classList.remove('hidden');
     document.getElementById('source-table').classList.add('hidden');
+    document.getElementById('empty-state').classList.add('hidden');
 
     try {
       const data = await apiFetch('/api/sources');
       sources = data.data || [];
       
-      // Count by health status
+      // Count by status
       const counts = { healthy: 0, degraded: 0, failing: 0, dead: 0, unknown: 0 };
       sources.forEach(s => {
         const status = s.health_status || 'unknown';
@@ -182,8 +411,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       document.getElementById('dead-count').textContent = counts.dead;
       document.getElementById('unknown-count').textContent = counts.unknown;
 
-      renderTable();
-      document.getElementById('source-table').classList.remove('hidden');
+      applyFilters();
     } catch (e) {
       console.error('Load error:', e);
     } finally {
@@ -191,180 +419,352 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
+  // Apply filters
+  function applyFilters() {
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const statusFilter = document.getElementById('status-filter').value;
+
+    filteredSources = sources.filter(source => {
+      const matchesSearch = !searchTerm || 
+        source.name?.toLowerCase().includes(searchTerm) ||
+        source.url?.toLowerCase().includes(searchTerm);
+      
+      const matchesStatus = statusFilter === 'all' || 
+        (source.health_status || 'unknown') === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+
+    renderTable();
+  }
+
   // Render table
   function renderTable() {
     const tbody = document.getElementById('source-tbody');
-    tbody.innerHTML = sources.map(source => {
-      const lastSuccess = source.last_success_at 
-        ? new Date(source.last_success_at).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-        : 'Nie';
-      
-      const statusColors = {
-        healthy: 'bg-green-100 text-green-700',
-        degraded: 'bg-yellow-100 text-yellow-700',
-        failing: 'bg-orange-100 text-orange-700',
-        dead: 'bg-red-100 text-red-700',
-        unknown: 'bg-gray-100 text-gray-600',
-      };
-      const statusLabels = {
-        healthy: 'Gesund',
-        degraded: 'Eingeschränkt',
-        failing: 'Fehlerhaft',
-        dead: 'Tot',
-        unknown: 'Unbekannt',
-      };
+    
+    if (filteredSources.length === 0) {
+      document.getElementById('source-table').classList.add('hidden');
+      document.getElementById('empty-state').classList.remove('hidden');
+      return;
+    }
+
+    document.getElementById('source-table').classList.remove('hidden');
+    document.getElementById('empty-state').classList.add('hidden');
+
+    tbody.innerHTML = filteredSources.map(source => {
       const status = source.health_status || 'unknown';
+      const config = statusConfig[status];
+      const isExpanded = expandedRows.has(source.id);
       const isActive = source.is_active !== false;
+      const lastSuccess = formatRelativeTime(source.last_success_at);
+      const avgEvents = source.avg_events_per_fetch?.toFixed(1) || '-';
+      const errorCount = source.consecutive_failures || 0;
 
       return `
-        <tr class="hover:bg-gray-50 cursor-pointer ${!isActive ? 'opacity-50' : ''}" data-id="${source.id}">
+        <tr class="source-row hover:bg-gray-50 cursor-pointer ${isExpanded ? 'expanded' : ''} ${!isActive ? 'opacity-60' : ''}" data-id="${source.id}">
           <td class="px-4 py-3">
-            <span class="px-2 py-1 text-xs rounded-full ${statusColors[status]}">
-              ${statusLabels[status]}
-            </span>
-            ${!isActive ? '<span class="ml-1 px-2 py-1 text-xs rounded-full bg-gray-200 text-gray-600">Deaktiviert</span>' : ''}
+            <button class="expand-btn p-1 hover:bg-gray-200 rounded transition-transform ${isExpanded ? 'rotate-180' : ''}" data-id="${source.id}">
+              <svg class="expand-chevron w-4 h-4 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
           </td>
-          <td class="px-4 py-3 font-medium">${source.name}</td>
           <td class="px-4 py-3">
-            <span class="px-2 py-1 text-xs rounded bg-gray-100 uppercase">${source.type}</span>
+            <div class="flex items-center gap-2">
+              <div class="status-dot ${config.dotClass}"></div>
+              ${!isActive ? '<span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inaktiv</span>' : ''}
+            </div>
           </td>
-          <td class="px-4 py-3 text-sm text-gray-500">${lastSuccess}</td>
-          <td class="px-4 py-3 text-sm">${source.avg_events_per_fetch?.toFixed(1) || '-'}</td>
           <td class="px-4 py-3">
-            ${source.consecutive_failures > 0 
-              ? `<span class="text-red-600 font-medium">${source.consecutive_failures}</span>` 
+            <span class="font-medium text-gray-900">${source.name}</span>
+          </td>
+          <td class="px-4 py-3">
+            <span class="type-badge ${source.type}">${source.type}</span>
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-600">${lastSuccess}</td>
+          <td class="px-4 py-3 text-sm text-gray-600">${avgEvents}</td>
+          <td class="px-4 py-3">
+            ${errorCount > 0 
+              ? `<span class="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded-full">${errorCount}</span>` 
               : '<span class="text-gray-400">0</span>'
             }
           </td>
-          <td class="px-4 py-3">
-            <button class="trigger-btn px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm" data-id="${source.id}" ${!isActive ? 'disabled' : ''}>
-              🔄
-            </button>
+        </tr>
+        <tr class="expanded-content bg-gray-50 ${isExpanded ? '' : 'hidden'}" data-expanded-for="${source.id}">
+          <td colspan="7" class="px-4 py-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Left Column: Details -->
+              <div class="space-y-4">
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Details</h4>
+                  <div class="bg-white rounded-lg border border-gray-200 p-3 space-y-2 text-sm">
+                    <div class="flex justify-between">
+                      <span class="text-gray-500">URL:</span>
+                      <a href="${source.url}" target="_blank" class="text-primary-600 hover:text-primary-700 truncate max-w-[250px]" title="${source.url}">${source.url}</a>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-500">Nächster Fetch:</span>
+                      <span class="text-gray-900">${source.next_fetch_at ? formatFullDate(source.next_fetch_at) : 'Nicht geplant'}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-gray-500">Priorität:</span>
+                      <span class="text-gray-900">${source.priority || '-'}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                ${source.consecutive_failures > 0 ? `
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Letzter Fehler</h4>
+                  <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                    ${source.last_error || `${source.consecutive_failures} aufeinanderfolgende Fehler`}
+                  </div>
+                </div>
+                ` : ''}
+
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Letzte Fetches</h4>
+                  <div id="fetch-history-${source.id}" class="bg-white rounded-lg border border-gray-200 p-3 text-sm text-gray-500">
+                    Lade...
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Right Column: Actions -->
+              <div>
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Aktionen</h4>
+                <div class="bg-white rounded-lg border border-gray-200 p-3 space-y-3">
+                  <!-- Import Status -->
+                  <div id="import-status-${source.id}" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                    <div class="flex items-center gap-2">
+                      <svg class="w-4 h-4 text-blue-500 animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span class="text-sm font-medium text-blue-700">Import läuft...</span>
+                    </div>
+                    <div id="import-details-${source.id}" class="text-xs text-blue-600 mt-1"></div>
+                  </div>
+
+                  <button 
+                    class="trigger-btn w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-id="${source.id}"
+                    ${!isActive ? 'disabled' : ''}
+                  >
+                    <svg class="trigger-icon w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span class="trigger-text">Jetzt abrufen</span>
+                  </button>
+                  
+                  <button 
+                    class="edit-btn w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                    data-id="${source.id}"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Bearbeiten
+                  </button>
+                  
+                  <div class="flex items-center justify-between py-2 px-1">
+                    <span class="text-sm text-gray-700">Aktiv</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        class="toggle-active sr-only peer" 
+                        data-id="${source.id}"
+                        ${isActive ? 'checked' : ''}
+                      />
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                    </label>
+                  </div>
+                  
+                  <button 
+                    class="delete-btn w-full flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition text-sm font-medium"
+                    data-id="${source.id}"
+                    data-name="${source.name}"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Löschen
+                  </button>
+                </div>
+              </div>
+            </div>
           </td>
         </tr>
       `;
     }).join('');
 
-    // Event handlers
-    tbody.querySelectorAll('tr[data-id]').forEach(row => {
+    // Attach event listeners
+    attachRowEventListeners();
+    
+    // Load fetch history for expanded rows
+    expandedRows.forEach(id => loadFetchHistory(id));
+  }
+
+  // Attach event listeners to table rows
+  function attachRowEventListeners() {
+    // Expand buttons
+    document.querySelectorAll('.expand-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleRowExpand(btn.dataset.id);
+      });
+    });
+
+    // Row click to expand
+    document.querySelectorAll('.source-row').forEach(row => {
       row.addEventListener('click', (e) => {
-        if (!e.target.closest('.trigger-btn')) {
-          openPanel(row.dataset.id);
+        if (!e.target.closest('button') && !e.target.closest('input') && !e.target.closest('a') && !e.target.closest('label')) {
+          toggleRowExpand(row.dataset.id);
         }
       });
     });
 
-    tbody.querySelectorAll('.trigger-btn').forEach(btn => {
+    // Trigger buttons
+    document.querySelectorAll('.trigger-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         triggerFetch(btn.dataset.id, btn);
       });
     });
+
+    // Edit buttons
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditModal(btn.dataset.id);
+      });
+    });
+
+    // Delete buttons
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openDeleteModal(btn.dataset.id, btn.dataset.name);
+      });
+    });
+
+    // Toggle active switches
+    document.querySelectorAll('.toggle-active').forEach(toggle => {
+      toggle.addEventListener('change', (e) => {
+        e.stopPropagation();
+        toggleActive(toggle.dataset.id, toggle.checked);
+      });
+    });
   }
 
-  // Open detail panel
-  function openPanel(id) {
-    currentSourceId = id;
+  // Toggle row expansion
+  function toggleRowExpand(id) {
+    const row = document.querySelector(`.source-row[data-id="${id}"]`);
+    const expandedRow = document.querySelector(`tr[data-expanded-for="${id}"]`);
+    
+    if (expandedRows.has(id)) {
+      expandedRows.delete(id);
+      row?.classList.remove('expanded');
+      expandedRow?.classList.add('hidden');
+    } else {
+      expandedRows.add(id);
+      row?.classList.add('expanded');
+      expandedRow?.classList.remove('hidden');
+      loadFetchHistory(id);
+    }
+  }
+
+  // Load fetch history for a source
+  async function loadFetchHistory(sourceId) {
+    const historyEl = document.getElementById(`fetch-history-${sourceId}`);
+    if (!historyEl) return;
+
+    try {
+      const data = await apiFetch(`/api/admin/ingest-runs?source_id=${sourceId}&limit=5`);
+      const runs = data.data || [];
+
+      if (runs.length === 0) {
+        historyEl.innerHTML = '<span class="text-gray-400">Keine Fetches vorhanden</span>';
+        return;
+      }
+
+      historyEl.innerHTML = runs.map(run => {
+        const statusColors = {
+          success: 'bg-green-100 text-green-700',
+          partial: 'bg-yellow-100 text-yellow-700',
+          failed: 'bg-red-100 text-red-700',
+          running: 'bg-blue-100 text-blue-700',
+        };
+        const statusColor = statusColors[run.status] || 'bg-gray-100 text-gray-700';
+        const date = formatRelativeTime(run.started_at);
+        const eventsInfo = run.status === 'running' ? 'Läuft...' : 
+          `${run.events_created || 0} neu, ${run.events_updated || 0} aktualisiert`;
+
+        return `
+          <div class="flex items-center justify-between py-1 ${runs.indexOf(run) > 0 ? 'border-t border-gray-100' : ''}">
+            <span class="text-gray-600">${date}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs">${eventsInfo}</span>
+              <span class="px-2 py-0.5 text-xs rounded-full ${statusColor}">${run.status}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      historyEl.innerHTML = '<span class="text-red-500">Fehler beim Laden</span>';
+    }
+  }
+
+  // Trigger fetch for a source
+  async function triggerFetch(id, btn) {
     const source = sources.find(s => s.id === id);
-    if (!source) return;
+    const sourceName = source?.name || 'diese Quelle';
 
-    document.getElementById('panel-title').textContent = source.name;
+    const triggerIcon = btn.querySelector('.trigger-icon');
+    const triggerText = btn.querySelector('.trigger-text');
+    const importStatus = document.getElementById(`import-status-${id}`);
+    const importDetails = document.getElementById(`import-details-${id}`);
     
-    const isActive = source.is_active !== false;
-    document.getElementById('toggle-btn').textContent = isActive ? '⏸️ Deaktivieren' : '▶️ Aktivieren';
-    document.getElementById('toggle-btn').className = isActive 
-      ? 'flex-1 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50'
-      : 'flex-1 px-4 py-2 border border-green-300 text-green-600 rounded-lg hover:bg-green-50';
+    // Show loading state
+    btn.disabled = true;
+    triggerIcon?.classList.add('animate-spin-slow');
+    triggerText.textContent = 'Wird gestartet...';
 
-    const formatDate = d => d ? new Date(d).toLocaleString('de-DE') : '-';
-    document.getElementById('panel-info').innerHTML = `
-      <div class="grid grid-cols-2 gap-2 text-sm">
-        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Typ</span><strong>${source.type}</strong></div>
-        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Status</span><strong>${source.health_status}</strong></div>
-        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Aktiv</span><strong>${isActive ? 'Ja' : 'Nein'}</strong></div>
-        <div class="bg-gray-50 p-2 rounded"><span class="text-gray-500 block">Priorität</span><strong>${source.priority || '-'}</strong></div>
-        <div class="bg-gray-50 p-2 rounded col-span-2"><span class="text-gray-500 block">Letzter Erfolg</span><strong>${formatDate(source.last_success_at)}</strong></div>
-        <div class="bg-gray-50 p-2 rounded col-span-2"><span class="text-gray-500 block">Letzter Fehler</span><strong>${formatDate(source.last_failure_at)}</strong></div>
-        ${source.url ? `<div class="bg-gray-50 p-2 rounded col-span-2"><span class="text-gray-500 block">URL</span><a href="${source.url}" target="_blank" class="text-primary-500 break-all">${source.url}</a></div>` : ''}
-      </div>
-    `;
-
-    // Error section
-    if (source.consecutive_failures > 0) {
-      document.getElementById('panel-error-section').classList.remove('hidden');
-      document.getElementById('panel-error').textContent = `${source.consecutive_failures} aufeinanderfolgende Fehler`;
-    } else {
-      document.getElementById('panel-error-section').classList.add('hidden');
-    }
-
-    document.getElementById('detail-overlay').classList.remove('hidden');
-  }
-
-  // Close panel
-  function closePanel() {
-    document.getElementById('detail-overlay').classList.add('hidden');
-    currentSourceId = null;
-  }
-
-  // Show run status in UI
-  function showRunStatus(sourceId, runData) {
-    const statusEl = document.getElementById(`run-status-${sourceId}`);
-    if (!statusEl) return;
-
-    const status = runData.status || 'running';
-    const label = runStatusLabels[status] || status;
-    const colorClass = runStatusColors[status] || 'bg-gray-100 text-gray-700';
-
-    let content = `<span class="px-2 py-1 text-xs rounded-full ${colorClass}">${label}</span>`;
-    
-    if (status === 'running') {
-      content += ' <span class="animate-pulse">●</span>';
-    } else {
-      // Show counts
-      const counts = [];
-      if (runData.events_created > 0) counts.push(`${runData.events_created} neu`);
-      if (runData.events_updated > 0) counts.push(`${runData.events_updated} aktualisiert`);
-      if (runData.events_skipped > 0) counts.push(`${runData.events_skipped} übersprungen`);
-      if (counts.length > 0) {
-        content += ` <span class="text-xs text-gray-500">(${counts.join(', ')})</span>`;
+    try {
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
+      
+      if (response.success && response.data?.ingest_run_id) {
+        // Show import status
+        importStatus?.classList.remove('hidden');
+        importDetails.textContent = '';
+        
+        // Start polling for status
+        pollRunStatus(id, response.data.ingest_run_id);
+      } else {
+        // Show detailed error for debugging
+        const errorDetail = response.error || response.message || JSON.stringify(response);
+        console.error('Trigger response:', response);
+        alert(`Import fehlgeschlagen: ${errorDetail}`);
       }
-      if (runData.error_message) {
-        content += ` <span class="text-xs text-red-500" title="${runData.error_message}">⚠️</span>`;
-      }
+    } catch (e) {
+      alert('Fehler beim Starten: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      triggerIcon?.classList.remove('animate-spin-slow');
+      triggerText.textContent = 'Jetzt abrufen';
     }
-
-    statusEl.innerHTML = content;
-    statusEl.classList.remove('hidden');
   }
 
   // Poll for run status
   async function pollRunStatus(sourceId, runId) {
-    // Clear any existing polling for this source
     if (activePolling[sourceId]) {
       clearInterval(activePolling[sourceId]);
     }
 
-    // Create status element if it doesn't exist
-    let statusEl = document.getElementById(`run-status-${sourceId}`);
-    if (!statusEl) {
-      const row = document.querySelector(`tr[data-id="${sourceId}"]`);
-      if (row) {
-        const actionsCell = row.querySelector('td:last-child');
-        if (actionsCell) {
-          statusEl = document.createElement('div');
-          statusEl.id = `run-status-${sourceId}`;
-          statusEl.className = 'mt-1 text-xs';
-          actionsCell.appendChild(statusEl);
-        }
-      }
-    }
+    const importStatus = document.getElementById(`import-status-${sourceId}`);
+    const importDetails = document.getElementById(`import-details-${sourceId}`);
 
-    // Initial status
-    showRunStatus(sourceId, { status: 'running' });
-
-    // Poll every 2 seconds
     let pollCount = 0;
-    const maxPolls = 60; // Max 2 minutes
+    const maxPolls = 60;
 
     activePolling[sourceId] = setInterval(async () => {
       pollCount++;
@@ -372,7 +772,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       if (pollCount > maxPolls) {
         clearInterval(activePolling[sourceId]);
         delete activePolling[sourceId];
-        showRunStatus(sourceId, { status: 'unknown', error_message: 'Timeout - prüfen Sie die Runs-Seite' });
+        if (importStatus) {
+          importStatus.innerHTML = `
+            <div class="flex items-center gap-2">
+              <span class="text-yellow-600">⚠</span>
+              <span class="text-sm font-medium text-yellow-700">Timeout - Status unbekannt</span>
+            </div>
+          `;
+        }
         return;
       }
 
@@ -380,243 +787,225 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         const data = await apiFetch(`/api/admin/ingest-runs/${runId}`);
         const run = data.data;
         
-        showRunStatus(sourceId, run);
-
-        // Stop polling if run is complete
         if (['success', 'partial', 'failed'].includes(run.status)) {
           clearInterval(activePolling[sourceId]);
           delete activePolling[sourceId];
           
-          // Reload sources to update health status
-          setTimeout(() => loadSources(), 1000);
+          const statusConfig = {
+            success: { icon: '✓', color: 'green', label: 'Erfolgreich' },
+            partial: { icon: '⚠', color: 'yellow', label: 'Teilweise erfolgreich' },
+            failed: { icon: '✕', color: 'red', label: 'Fehlgeschlagen' },
+          };
+          const config = statusConfig[run.status];
+          
+          if (importStatus) {
+            importStatus.className = `bg-${config.color}-50 border border-${config.color}-200 rounded-lg p-3 mb-3`;
+            importStatus.innerHTML = `
+              <div class="flex items-center gap-2">
+                <span class="text-${config.color}-600">${config.icon}</span>
+                <span class="text-sm font-medium text-${config.color}-700">${config.label}</span>
+              </div>
+              <div class="text-xs text-${config.color}-600 mt-1">
+                ${run.events_created || 0} neu | ${run.events_updated || 0} aktualisiert | ${run.events_skipped || 0} übersprungen
+              </div>
+            `;
+          }
+          
+          // Reload after a short delay
+          setTimeout(() => {
+            loadSources();
+            loadFetchHistory(sourceId);
+          }, 2000);
+        } else {
+          // Still running - update details
+          if (importDetails) {
+            importDetails.textContent = `${run.events_found || 0} Events gefunden...`;
+          }
         }
       } catch (e) {
         console.error('Poll error:', e);
-        // Continue polling even on error
       }
     }, 2000);
   }
 
-  // Trigger fetch with confirmation and live feedback
-  async function triggerFetch(id, btn) {
-    const source = sources.find(s => s.id === id);
-    const sourceName = source?.name || 'diese Quelle';
-    
-    if (!confirm(`Import für "${sourceName}" jetzt starten?\n\nDies crawlt die Quelle und importiert neue Events.`)) {
-      return;
-    }
-    
-    const originalText = btn?.innerHTML;
-    if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="animate-spin inline-block">⏳</span>';
-    }
-
+  // Toggle active status
+  async function toggleActive(id, isActive) {
     try {
-      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
-      
-      if (response.success && response.data?.ingest_run_id) {
-        // Start polling for status
-        pollRunStatus(id, response.data.ingest_run_id);
-      } else {
-        alert('Import gestartet, aber keine Run-ID erhalten.');
-      }
+      await apiFetch(`/api/sources/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: isActive }),
+      });
+      loadSources();
     } catch (e) {
-      alert('Fehler beim Starten: ' + e.message);
-      // Clear any status display
-      const statusEl = document.getElementById(`run-status-${id}`);
-      if (statusEl) statusEl.classList.add('hidden');
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-      }
+      alert('Fehler: ' + e.message);
+      // Revert toggle
+      const toggle = document.querySelector(`.toggle-active[data-id="${id}"]`);
+      if (toggle) toggle.checked = !isActive;
     }
   }
 
-  // Toggle active status
-  async function toggleActive() {
-    const source = sources.find(s => s.id === currentSourceId);
-    if (!source) return;
+  // Open edit modal
+  function openEditModal(id) {
+    const source = sources.find(s => s.id === id);
+    if (!source && id !== 'new') return;
 
-    const isActive = source.is_active !== false;
-    const action = isActive ? 'deaktivieren' : 'aktivieren';
-    if (!confirm(`Quelle wirklich ${action}?`)) return;
+    const modal = document.getElementById('edit-modal');
+    const title = document.getElementById('modal-title');
+    
+    if (id === 'new') {
+      title.textContent = 'Neue Quelle erstellen';
+      document.getElementById('edit-id').value = '';
+      document.getElementById('edit-name').value = '';
+      document.getElementById('edit-url').value = '';
+      document.getElementById('edit-type').value = 'rss';
+      document.getElementById('edit-priority').value = '5';
+      document.getElementById('edit-interval').value = '60';
+      document.getElementById('edit-active').checked = true;
+    } else {
+      title.textContent = 'Quelle bearbeiten';
+      document.getElementById('edit-id').value = source.id;
+      document.getElementById('edit-name').value = source.name || '';
+      document.getElementById('edit-url').value = source.url || '';
+      document.getElementById('edit-type').value = source.type || 'rss';
+      document.getElementById('edit-priority').value = source.priority || '';
+      document.getElementById('edit-interval').value = source.fetch_interval_minutes || '';
+      document.getElementById('edit-active').checked = source.is_active !== false;
+    }
 
-    const btn = document.getElementById('toggle-btn');
-    btn.disabled = true;
-    btn.textContent = 'Wird gespeichert...';
+    modal.classList.remove('hidden');
+  }
+
+  // Close edit modal
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.add('hidden');
+  }
+
+  // Save source
+  async function saveSource(e) {
+    e.preventDefault();
+    
+    const id = document.getElementById('edit-id').value;
+    const data = {
+      name: document.getElementById('edit-name').value,
+      url: document.getElementById('edit-url').value,
+      type: document.getElementById('edit-type').value,
+      priority: parseInt(document.getElementById('edit-priority').value) || null,
+      fetch_interval_minutes: parseInt(document.getElementById('edit-interval').value) || null,
+      is_active: document.getElementById('edit-active').checked,
+    };
 
     try {
-      await apiFetch(`/api/sources/${currentSourceId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ is_active: !isActive }),
-      });
-      closePanel();
+      if (id) {
+        await apiFetch(`/api/sources/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(data),
+        });
+      } else {
+        await apiFetch('/api/sources', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+      }
+      closeEditModal();
+      loadSources();
+    } catch (e) {
+      alert('Fehler beim Speichern: ' + e.message);
+    }
+  }
+
+  // Open delete modal
+  function openDeleteModal(id, name) {
+    deleteSourceId = id;
+    document.getElementById('delete-message').textContent = 
+      `Möchten Sie "${name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`;
+    document.getElementById('delete-modal').classList.remove('hidden');
+  }
+
+  // Close delete modal
+  function closeDeleteModal() {
+    deleteSourceId = null;
+    document.getElementById('delete-modal').classList.add('hidden');
+  }
+
+  // Confirm delete
+  async function confirmDelete() {
+    if (!deleteSourceId) return;
+
+    try {
+      await apiFetch(`/api/sources/${deleteSourceId}`, { method: 'DELETE' });
+      closeDeleteModal();
+      expandedRows.delete(deleteSourceId);
+      loadSources();
+    } catch (e) {
+      alert('Fehler beim Löschen: ' + e.message);
+    }
+  }
+
+  // Trigger all enabled sources
+  async function triggerAll() {
+    if (!confirm('Möchten Sie wirklich alle aktiven Quellen abrufen? Dies kann einige Zeit dauern.')) {
+      return;
+    }
+
+    const btn = document.getElementById('trigger-all-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `
+      <svg class="w-4 h-4 animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      Wird gestartet...
+    `;
+
+    try {
+      const activeSources = sources.filter(s => s.is_active !== false);
+      let triggered = 0;
+      
+      for (const source of activeSources) {
+        try {
+          await apiFetch(`/api/sources/${source.id}/trigger`, { method: 'POST' });
+          triggered++;
+        } catch (e) {
+          console.error(`Failed to trigger ${source.name}:`, e);
+        }
+      }
+      
+      alert(`${triggered} von ${activeSources.length} Quellen wurden gestartet.`);
       loadSources();
     } catch (e) {
       alert('Fehler: ' + e.message);
     } finally {
       btn.disabled = false;
+      btn.innerHTML = originalText;
     }
-  }
-
-  // Update panel run status display
-  function updatePanelRunStatus(runData) {
-    const statusSection = document.getElementById('panel-run-status');
-    const indicator = document.getElementById('panel-run-indicator');
-    const label = document.getElementById('panel-run-label');
-    const counts = document.getElementById('panel-run-counts');
-    const triggerBtn = document.getElementById('trigger-btn');
-
-    if (!runData) {
-      statusSection.classList.add('hidden');
-      triggerBtn.disabled = false;
-      return;
-    }
-
-    statusSection.classList.remove('hidden');
-    const status = runData.status || 'running';
-
-    // Update indicator and label
-    if (status === 'running') {
-      indicator.className = 'animate-pulse text-blue-500';
-      indicator.textContent = '●';
-      label.textContent = 'Import läuft...';
-      label.className = 'text-sm font-medium text-blue-700';
-      counts.classList.add('hidden');
-      triggerBtn.disabled = true;
-    } else {
-      indicator.className = '';
-      triggerBtn.disabled = false;
-      
-      if (status === 'success') {
-        indicator.textContent = '✓';
-        indicator.className = 'text-green-500';
-        label.textContent = 'Import erfolgreich';
-        label.className = 'text-sm font-medium text-green-700';
-      } else if (status === 'partial') {
-        indicator.textContent = '⚠';
-        indicator.className = 'text-yellow-500';
-        label.textContent = 'Teilweise erfolgreich';
-        label.className = 'text-sm font-medium text-yellow-700';
-      } else if (status === 'failed') {
-        indicator.textContent = '✕';
-        indicator.className = 'text-red-500';
-        label.textContent = runData.error_message || 'Import fehlgeschlagen';
-        label.className = 'text-sm font-medium text-red-700';
-      }
-
-      // Show counts
-      const countParts = [];
-      if (runData.events_found > 0) countParts.push(`${runData.events_found} gefunden`);
-      if (runData.events_created > 0) countParts.push(`${runData.events_created} neu`);
-      if (runData.events_updated > 0) countParts.push(`${runData.events_updated} aktualisiert`);
-      if (runData.events_skipped > 0) countParts.push(`${runData.events_skipped} übersprungen`);
-      
-      if (countParts.length > 0) {
-        counts.textContent = countParts.join(' | ');
-        counts.classList.remove('hidden');
-      } else {
-        counts.classList.add('hidden');
-      }
-    }
-  }
-
-  // Poll for panel run status
-  let panelPollingInterval = null;
-  
-  async function pollPanelRunStatus(runId) {
-    if (panelPollingInterval) {
-      clearInterval(panelPollingInterval);
-    }
-
-    updatePanelRunStatus({ status: 'running' });
-
-    let pollCount = 0;
-    const maxPolls = 60;
-
-    panelPollingInterval = setInterval(async () => {
-      pollCount++;
-      
-      if (pollCount > maxPolls) {
-        clearInterval(panelPollingInterval);
-        panelPollingInterval = null;
-        updatePanelRunStatus({ status: 'failed', error_message: 'Timeout' });
-        return;
-      }
-
-      try {
-        const data = await apiFetch(`/api/admin/ingest-runs/${runId}`);
-        const run = data.data;
-        
-        updatePanelRunStatus(run);
-
-        if (['success', 'partial', 'failed'].includes(run.status)) {
-          clearInterval(panelPollingInterval);
-          panelPollingInterval = null;
-          setTimeout(() => loadSources(), 1000);
-        }
-      } catch (e) {
-        console.error('Panel poll error:', e);
-      }
-    }, 2000);
-  }
-
-  // Trigger from panel with enhanced feedback
-  async function triggerFromPanel() {
-    if (!currentSourceId) return;
-    
-    const source = sources.find(s => s.id === currentSourceId);
-    const sourceName = source?.name || 'diese Quelle';
-    
-    if (!confirm(`Import für "${sourceName}" jetzt starten?\n\nDies crawlt die Quelle und importiert neue Events.`)) {
-      return;
-    }
-
-    const triggerBtn = document.getElementById('trigger-btn');
-    const originalText = triggerBtn.innerHTML;
-    triggerBtn.disabled = true;
-    triggerBtn.innerHTML = '<span class="animate-spin inline-block">⏳</span> Wird gestartet...';
-
-    try {
-      const response = await apiFetch(`/api/sources/${currentSourceId}/trigger`, { method: 'POST' });
-      
-      if (response.success && response.data?.ingest_run_id) {
-        pollPanelRunStatus(response.data.ingest_run_id);
-        // Also poll in table view
-        pollRunStatus(currentSourceId, response.data.ingest_run_id);
-      } else {
-        triggerBtn.disabled = false;
-        alert('Import gestartet, aber keine Run-ID erhalten.');
-      }
-    } catch (e) {
-      triggerBtn.disabled = false;
-      alert('Fehler beim Starten: ' + e.message);
-      updatePanelRunStatus(null);
-    }
-    
-    triggerBtn.innerHTML = originalText;
   }
 
   // Event listeners
-  document.getElementById('panel-close').addEventListener('click', closePanel);
-  document.getElementById('detail-overlay').addEventListener('click', (e) => {
-    if (e.target.id === 'detail-overlay') closePanel();
-  });
-  document.getElementById('trigger-btn').addEventListener('click', triggerFromPanel);
-  document.getElementById('toggle-btn').addEventListener('click', toggleActive);
+  document.getElementById('search-input').addEventListener('input', applyFilters);
+  document.getElementById('status-filter').addEventListener('change', applyFilters);
+  document.getElementById('trigger-all-btn').addEventListener('click', triggerAll);
+  document.getElementById('add-source-btn').addEventListener('click', () => openEditModal('new'));
+  document.getElementById('modal-close').addEventListener('click', closeEditModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeEditModal);
+  document.getElementById('edit-form').addEventListener('submit', saveSource);
+  document.getElementById('delete-cancel').addEventListener('click', closeDeleteModal);
+  document.getElementById('delete-confirm').addEventListener('click', confirmDelete);
 
-  // Clear panel polling when closing
-  const originalClosePanel = closePanel;
-  closePanel = function() {
-    if (panelPollingInterval) {
-      clearInterval(panelPollingInterval);
-      panelPollingInterval = null;
+  // Close modals on backdrop click
+  document.getElementById('edit-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'edit-modal') closeEditModal();
+  });
+  document.getElementById('delete-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'delete-modal') closeDeleteModal();
+  });
+
+  // Close modals on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeEditModal();
+      closeDeleteModal();
     }
-    updatePanelRunStatus(null);
-    originalClosePanel();
-  };
+  });
 
   // Initial load
   loadSources();

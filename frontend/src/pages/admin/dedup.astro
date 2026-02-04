@@ -1,54 +1,235 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Duplikate - Admin - kiezling">
-  <StickyHeader />
-  <main class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+<AdminLayout title="Duplikate - kiezling Admin" currentPage="dedup">
+  <!-- Header Row -->
+  <div class="mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
         <h1 class="text-2xl font-bold text-gray-900">Duplikate prüfen</h1>
-        <p class="text-gray-500">Mögliche Duplikate vergleichen und zusammenführen</p>
-      </header>
-
-      <!-- Filter -->
-      <div class="flex gap-3 mb-6">
-        <select id="confidence-filter" class="px-4 py-2 border-2 border-gray-200 rounded-lg bg-white text-sm">
-          <option value="">Alle Konfidenz-Stufen</option>
+        <p class="text-gray-500 text-sm mt-1">Mögliche Duplikate vergleichen und zusammenführen</p>
+      </div>
+      
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Confidence Filter -->
+        <select id="confidence-filter" class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+          <option value="">Alle</option>
           <option value="exact">Exakt</option>
           <option value="likely">Wahrscheinlich</option>
           <option value="maybe">Vielleicht</option>
         </select>
-        <button id="refresh-btn" class="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-sm hover:bg-gray-50">
-          🔄 Aktualisieren
+        
+        <!-- Counter & Navigation -->
+        <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
+          <button id="prev-btn" class="p-1 hover:bg-gray-200 rounded disabled:opacity-40 disabled:cursor-not-allowed" title="Vorheriges (←)" disabled>
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <span id="dup-counter" class="text-sm font-medium text-gray-700 min-w-[60px] text-center">0 von 0</span>
+          <button id="next-btn" class="p-1 hover:bg-gray-200 rounded disabled:opacity-40 disabled:cursor-not-allowed" title="Nächstes (→)" disabled>
+            <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Keyboard Shortcuts Hint -->
+        <div class="hidden lg:flex items-center gap-1 text-xs text-gray-400">
+          <kbd class="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-gray-600">M</kbd>=Merge
+          <kbd class="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-gray-600 ml-2">D</kbd>=Unterschiedlich
+          <kbd class="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-gray-600 ml-2">I</kbd>=Ignorieren
+        </div>
+        
+        <!-- Refresh Button -->
+        <button id="refresh-btn" class="p-2 hover:bg-gray-100 rounded-lg border border-gray-300 transition-colors" title="Aktualisieren">
+          <svg id="refresh-icon" class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
         </button>
-        <span id="dup-count" class="ml-auto text-sm text-gray-500 self-center"></span>
-      </div>
-
-      <!-- Loading State -->
-      <div id="loading-state" class="text-center py-12">
-        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-        <p class="text-gray-500 mt-4">Lade Duplikate...</p>
-      </div>
-
-      <!-- Duplicate List -->
-      <div id="dup-list" class="hidden space-y-6"></div>
-
-      <!-- Empty State -->
-      <div id="empty-state" class="hidden text-center py-12">
-        <p class="text-4xl mb-4">🎉</p>
-        <p class="text-gray-500 text-lg">Keine offenen Duplikate</p>
       </div>
     </div>
-  </main>
-</BaseLayout>
+  </div>
+
+  <!-- Loading State -->
+  <div id="loading-state" class="flex flex-col items-center justify-center py-20">
+    <div class="animate-spin w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+    <p class="text-gray-500 mt-4">Lade Duplikate...</p>
+  </div>
+
+  <!-- Comparison Panel -->
+  <div id="comparison-panel" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <!-- Side-by-Side Columns -->
+      <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+        <!-- Event A Column -->
+        <div class="p-4 sm:p-6" id="event-a-panel">
+          <div class="flex items-start justify-between mb-4">
+            <span class="px-3 py-1 text-sm font-medium bg-blue-100 text-blue-700 rounded-full">Event A</span>
+            <span id="confidence-badge-a" class="px-3 py-1 text-xs rounded-full"></span>
+          </div>
+          <h2 id="title-a" class="text-xl font-bold text-gray-900 mb-4"></h2>
+        </div>
+        
+        <!-- Event B Column -->
+        <div class="p-4 sm:p-6" id="event-b-panel">
+          <div class="flex items-start justify-between mb-4">
+            <span class="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-700 rounded-full">Event B</span>
+            <span id="confidence-badge-b" class="px-3 py-1 text-xs rounded-full"></span>
+          </div>
+          <h2 id="title-b" class="text-xl font-bold text-gray-900 mb-4"></h2>
+        </div>
+      </div>
+      
+      <!-- Field-by-Field Comparison Table -->
+      <div class="border-t border-gray-200">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider w-[120px]">Feld</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Event A</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Event B</th>
+            </tr>
+          </thead>
+          <tbody id="comparison-table" class="divide-y divide-gray-100">
+            <!-- Rows will be inserted dynamically -->
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="bg-gray-50 px-4 sm:px-6 py-4 border-t border-gray-200">
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <button id="merge-a-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+            Merge → A
+          </button>
+          <button id="merge-b-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm flex items-center gap-2">
+            Merge → B
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+            </svg>
+          </button>
+          <button id="different-btn" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium text-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Unterschiedlich
+          </button>
+          <button id="ignore-btn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium text-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Ignorieren
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div id="empty-state" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+      <div class="text-6xl mb-4">🎉</div>
+      <h2 class="text-xl font-bold text-gray-900 mb-2">Keine offenen Duplikate</h2>
+      <p class="text-gray-500">Alle potenziellen Duplikate wurden bearbeitet</p>
+    </div>
+  </div>
+
+  <!-- Merge Choice Modal -->
+  <div id="merge-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/50" id="merge-modal-backdrop"></div>
+    <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+      <h3 class="text-lg font-bold text-gray-900 mb-4">Welches Event behalten?</h3>
+      <p class="text-gray-500 text-sm mb-6">Das andere Event wird archiviert und von der Seite entfernt.</p>
+      <div class="flex gap-3">
+        <button id="modal-merge-a" class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+          Event A behalten
+        </button>
+        <button id="modal-merge-b" class="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium">
+          Event B behalten
+        </button>
+      </div>
+      <button id="modal-cancel" class="w-full mt-3 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors text-sm">
+        Abbrechen
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-4 right-4 z-50 transform translate-y-20 opacity-0 transition-all duration-300">
+    <div class="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+      <svg id="toast-icon" class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+      </svg>
+      <span id="toast-message"></span>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  /* Diff highlighting */
+  .diff-cell {
+    background-color: #fef3c7;
+  }
+  
+  .diff-indicator {
+    color: #d97706;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  
+  /* Keyboard hint styles */
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  
+  /* Mobile swipe area */
+  @media (max-width: 767px) {
+    #comparison-panel {
+      touch-action: pan-y;
+    }
+  }
+  
+  /* Loading animation for refresh */
+  .refreshing svg {
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Table responsive */
+  .comparison-table-wrapper {
+    overflow-x: auto;
+  }
+  
+  /* Truncate long text */
+  .truncate-text {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  @media (max-width: 640px) {
+    .truncate-text {
+      max-width: 150px;
+    }
+  }
+</style>
 
 <script is:inline define:vars={{ API_URL }}>
+  // State
   let duplicates = [];
+  let currentIndex = 0;
+  let isLoading = false;
   const token = localStorage.getItem('auth_token');
 
   // Auth check
@@ -56,7 +237,21 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     window.location.href = '/login?redirect=/admin/dedup';
   }
 
-  // Fetch helper
+  // DOM Elements
+  const loadingState = document.getElementById('loading-state');
+  const comparisonPanel = document.getElementById('comparison-panel');
+  const emptyState = document.getElementById('empty-state');
+  const confidenceFilter = document.getElementById('confidence-filter');
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const dupCounter = document.getElementById('dup-counter');
+  const refreshBtn = document.getElementById('refresh-btn');
+  const comparisonTable = document.getElementById('comparison-table');
+  const mergeModal = document.getElementById('merge-modal');
+  const toast = document.getElementById('toast');
+  const toastMessage = document.getElementById('toast-message');
+
+  // API Fetch helper
   async function apiFetch(endpoint, options = {}) {
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -74,156 +269,375 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     return res.json();
   }
 
+  // Show toast notification
+  function showToast(message, isSuccess = true) {
+    const icon = document.getElementById('toast-icon');
+    toastMessage.textContent = message;
+    icon.classList.toggle('text-green-400', isSuccess);
+    icon.classList.toggle('text-red-400', !isSuccess);
+    
+    toast.classList.remove('translate-y-20', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+    
+    setTimeout(() => {
+      toast.classList.add('translate-y-20', 'opacity-0');
+      toast.classList.remove('translate-y-0', 'opacity-100');
+    }, 3000);
+  }
+
+  // Format date
+  function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  // Truncate text
+  function truncate(str, len = 100) {
+    if (!str) return '-';
+    return str.length > len ? str.substring(0, len) + '...' : str;
+  }
+
+  // Check if values differ
+  function valuesDiffer(a, b) {
+    const strA = String(a || '').toLowerCase().trim();
+    const strB = String(b || '').toLowerCase().trim();
+    return strA !== strB;
+  }
+
+  // Confidence badge styling
+  function getConfidenceBadge(confidence) {
+    const styles = {
+      exact: { bg: 'bg-green-100', text: 'text-green-700', label: 'Exakt' },
+      likely: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Wahrscheinlich' },
+      maybe: { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Vielleicht' }
+    };
+    return styles[confidence] || styles.maybe;
+  }
+
   // Load duplicates
   async function loadDuplicates() {
-    document.getElementById('loading-state').classList.remove('hidden');
-    document.getElementById('dup-list').classList.add('hidden');
-    document.getElementById('empty-state').classList.add('hidden');
+    if (isLoading) return;
+    isLoading = true;
+    
+    loadingState.classList.remove('hidden');
+    comparisonPanel.classList.add('hidden');
+    emptyState.classList.add('hidden');
+    refreshBtn.classList.add('refreshing');
 
     try {
-      const confidence = document.getElementById('confidence-filter').value;
-      const params = new URLSearchParams({ status: 'pending', limit: '50' });
+      const confidence = confidenceFilter.value;
+      const params = new URLSearchParams({ status: 'pending', limit: '100' });
       if (confidence) params.set('confidence', confidence);
 
       const data = await apiFetch(`/api/admin/duplicates?${params}`);
       duplicates = data.data || [];
+      currentIndex = 0;
       
-      document.getElementById('dup-count').textContent = `${duplicates.length} Duplikate`;
-
+      updateNavigation();
+      
       if (duplicates.length === 0) {
-        document.getElementById('empty-state').classList.remove('hidden');
+        emptyState.classList.remove('hidden');
       } else {
-        renderDuplicates();
-        document.getElementById('dup-list').classList.remove('hidden');
+        renderCurrentDuplicate();
+        comparisonPanel.classList.remove('hidden');
       }
     } catch (e) {
       console.error('Load error:', e);
-      document.getElementById('empty-state').classList.remove('hidden');
-      document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Fehler beim Laden</p>';
+      emptyState.classList.remove('hidden');
+      emptyState.querySelector('h2').textContent = 'Fehler beim Laden';
+      emptyState.querySelector('p').textContent = e.message;
+      emptyState.querySelector('.text-6xl').textContent = '❌';
     } finally {
-      document.getElementById('loading-state').classList.add('hidden');
+      loadingState.classList.add('hidden');
+      refreshBtn.classList.remove('refreshing');
+      isLoading = false;
     }
   }
 
-  // Render duplicates
-  function renderDuplicates() {
-    const list = document.getElementById('dup-list');
+  // Update navigation state
+  function updateNavigation() {
+    const total = duplicates.length;
+    const current = total > 0 ? currentIndex + 1 : 0;
     
-    list.innerHTML = duplicates.map(dup => {
-      const confidenceColors = {
-        exact: 'bg-red-100 text-red-700',
-        likely: 'bg-orange-100 text-orange-700',
-        maybe: 'bg-yellow-100 text-yellow-700',
-      };
-      const confidenceLabels = {
-        exact: 'Exakt',
-        likely: 'Wahrscheinlich',
-        maybe: 'Vielleicht',
-      };
+    dupCounter.textContent = `${current} von ${total}`;
+    prevBtn.disabled = currentIndex <= 0;
+    nextBtn.disabled = currentIndex >= total - 1;
+  }
 
-      const formatDate = d => d ? new Date(d).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+  // Render current duplicate comparison
+  function renderCurrentDuplicate() {
+    if (duplicates.length === 0) {
+      comparisonPanel.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+      emptyState.querySelector('.text-6xl').textContent = '🎉';
+      emptyState.querySelector('h2').textContent = 'Keine offenen Duplikate';
+      emptyState.querySelector('p').textContent = 'Alle potenziellen Duplikate wurden bearbeitet';
+      return;
+    }
 
+    const dup = duplicates[currentIndex];
+    const eventA = dup.event_a;
+    const eventB = dup.event_b;
+    const badge = getConfidenceBadge(dup.confidence);
+
+    // Update titles
+    document.getElementById('title-a').textContent = eventA.title || 'Ohne Titel';
+    document.getElementById('title-b').textContent = eventB.title || 'Ohne Titel';
+
+    // Update confidence badges
+    const badgeA = document.getElementById('confidence-badge-a');
+    const badgeB = document.getElementById('confidence-badge-b');
+    badgeA.className = `px-3 py-1 text-xs rounded-full ${badge.bg} ${badge.text}`;
+    badgeA.textContent = badge.label;
+    badgeB.className = `px-3 py-1 text-xs rounded-full ${badge.bg} ${badge.text}`;
+    badgeB.textContent = `${Math.round((dup.score || 0) * 100)}%`;
+
+    // Build comparison rows
+    const fields = [
+      { label: 'Titel', keyA: eventA.title, keyB: eventB.title },
+      { label: 'Beschreibung', keyA: truncate(eventA.description, 150), keyB: truncate(eventB.description, 150) },
+      { label: 'Datum & Zeit', keyA: formatDate(eventA.start_datetime), keyB: formatDate(eventB.start_datetime) },
+      { label: 'End-Zeit', keyA: formatDate(eventA.end_datetime), keyB: formatDate(eventB.end_datetime) },
+      { label: 'Ort', keyA: eventA.location_name || eventA.location_address || '-', keyB: eventB.location_name || eventB.location_address || '-' },
+      { label: 'Adresse', keyA: eventA.location_address || '-', keyB: eventB.location_address || '-' },
+      { label: 'Preis', keyA: eventA.price_info || eventA.price || '-', keyB: eventB.price_info || eventB.price || '-' },
+      { label: 'Quelle', keyA: eventA.source_url || '-', keyB: eventB.source_url || '-' },
+      { label: 'Kategorie', keyA: eventA.category?.name || '-', keyB: eventB.category?.name || '-' },
+    ];
+
+    comparisonTable.innerHTML = fields.map(field => {
+      const differs = valuesDiffer(field.keyA, field.keyB);
       return `
-        <div class="bg-white rounded-xl shadow-sm overflow-hidden" data-id="${dup.id}">
-          <!-- Header -->
-          <div class="bg-gray-50 px-4 py-3 flex items-center justify-between border-b">
-            <span class="px-3 py-1 text-sm rounded-full ${confidenceColors[dup.confidence]}">
-              ${confidenceLabels[dup.confidence]} ${dup.score ? `(${Math.round(dup.score * 100)}%)` : ''}
-            </span>
-            <span class="text-sm text-gray-500">Erkannt: ${formatDate(dup.detected_at)}</span>
-          </div>
-
-          <!-- Side-by-side comparison -->
-          <div class="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200">
-            <!-- Event A -->
-            <div class="p-4">
-              <div class="flex items-start justify-between mb-2">
-                <span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">Event A</span>
-              </div>
-              <h3 class="font-semibold text-gray-900 mb-2">${dup.event_a.title}</h3>
-              <div class="text-sm text-gray-500 space-y-1">
-                <p>📅 ${formatDate(dup.event_a.start_datetime)}</p>
-                <p class="truncate">📍 ${dup.event_a.location_address || '-'}</p>
-              </div>
+        <tr>
+          <td class="px-4 py-3 text-gray-500 font-medium">${field.label}</td>
+          <td class="px-4 py-3 ${differs ? 'diff-cell' : ''}"">
+            <span class="truncate-text block">${field.keyA}</span>
+          </td>
+          <td class="px-4 py-3 ${differs ? 'diff-cell' : ''}">
+            <div class="flex items-center justify-between gap-2">
+              <span class="truncate-text block">${field.keyB}</span>
+              ${differs ? '<span class="diff-indicator flex-shrink-0">← Diff</span>' : ''}
             </div>
-
-            <!-- Event B -->
-            <div class="p-4">
-              <div class="flex items-start justify-between mb-2">
-                <span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">Event B</span>
-              </div>
-              <h3 class="font-semibold text-gray-900 mb-2">${dup.event_b.title}</h3>
-              <div class="text-sm text-gray-500 space-y-1">
-                <p>📅 ${formatDate(dup.event_b.start_datetime)}</p>
-                <p class="truncate">📍 ${dup.event_b.location_address || '-'}</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="bg-gray-50 px-4 py-3 flex flex-wrap gap-2 border-t">
-            <button class="action-btn px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm" data-action="merge" data-id="${dup.id}">
-              ✓ Zusammenführen (A behalten)
-            </button>
-            <button class="action-btn px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm" data-action="different" data-id="${dup.id}">
-              ✗ Unterschiedlich
-            </button>
-            <button class="action-btn px-4 py-2 text-gray-500 hover:text-gray-700 text-sm" data-action="ignore" data-id="${dup.id}">
-              Ignorieren
-            </button>
-          </div>
-        </div>
+          </td>
+        </tr>
       `;
     }).join('');
 
-    // Event handlers
-    list.querySelectorAll('.action-btn').forEach(btn => {
-      btn.addEventListener('click', () => handleAction(btn.dataset.action, btn.dataset.id, btn));
-    });
+    updateNavigation();
   }
 
-  // Handle actions
-  async function handleAction(action, id, btn) {
-    const messages = {
-      merge: 'Events zusammenführen? Event A wird behalten, Event B wird archiviert.',
-      different: 'Als unterschiedliche Events markieren?',
-      ignore: 'Duplikat-Vorschlag ignorieren?',
-    };
-
-    if (!confirm(messages[action])) return;
-
-    const endpoints = {
-      merge: `/api/admin/duplicates/${id}/merge`,
-      different: `/api/admin/duplicates/${id}/mark-different`,
-      ignore: `/api/admin/duplicates/${id}/ignore`,
-    };
-
-    const originalText = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '...';
-
-    try {
-      await apiFetch(endpoints[action], { method: 'POST' });
-      duplicates = duplicates.filter(d => d.id !== id);
-      
-      if (duplicates.length === 0) {
-        document.getElementById('dup-list').classList.add('hidden');
-        document.getElementById('empty-state').classList.remove('hidden');
-      } else {
-        renderDuplicates();
-      }
-      document.getElementById('dup-count').textContent = `${duplicates.length} Duplikate`;
-    } catch (e) {
-      alert('Fehler: ' + e.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = originalText;
+  // Navigate to previous
+  function goToPrevious() {
+    if (currentIndex > 0) {
+      currentIndex--;
+      renderCurrentDuplicate();
     }
   }
 
-  // Event listeners
-  document.getElementById('confidence-filter').addEventListener('change', loadDuplicates);
-  document.getElementById('refresh-btn').addEventListener('click', loadDuplicates);
+  // Navigate to next
+  function goToNext() {
+    if (currentIndex < duplicates.length - 1) {
+      currentIndex++;
+      renderCurrentDuplicate();
+    }
+  }
+
+  // Handle merge action
+  async function handleMerge(keepEvent) {
+    const dup = duplicates[currentIndex];
+    if (!dup) return;
+
+    const btn = keepEvent === 'A' ? document.getElementById('merge-a-btn') : document.getElementById('merge-b-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-pulse">...</span>';
+
+    try {
+      await apiFetch(`/api/admin/duplicates/${dup.id}/merge`, {
+        method: 'POST',
+        body: JSON.stringify({ keep: keepEvent === 'A' ? 'event_a' : 'event_b' })
+      });
+
+      duplicates.splice(currentIndex, 1);
+      if (currentIndex >= duplicates.length && currentIndex > 0) {
+        currentIndex--;
+      }
+      
+      showToast(`Events zusammengeführt (${keepEvent} behalten)`);
+      renderCurrentDuplicate();
+    } catch (e) {
+      showToast('Fehler: ' + e.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+
+  // Handle mark as different
+  async function handleMarkDifferent() {
+    const dup = duplicates[currentIndex];
+    if (!dup) return;
+
+    const btn = document.getElementById('different-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-pulse">...</span>';
+
+    try {
+      await apiFetch(`/api/admin/duplicates/${dup.id}/mark-different`, { method: 'POST' });
+
+      duplicates.splice(currentIndex, 1);
+      if (currentIndex >= duplicates.length && currentIndex > 0) {
+        currentIndex--;
+      }
+      
+      showToast('Als unterschiedlich markiert');
+      renderCurrentDuplicate();
+    } catch (e) {
+      showToast('Fehler: ' + e.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+
+  // Handle ignore
+  async function handleIgnore() {
+    const dup = duplicates[currentIndex];
+    if (!dup) return;
+
+    const btn = document.getElementById('ignore-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-pulse">...</span>';
+
+    try {
+      await apiFetch(`/api/admin/duplicates/${dup.id}/ignore`, { method: 'POST' });
+
+      duplicates.splice(currentIndex, 1);
+      if (currentIndex >= duplicates.length && currentIndex > 0) {
+        currentIndex--;
+      }
+      
+      showToast('Duplikat ignoriert');
+      renderCurrentDuplicate();
+    } catch (e) {
+      showToast('Fehler: ' + e.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+
+  // Show merge modal
+  function showMergeModal() {
+    mergeModal.classList.remove('hidden');
+  }
+
+  // Hide merge modal
+  function hideMergeModal() {
+    mergeModal.classList.add('hidden');
+  }
+
+  // Event Listeners
+  confidenceFilter.addEventListener('change', loadDuplicates);
+  refreshBtn.addEventListener('click', loadDuplicates);
+  prevBtn.addEventListener('click', goToPrevious);
+  nextBtn.addEventListener('click', goToNext);
+
+  document.getElementById('merge-a-btn').addEventListener('click', () => handleMerge('A'));
+  document.getElementById('merge-b-btn').addEventListener('click', () => handleMerge('B'));
+  document.getElementById('different-btn').addEventListener('click', handleMarkDifferent);
+  document.getElementById('ignore-btn').addEventListener('click', handleIgnore);
+
+  // Modal listeners
+  document.getElementById('merge-modal-backdrop').addEventListener('click', hideMergeModal);
+  document.getElementById('modal-cancel').addEventListener('click', hideMergeModal);
+  document.getElementById('modal-merge-a').addEventListener('click', () => {
+    hideMergeModal();
+    handleMerge('A');
+  });
+  document.getElementById('modal-merge-b').addEventListener('click', () => {
+    hideMergeModal();
+    handleMerge('B');
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Don't trigger if typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        goToPrevious();
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        goToNext();
+        break;
+      case 'm':
+      case 'M':
+        e.preventDefault();
+        if (duplicates.length > 0) {
+          showMergeModal();
+        }
+        break;
+      case 'd':
+      case 'D':
+        e.preventDefault();
+        if (duplicates.length > 0) {
+          handleMarkDifferent();
+        }
+        break;
+      case 'i':
+      case 'I':
+        e.preventDefault();
+        if (duplicates.length > 0) {
+          handleIgnore();
+        }
+        break;
+      case 'Escape':
+        hideMergeModal();
+        break;
+    }
+  });
+
+  // Touch/swipe support for mobile
+  let touchStartX = 0;
+  let touchEndX = 0;
+
+  comparisonPanel.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+  }, { passive: true });
+
+  comparisonPanel.addEventListener('touchend', (e) => {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+  }, { passive: true });
+
+  function handleSwipe() {
+    const swipeThreshold = 50;
+    const diff = touchStartX - touchEndX;
+    
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) {
+        // Swipe left - next
+        goToNext();
+      } else {
+        // Swipe right - previous
+        goToPrevious();
+      }
+    }
+  }
 
   // Initial load
   loadDuplicates();

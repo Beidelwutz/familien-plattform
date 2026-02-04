@@ -1,146 +1,160 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
-
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="AI Usage Monitor - Admin - kiezling">
-  <StickyHeader />
-  <AdminMobileNav currentPage="ai-usage" />
-  
-  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+<AdminLayout title="AI Usage - kiezling Admin" currentPage="ai-usage">
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
         <h1 class="text-2xl font-bold text-gray-900">AI Usage Monitor</h1>
         <p class="text-gray-500 text-sm mt-1">Kosten und Nutzung von KI-Diensten überwachen</p>
-      </header>
-
-      <!-- Loading State -->
-      <div id="loading-state" class="text-center py-12">
-        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-        <p class="text-gray-500 mt-4">Lade Statistiken...</p>
       </div>
+      <div class="flex items-center gap-3">
+        <select id="time-filter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+          <option value="7">Letzte 7 Tage</option>
+          <option value="30" selected>Letzte 30 Tage</option>
+          <option value="1">Heute</option>
+        </select>
+        <button id="refresh-btn" class="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span class="hidden sm:inline">Aktualisieren</span>
+        </button>
+      </div>
+    </header>
 
-      <!-- Content -->
-      <div id="content" class="hidden space-y-6">
-        <!-- Cost Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div class="bg-white rounded-2xl shadow-card p-6">
-            <div class="text-sm text-gray-500 mb-1">Heute</div>
-            <div class="text-2xl font-bold text-gray-900" id="cost-today">$0.00</div>
-            <div class="text-xs text-gray-400" id="calls-today">0 Aufrufe</div>
-          </div>
-          <div class="bg-white rounded-2xl shadow-card p-6">
-            <div class="text-sm text-gray-500 mb-1">Dieser Monat</div>
-            <div class="text-2xl font-bold text-gray-900" id="cost-month">$0.00</div>
-            <div class="text-xs text-gray-400" id="calls-month">0 Aufrufe</div>
-          </div>
-          <div class="bg-white rounded-2xl shadow-card p-6">
-            <div class="text-sm text-gray-500 mb-1">Prognose Monatsende</div>
-            <div class="text-2xl font-bold text-gray-900" id="cost-projected">$0.00</div>
-            <div class="text-xs text-gray-400" id="days-remaining">0 Tage übrig</div>
-          </div>
-          <div class="bg-white rounded-2xl shadow-card p-6" id="budget-card">
-            <div class="text-sm text-gray-500 mb-1">Budget</div>
-            <div class="text-2xl font-bold text-gray-900" id="budget-status">Nicht konfiguriert</div>
-            <div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden hidden" id="budget-bar-container">
-              <div class="h-full bg-primary-500 rounded-full transition-all" id="budget-bar" style="width: 0%"></div>
+    <!-- Loading State -->
+    <div id="loading-state" class="text-center py-12">
+      <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+      <p class="text-gray-500 mt-4">Lade Statistiken...</p>
+    </div>
+
+    <!-- Content -->
+    <div id="content" class="hidden space-y-6">
+      <!-- Budget Status Section -->
+      <div class="bg-white rounded-2xl shadow-card p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Budget Status</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Daily Budget -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-700">Heute</span>
+              <span class="text-sm text-gray-500" id="budget-today-text">$0.00 / $5.00</span>
             </div>
-          </div>
-        </div>
-
-        <!-- Stats Overview -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
-            <div class="text-xl font-bold text-primary-500" id="total-calls">0</div>
-            <div class="text-xs text-gray-500">Aufrufe (30d)</div>
-          </div>
-          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
-            <div class="text-xl font-bold text-primary-500" id="total-tokens">0</div>
-            <div class="text-xs text-gray-500">Tokens</div>
-          </div>
-          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
-            <div class="text-xl font-bold text-primary-500" id="avg-response">0ms</div>
-            <div class="text-xs text-gray-500">Ø Response</div>
-          </div>
-          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
-            <div class="text-xl font-bold text-green-500" id="cache-rate">0%</div>
-            <div class="text-xs text-gray-500">Cache Hit</div>
-          </div>
-          <div class="bg-white rounded-xl p-4 text-center border border-gray-100">
-            <div class="text-xl font-bold text-red-500" id="error-rate">0%</div>
-            <div class="text-xs text-gray-500">Fehlerrate</div>
-          </div>
-        </div>
-
-        <!-- Charts Row -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- Daily Costs Chart -->
-          <div class="bg-white rounded-2xl shadow-card p-6">
-            <h3 class="font-semibold text-gray-900 mb-4">Kosten pro Tag (letzte 30 Tage)</h3>
-            <div class="h-64" id="cost-chart">
-              <canvas id="cost-canvas"></canvas>
+            <div class="h-4 bg-gray-100 rounded-full overflow-hidden">
+              <div id="budget-today-bar" class="h-full rounded-full transition-all duration-500 bg-green-500" style="width: 0%"></div>
             </div>
+            <div class="text-right text-xs text-gray-400" id="budget-today-percent">0%</div>
           </div>
-
-          <!-- By Model -->
-          <div class="bg-white rounded-2xl shadow-card p-6">
-            <h3 class="font-semibold text-gray-900 mb-4">Nach Modell</h3>
-            <div id="by-model" class="space-y-3"></div>
-          </div>
-        </div>
-
-        <!-- By Operation -->
-        <div class="bg-white rounded-2xl shadow-card p-6">
-          <h3 class="font-semibold text-gray-900 mb-4">Nach Operation</h3>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-200">
-                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Operation</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Aufrufe</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Input Tokens</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Output Tokens</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Kosten</th>
-                </tr>
-              </thead>
-              <tbody id="by-operation"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Recent Logs -->
-        <div class="bg-white rounded-2xl shadow-card p-6">
-          <h3 class="font-semibold text-gray-900 mb-4">Letzte Aufrufe</h3>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-200">
-                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Zeit</th>
-                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Model</th>
-                  <th class="text-left py-2 px-4 text-gray-500 font-medium">Operation</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Tokens</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Kosten</th>
-                  <th class="text-right py-2 px-4 text-gray-500 font-medium">Zeit</th>
-                </tr>
-              </thead>
-              <tbody id="recent-logs"></tbody>
-            </table>
+          <!-- Monthly Budget -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-700">Monat</span>
+              <span class="text-sm text-gray-500" id="budget-month-text">$0 / $150</span>
+            </div>
+            <div class="h-4 bg-gray-100 rounded-full overflow-hidden">
+              <div id="budget-month-bar" class="h-full rounded-full transition-all duration-500 bg-green-500" style="width: 0%"></div>
+            </div>
+            <div class="text-right text-xs text-gray-400" id="budget-month-percent">0%</div>
           </div>
         </div>
       </div>
 
-      <!-- Error State -->
-      <div id="error-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
-        <p class="text-red-500 text-lg mb-4">Fehler beim Laden der Statistiken</p>
-        <button onclick="loadData()" class="btn-primary">Erneut versuchen</button>
+      <!-- Charts Section (Two Columns) -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Daily Costs Line Chart -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h3 class="font-semibold text-gray-900 mb-4">Tägliche Kosten</h3>
+          <div class="h-72">
+            <canvas id="cost-canvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Calls by Model Chart -->
+        <div class="bg-white rounded-2xl shadow-card p-6">
+          <h3 class="font-semibold text-gray-900 mb-4">Aufrufe nach Modell</h3>
+          <div class="h-72">
+            <canvas id="model-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Cards Row -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl shadow-card p-5 text-center">
+          <div class="text-3xl font-bold text-primary-500" id="total-calls">0</div>
+          <div class="text-sm text-gray-500 mt-1">Aufrufe gesamt</div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-card p-5 text-center">
+          <div class="text-3xl font-bold text-primary-500" id="total-tokens">0</div>
+          <div class="text-sm text-gray-500 mt-1">Tokens gesamt</div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-card p-5 text-center">
+          <div class="text-3xl font-bold text-green-500" id="cache-rate">0%</div>
+          <div class="text-sm text-gray-500 mt-1">Cache Hit Rate</div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-card p-5 text-center">
+          <div class="text-3xl font-bold text-red-500" id="error-rate">0%</div>
+          <div class="text-sm text-gray-500 mt-1">Fehlerrate</div>
+        </div>
+      </div>
+
+      <!-- Logs Table -->
+      <div class="bg-white rounded-2xl shadow-card p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <h3 class="font-semibold text-gray-900">Letzte Logs</h3>
+          <div class="flex items-center gap-3">
+            <select id="operation-filter" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+              <option value="">Alle Operationen</option>
+              <option value="classify">Klassifizierung</option>
+              <option value="enrich">Anreicherung</option>
+              <option value="geocode">Geocoding</option>
+              <option value="dedup">Deduplizierung</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200">
+                <th class="text-left py-3 px-4 text-gray-500 font-medium">Zeit</th>
+                <th class="text-left py-3 px-4 text-gray-500 font-medium">Operation</th>
+                <th class="text-left py-3 px-4 text-gray-500 font-medium">Modell</th>
+                <th class="text-right py-3 px-4 text-gray-500 font-medium">Tokens</th>
+                <th class="text-right py-3 px-4 text-gray-500 font-medium">Kosten</th>
+                <th class="text-center py-3 px-4 text-gray-500 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table"></tbody>
+          </table>
+        </div>
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
+          <div class="text-sm text-gray-500" id="logs-info">Zeige 0 von 0</div>
+          <div class="flex items-center gap-2">
+            <button id="prev-page" disabled class="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+              Zurück
+            </button>
+            <span class="text-sm text-gray-500" id="page-info">Seite 1</span>
+            <button id="next-page" class="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+              Weiter
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  </main>
-</BaseLayout>
+
+    <!-- Error State -->
+    <div id="error-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+      <div class="text-red-500 text-5xl mb-4">⚠️</div>
+      <p class="text-red-500 text-lg mb-4">Fehler beim Laden der Statistiken</p>
+      <button onclick="loadData()" class="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 transition-colors">Erneut versuchen</button>
+    </div>
+  </div>
+</AdminLayout>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script is:inline define:vars={{ API_URL }}>
@@ -150,21 +164,66 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   }
 
   let costChart = null;
+  let modelChart = null;
+  let currentPage = 1;
+  const logsPerPage = 15;
+  let totalLogs = 0;
+  let currentOperationFilter = '';
+  let autoRefreshInterval = null;
+
+  // Budget configuration (can be fetched from API or env)
+  const DAILY_BUDGET = 5.00;
+  const MONTHLY_BUDGET = 150.00;
+
+  // DOM elements
+  const timeFilter = document.getElementById('time-filter');
+  const operationFilter = document.getElementById('operation-filter');
+  const refreshBtn = document.getElementById('refresh-btn');
+  const prevPageBtn = document.getElementById('prev-page');
+  const nextPageBtn = document.getElementById('next-page');
+
+  // Event listeners
+  timeFilter?.addEventListener('change', () => {
+    currentPage = 1;
+    loadData();
+  });
+
+  operationFilter?.addEventListener('change', () => {
+    currentOperationFilter = operationFilter.value;
+    currentPage = 1;
+    loadLogs();
+  });
+
+  refreshBtn?.addEventListener('click', loadData);
+
+  prevPageBtn?.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      loadLogs();
+    }
+  });
+
+  nextPageBtn?.addEventListener('click', () => {
+    const totalPages = Math.ceil(totalLogs / logsPerPage);
+    if (currentPage < totalPages) {
+      currentPage++;
+      loadLogs();
+    }
+  });
 
   async function loadData() {
     document.getElementById('loading-state').classList.remove('hidden');
     document.getElementById('content').classList.add('hidden');
     document.getElementById('error-state').classList.add('hidden');
 
+    const days = timeFilter?.value || '30';
+
     try {
-      const [statsRes, costsRes, logsRes] = await Promise.all([
-        fetch(`${API_URL}/api/admin/ai-usage/stats?days=30`, {
+      const [statsRes, costsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/ai-usage/stats?days=${days}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
         fetch(`${API_URL}/api/admin/ai-usage/costs`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`${API_URL}/api/admin/ai-usage/logs?limit=20`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
       ]);
@@ -173,10 +232,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       const stats = await statsRes.json();
       const costs = await costsRes.json();
-      const logs = logsRes.ok ? await logsRes.json() : { data: [] };
 
-      renderStats(stats.data, costs.data, logs.data);
-      
+      renderBudget(costs.data);
+      renderStats(stats.data);
+      renderCostChart(stats.data.dailyCosts || []);
+      renderModelChart(stats.data.byModel || []);
+
+      await loadLogs();
+
       document.getElementById('loading-state').classList.add('hidden');
       document.getElementById('content').classList.remove('hidden');
     } catch (e) {
@@ -186,88 +249,83 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
+  async function loadLogs() {
+    try {
+      const offset = (currentPage - 1) * logsPerPage;
+      let url = `${API_URL}/api/admin/ai-usage/logs?limit=${logsPerPage}&offset=${offset}`;
+      if (currentOperationFilter) {
+        url += `&operation=${currentOperationFilter}`;
+      }
+
+      const logsRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        totalLogs = logsData.pagination?.total || logsData.data?.length || 0;
+        renderLogs(logsData.data || []);
+        updatePagination();
+      }
+    } catch (e) {
+      console.error('Error loading logs:', e);
+    }
+  }
+
   function formatCurrency(value) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(value || 0);
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD', 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4
+    }).format(value || 0);
   }
 
   function formatNumber(value) {
     return new Intl.NumberFormat('de-DE').format(value || 0);
   }
 
-  function renderStats(stats, costs, logs) {
-    // Cost cards
-    document.getElementById('cost-today').textContent = formatCurrency(costs.today?.cost);
-    document.getElementById('calls-today').textContent = `${formatNumber(costs.today?.calls)} Aufrufe`;
-    document.getElementById('cost-month').textContent = formatCurrency(costs.currentMonth?.cost);
-    document.getElementById('calls-month').textContent = `${formatNumber(costs.currentMonth?.calls)} Aufrufe`;
-    document.getElementById('cost-projected').textContent = formatCurrency(costs.currentMonth?.projected);
-    document.getElementById('days-remaining').textContent = `${costs.currentMonth?.daysRemaining} Tage übrig`;
+  function getBarColor(percent) {
+    if (percent >= 80) return 'bg-red-500';
+    if (percent >= 50) return 'bg-yellow-500';
+    return 'bg-green-500';
+  }
 
-    // Budget
-    if (costs.budget) {
-      document.getElementById('budget-status').textContent = `${Math.round(costs.budget.percentUsed)}% genutzt`;
-      document.getElementById('budget-bar-container').classList.remove('hidden');
-      const bar = document.getElementById('budget-bar');
-      bar.style.width = `${Math.min(costs.budget.percentUsed, 100)}%`;
-      bar.classList.toggle('bg-red-500', costs.budget.percentUsed > 80);
-      bar.classList.toggle('bg-yellow-500', costs.budget.percentUsed > 60 && costs.budget.percentUsed <= 80);
-      bar.classList.toggle('bg-primary-500', costs.budget.percentUsed <= 60);
-    }
+  function renderBudget(costs) {
+    // Today's budget
+    const todayCost = costs.today?.cost || 0;
+    const todayPercent = Math.min((todayCost / DAILY_BUDGET) * 100, 100);
+    
+    document.getElementById('budget-today-text').textContent = `${formatCurrency(todayCost)} / ${formatCurrency(DAILY_BUDGET)}`;
+    document.getElementById('budget-today-percent').textContent = `${todayPercent.toFixed(0)}%`;
+    
+    const todayBar = document.getElementById('budget-today-bar');
+    todayBar.style.width = `${todayPercent}%`;
+    todayBar.className = `h-full rounded-full transition-all duration-500 ${getBarColor(todayPercent)}`;
 
-    // Stats overview
-    document.getElementById('total-calls').textContent = formatNumber(stats.totals.calls);
-    document.getElementById('total-tokens').textContent = formatNumber(stats.totals.inputTokens + stats.totals.outputTokens);
-    document.getElementById('avg-response').textContent = `${stats.totals.avgResponseMs}ms`;
-    document.getElementById('cache-rate').textContent = `${(stats.totals.cacheHitRate * 100).toFixed(1)}%`;
-    document.getElementById('error-rate').textContent = `${(stats.totals.errorRate * 100).toFixed(1)}%`;
+    // Monthly budget
+    const monthCost = costs.currentMonth?.cost || 0;
+    const monthPercent = Math.min((monthCost / MONTHLY_BUDGET) * 100, 100);
+    
+    document.getElementById('budget-month-text').textContent = `${formatCurrency(monthCost)} / ${formatCurrency(MONTHLY_BUDGET)}`;
+    document.getElementById('budget-month-percent').textContent = `${monthPercent.toFixed(0)}%`;
+    
+    const monthBar = document.getElementById('budget-month-bar');
+    monthBar.style.width = `${monthPercent}%`;
+    monthBar.className = `h-full rounded-full transition-all duration-500 ${getBarColor(monthPercent)}`;
+  }
 
-    // By Model
-    const byModelHtml = stats.byModel.map(m => `
-      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-        <div>
-          <div class="font-medium text-gray-900">${m.model}</div>
-          <div class="text-xs text-gray-500">${formatNumber(m.calls)} Aufrufe</div>
-        </div>
-        <div class="text-right">
-          <div class="font-medium text-gray-900">${formatCurrency(m.costUsd)}</div>
-          <div class="text-xs text-gray-500">${formatNumber(m.inputTokens + m.outputTokens)} Tokens</div>
-        </div>
-      </div>
-    `).join('');
-    document.getElementById('by-model').innerHTML = byModelHtml || '<p class="text-gray-500 text-center py-4">Keine Daten</p>';
-
-    // By Operation
-    const byOpHtml = stats.byOperation.map(o => `
-      <tr class="border-b border-gray-100">
-        <td class="py-2 px-4 font-medium">${o.operation}</td>
-        <td class="py-2 px-4 text-right">${formatNumber(o.calls)}</td>
-        <td class="py-2 px-4 text-right">${formatNumber(o.inputTokens)}</td>
-        <td class="py-2 px-4 text-right">${formatNumber(o.outputTokens)}</td>
-        <td class="py-2 px-4 text-right font-medium">${formatCurrency(o.costUsd)}</td>
-      </tr>
-    `).join('');
-    document.getElementById('by-operation').innerHTML = byOpHtml || '<tr><td colspan="5" class="text-center py-4 text-gray-500">Keine Daten</td></tr>';
-
-    // Recent logs
-    const logsHtml = logs.map(log => `
-      <tr class="border-b border-gray-100">
-        <td class="py-2 px-4 text-gray-500">${new Date(log.timestamp).toLocaleString('de-DE')}</td>
-        <td class="py-2 px-4">${log.model}</td>
-        <td class="py-2 px-4">${log.operation}</td>
-        <td class="py-2 px-4 text-right">${formatNumber((log.input_tokens || 0) + (log.output_tokens || 0))}</td>
-        <td class="py-2 px-4 text-right">${formatCurrency(log.estimated_cost_usd)}</td>
-        <td class="py-2 px-4 text-right ${log.error_code ? 'text-red-500' : ''}">${log.error_code || (log.response_time_ms ? `${log.response_time_ms}ms` : '-')}</td>
-      </tr>
-    `).join('');
-    document.getElementById('recent-logs').innerHTML = logsHtml || '<tr><td colspan="6" class="text-center py-4 text-gray-500">Keine Logs</td></tr>';
-
-    // Daily costs chart
-    renderCostChart(stats.dailyCosts);
+  function renderStats(stats) {
+    const totals = stats.totals || {};
+    document.getElementById('total-calls').textContent = formatNumber(totals.calls);
+    document.getElementById('total-tokens').textContent = formatNumber((totals.inputTokens || 0) + (totals.outputTokens || 0));
+    document.getElementById('cache-rate').textContent = `${((totals.cacheHitRate || 0) * 100).toFixed(1)}%`;
+    document.getElementById('error-rate').textContent = `${((totals.errorRate || 0) * 100).toFixed(1)}%`;
   }
 
   function renderCostChart(dailyCosts) {
     const ctx = document.getElementById('cost-canvas').getContext('2d');
-    
+
     if (costChart) {
       costChart.destroy();
     }
@@ -276,27 +334,53 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const date = new Date(d.date);
       return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
     });
-    const data = dailyCosts.map(d => d.cost);
+    const data = dailyCosts.map(d => d.cost || 0);
+
+    // Calculate projection (simple linear projection)
+    const avgCost = data.length > 0 ? data.reduce((a, b) => a + b, 0) / data.length : 0;
+    const projectedData = data.map((_, i) => i >= data.length - 7 ? avgCost * 1.1 : null);
 
     costChart = new Chart(ctx, {
-      type: 'bar',
+      type: 'line',
       data: {
         labels,
-        datasets: [{
-          label: 'Kosten ($)',
-          data,
-          backgroundColor: 'rgba(79, 70, 229, 0.8)',
-          borderRadius: 4,
-        }]
+        datasets: [
+          {
+            label: 'Kosten ($)',
+            data,
+            borderColor: 'rgba(79, 70, 229, 1)',
+            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+          },
+          {
+            label: 'Prognose',
+            data: projectedData,
+            borderColor: 'rgba(156, 163, 175, 0.6)',
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+          }
+        ]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: {
+              usePointStyle: true,
+              padding: 20,
+            }
+          },
           tooltip: {
             callbacks: {
-              label: (ctx) => `$${ctx.raw.toFixed(4)}`
+              label: (ctx) => `${ctx.dataset.label}: $${ctx.raw?.toFixed(4) || '0'}`
             }
           }
         },
@@ -306,11 +390,161 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             ticks: {
               callback: (value) => `$${value.toFixed(2)}`
             }
+          },
+          x: {
+            grid: {
+              display: false
+            }
           }
         }
       }
     });
   }
 
+  function renderModelChart(byModel) {
+    const ctx = document.getElementById('model-canvas').getContext('2d');
+
+    if (modelChart) {
+      modelChart.destroy();
+    }
+
+    const labels = byModel.map(m => m.model || 'Unknown');
+    const data = byModel.map(m => m.calls || 0);
+    const totalCalls = data.reduce((a, b) => a + b, 0);
+
+    const colors = [
+      'rgba(79, 70, 229, 0.8)',
+      'rgba(16, 185, 129, 0.8)',
+      'rgba(245, 158, 11, 0.8)',
+      'rgba(239, 68, 68, 0.8)',
+      'rgba(139, 92, 246, 0.8)',
+      'rgba(6, 182, 212, 0.8)',
+    ];
+
+    modelChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors.slice(0, labels.length),
+          borderWidth: 2,
+          borderColor: 'white',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'right',
+            labels: {
+              usePointStyle: true,
+              padding: 15,
+              generateLabels: (chart) => {
+                const dataset = chart.data.datasets[0];
+                return chart.data.labels.map((label, i) => {
+                  const value = dataset.data[i];
+                  const percent = totalCalls > 0 ? ((value / totalCalls) * 100).toFixed(1) : 0;
+                  return {
+                    text: `${label} (${percent}%)`,
+                    fillStyle: dataset.backgroundColor[i],
+                    strokeStyle: dataset.backgroundColor[i],
+                    pointStyle: 'circle',
+                    index: i,
+                  };
+                });
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const value = ctx.raw;
+                const percent = totalCalls > 0 ? ((value / totalCalls) * 100).toFixed(1) : 0;
+                return `${formatNumber(value)} Aufrufe (${percent}%)`;
+              }
+            }
+          }
+        },
+        cutout: '60%',
+      }
+    });
+  }
+
+  function renderLogs(logs) {
+    const tbody = document.getElementById('logs-table');
+    
+    if (!logs || logs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-gray-500">Keine Logs vorhanden</td></tr>';
+      return;
+    }
+
+    const html = logs.map(log => {
+      const time = new Date(log.timestamp).toLocaleString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      const tokens = formatNumber((log.input_tokens || 0) + (log.output_tokens || 0));
+      const cost = formatCurrency(log.estimated_cost_usd);
+      const hasError = !!log.error_code;
+      
+      const statusBadge = hasError
+        ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">${log.error_code}</span>`
+        : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>`;
+
+      return `
+        <tr class="border-b border-gray-100 hover:bg-gray-50">
+          <td class="py-3 px-4 text-gray-500 text-xs">${time}</td>
+          <td class="py-3 px-4">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+              ${log.operation || '-'}
+            </span>
+          </td>
+          <td class="py-3 px-4 font-medium text-gray-900">${log.model || '-'}</td>
+          <td class="py-3 px-4 text-right text-gray-600">${tokens}</td>
+          <td class="py-3 px-4 text-right font-medium text-gray-900">${cost}</td>
+          <td class="py-3 px-4 text-center">${statusBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.innerHTML = html;
+  }
+
+  function updatePagination() {
+    const totalPages = Math.ceil(totalLogs / logsPerPage);
+    const startItem = totalLogs === 0 ? 0 : (currentPage - 1) * logsPerPage + 1;
+    const endItem = Math.min(currentPage * logsPerPage, totalLogs);
+
+    document.getElementById('logs-info').textContent = `Zeige ${startItem}-${endItem} von ${formatNumber(totalLogs)}`;
+    document.getElementById('page-info').textContent = `Seite ${currentPage} von ${totalPages || 1}`;
+
+    prevPageBtn.disabled = currentPage <= 1;
+    nextPageBtn.disabled = currentPage >= totalPages;
+  }
+
+  // Auto-refresh every 60 seconds (optional)
+  function startAutoRefresh() {
+    autoRefreshInterval = setInterval(() => {
+      loadData();
+    }, 60000);
+  }
+
+  function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+    }
+  }
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', stopAutoRefresh);
+
+  // Initial load
   loadData();
+  // startAutoRefresh(); // Uncomment to enable auto-refresh
 </script>

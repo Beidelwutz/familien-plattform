@@ -1,38 +1,50 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
-
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Ausstattung verwalten - Admin - kiezling">
-  <StickyHeader />
-  <AdminMobileNav currentPage="amenities" />
-  
-  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900">Ausstattung</h1>
-            <p class="text-gray-500 text-sm mt-1">Ausstattungsmerkmale für Events verwalten</p>
-          </div>
-          <button id="add-amenity-btn" class="btn-primary flex items-center gap-2">
-            <span class="text-lg">+</span> Neue Ausstattung
-          </button>
-        </div>
-      </header>
+<AdminLayout title="Ausstattung - kiezling Admin" currentPage="amenities">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Ausstattung</h1>
+      <p class="text-gray-500 text-sm mt-1">Ausstattungsmerkmale für Events verwalten</p>
+    </div>
+    <button id="add-amenity-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      Neue Amenity
+    </button>
+  </div>
 
-      <!-- Tabs -->
-      <div class="flex gap-4 mb-6 border-b border-gray-200">
-        <button id="tab-all" class="px-4 py-2 text-sm font-medium text-primary-600 border-b-2 border-primary-600 -mb-px">
-          Alle
-        </button>
-        <button id="tab-unconfirmed" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700">
-          Unbestätigt <span id="unconfirmed-badge" class="ml-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs rounded-full">0</span>
-        </button>
+  <!-- Tab Navigation -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+    <div class="flex border-b border-gray-200">
+      <button id="tab-all" class="flex-1 sm:flex-none px-6 py-3 text-sm font-medium text-primary-600 border-b-2 border-primary-600 -mb-px bg-transparent hover:bg-gray-50 transition-colors">
+        Alle Amenities
+      </button>
+      <button id="tab-unconfirmed" class="flex-1 sm:flex-none px-6 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+        Unbestätigt
+        <span id="unconfirmed-badge" class="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">0</span>
+      </button>
+    </div>
+
+    <!-- Tab 1: Alle Amenities -->
+    <div id="tab-content-all" class="p-4">
+      <!-- Search -->
+      <div class="mb-4">
+        <div class="relative max-w-md">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Amenities filtern..." 
+            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+          />
+        </div>
       </div>
 
       <!-- Loading State -->
@@ -41,47 +53,113 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         <p class="text-gray-500 mt-4">Lade Ausstattung...</p>
       </div>
 
-      <!-- Amenity List -->
-      <div id="amenity-list" class="hidden space-y-2"></div>
-
-      <!-- Unconfirmed List -->
-      <div id="unconfirmed-list" class="hidden space-y-2"></div>
+      <!-- Amenity Table -->
+      <div id="amenity-table" class="hidden overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th class="px-4 py-3">Icon</th>
+              <th class="px-4 py-3">Name</th>
+              <th class="px-4 py-3 hidden sm:table-cell">Slug</th>
+              <th class="px-4 py-3 text-center">Events</th>
+              <th class="px-4 py-3 text-right">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="amenity-tbody" class="divide-y divide-gray-100">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
 
       <!-- Empty State -->
-      <div id="empty-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+      <div id="empty-state" class="hidden text-center py-12">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+          <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
         <p class="text-gray-500 text-lg mb-4">Noch keine Ausstattung vorhanden</p>
-        <button class="btn-primary" onclick="document.getElementById('add-amenity-btn').click()">
+        <button class="inline-flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium" onclick="document.getElementById('add-amenity-btn').click()">
           Erstes Merkmal erstellen
         </button>
       </div>
+
+      <!-- No Results State -->
+      <div id="no-results-state" class="hidden text-center py-12">
+        <p class="text-gray-500">Keine Amenities gefunden für diesen Suchbegriff</p>
+      </div>
     </div>
-  </main>
+
+    <!-- Tab 2: Unbestätigt -->
+    <div id="tab-content-unconfirmed" class="p-4 hidden">
+      <!-- Bulk Actions -->
+      <div id="bulk-actions" class="hidden flex items-center justify-between mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+        <span class="text-sm text-yellow-800">
+          <span id="unconfirmed-count">0</span> unbestätigte Zuweisungen
+        </span>
+        <button id="confirm-all-btn" class="inline-flex items-center gap-2 px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors font-medium">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Alle bestätigen
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div id="unconfirmed-loading" class="hidden text-center py-12">
+        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+        <p class="text-gray-500 mt-4">Lade unbestätigte Zuweisungen...</p>
+      </div>
+
+      <!-- Unconfirmed List -->
+      <div id="unconfirmed-list" class="space-y-2">
+        <!-- Filled by JS -->
+      </div>
+
+      <!-- Empty Unconfirmed State -->
+      <div id="unconfirmed-empty" class="hidden text-center py-12">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+          <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <p class="text-gray-500 text-lg">Alle Zuweisungen bestätigt!</p>
+        <p class="text-gray-400 text-sm mt-1">Keine offenen Bestätigungen vorhanden</p>
+      </div>
+    </div>
+  </div>
 
   <!-- Add/Edit Modal -->
   <div id="amenity-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6">
-      <h3 id="modal-title" class="text-lg font-semibold mb-4">Neue Ausstattung</h3>
-      <form id="amenity-form" class="space-y-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-xl">
+      <div class="p-6 border-b border-gray-100">
+        <h3 id="modal-title" class="text-lg font-semibold text-gray-900">Neue Amenity</h3>
+      </div>
+      <form id="amenity-form" class="p-6 space-y-4">
         <input type="hidden" id="edit-id" value="">
         
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Name (DE)</label>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
           <input type="text" id="input-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="z.B. Wickeltisch">
         </div>
         
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
           <input type="text" id="input-slug" required pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" placeholder="z.B. wickeltisch">
+          <p class="text-xs text-gray-500 mt-1">Nur Kleinbuchstaben, Zahlen und Bindestriche</p>
         </div>
         
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Icon (Emoji)</label>
-          <input type="text" id="input-icon" maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-2xl" placeholder="🚼">
+          <div class="flex gap-3 items-center">
+            <input type="text" id="input-icon" maxlength="10" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-2xl" placeholder="🎯">
+            <div id="icon-preview" class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded-lg text-2xl">🎯</div>
+          </div>
         </div>
         
-        <div class="flex gap-3 mt-6">
-          <button type="button" id="modal-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
-          <button type="submit" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Speichern</button>
+        <div class="flex gap-3 pt-4">
+          <button type="button" id="modal-cancel" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">Abbrechen</button>
+          <button type="submit" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium">Speichern</button>
         </div>
       </form>
     </div>
@@ -89,20 +167,28 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   <!-- Delete Confirmation Modal -->
   <div id="delete-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-2xl max-w-sm w-full p-6">
-      <h3 class="text-lg font-semibold mb-2">Ausstattung löschen?</h3>
-      <p class="text-gray-600 mb-4">Diese Aktion kann nicht rückgängig gemacht werden.</p>
-      <p id="delete-warning" class="text-red-600 text-sm mb-4 hidden"></p>
-      <div class="flex gap-3">
-        <button id="delete-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
-        <button id="delete-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Löschen</button>
+    <div class="bg-white rounded-2xl max-w-sm w-full shadow-xl">
+      <div class="p-6">
+        <div class="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full mb-4 mx-auto">
+          <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 text-center mb-2">Amenity löschen?</h3>
+        <p class="text-gray-600 text-center mb-2">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+        <p id="delete-warning" class="text-red-600 text-sm text-center mb-4 hidden"></p>
+        <div class="flex gap-3">
+          <button id="delete-cancel" class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">Abbrechen</button>
+          <button id="delete-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium">Löschen</button>
+        </div>
       </div>
     </div>
   </div>
-</BaseLayout>
+</AdminLayout>
 
 <script is:inline define:vars={{ API_URL }}>
   let amenities = [];
+  let filteredAmenities = [];
   let unconfirmed = [];
   let currentTab = 'all';
   let deleteTargetId = null;
@@ -114,35 +200,72 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // Elements
   const loadingState = document.getElementById('loading-state');
-  const amenityList = document.getElementById('amenity-list');
-  const unconfirmedList = document.getElementById('unconfirmed-list');
+  const amenityTable = document.getElementById('amenity-table');
+  const amenityTbody = document.getElementById('amenity-tbody');
   const emptyState = document.getElementById('empty-state');
+  const noResultsState = document.getElementById('no-results-state');
+  const searchInput = document.getElementById('search-input');
+  
+  const tabAll = document.getElementById('tab-all');
+  const tabUnconfirmed = document.getElementById('tab-unconfirmed');
+  const tabContentAll = document.getElementById('tab-content-all');
+  const tabContentUnconfirmed = document.getElementById('tab-content-unconfirmed');
+  
+  const unconfirmedLoading = document.getElementById('unconfirmed-loading');
+  const unconfirmedList = document.getElementById('unconfirmed-list');
+  const unconfirmedEmpty = document.getElementById('unconfirmed-empty');
+  const bulkActions = document.getElementById('bulk-actions');
+  const unconfirmedCountEl = document.getElementById('unconfirmed-count');
+  
   const modal = document.getElementById('amenity-modal');
   const deleteModal = document.getElementById('delete-modal');
+  const iconPreview = document.getElementById('icon-preview');
 
   // Tab switching
-  document.getElementById('tab-all').addEventListener('click', () => {
-    currentTab = 'all';
-    document.getElementById('tab-all').classList.add('text-primary-600', 'border-primary-600');
-    document.getElementById('tab-all').classList.remove('text-gray-500');
-    document.getElementById('tab-unconfirmed').classList.remove('text-primary-600', 'border-primary-600');
-    document.getElementById('tab-unconfirmed').classList.add('text-gray-500');
-    amenityList.classList.remove('hidden');
-    unconfirmedList.classList.add('hidden');
-  });
+  function switchTab(tab) {
+    currentTab = tab;
+    
+    if (tab === 'all') {
+      tabAll.classList.add('text-primary-600', 'border-b-2', 'border-primary-600');
+      tabAll.classList.remove('text-gray-500');
+      tabUnconfirmed.classList.remove('text-primary-600', 'border-b-2', 'border-primary-600');
+      tabUnconfirmed.classList.add('text-gray-500');
+      tabContentAll.classList.remove('hidden');
+      tabContentUnconfirmed.classList.add('hidden');
+    } else {
+      tabUnconfirmed.classList.add('text-primary-600', 'border-b-2', 'border-primary-600');
+      tabUnconfirmed.classList.remove('text-gray-500');
+      tabAll.classList.remove('text-primary-600', 'border-b-2', 'border-primary-600');
+      tabAll.classList.add('text-gray-500');
+      tabContentUnconfirmed.classList.remove('hidden');
+      tabContentAll.classList.add('hidden');
+      loadUnconfirmed();
+    }
+  }
 
-  document.getElementById('tab-unconfirmed').addEventListener('click', () => {
-    currentTab = 'unconfirmed';
-    document.getElementById('tab-unconfirmed').classList.add('text-primary-600', 'border-primary-600');
-    document.getElementById('tab-unconfirmed').classList.remove('text-gray-500');
-    document.getElementById('tab-all').classList.remove('text-primary-600', 'border-primary-600');
-    document.getElementById('tab-all').classList.add('text-gray-500');
-    unconfirmedList.classList.remove('hidden');
-    amenityList.classList.add('hidden');
-    loadUnconfirmed();
+  tabAll.addEventListener('click', () => switchTab('all'));
+  tabUnconfirmed.addEventListener('click', () => switchTab('unconfirmed'));
+
+  // Search filtering
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase().trim();
+    if (!query) {
+      filteredAmenities = [...amenities];
+    } else {
+      filteredAmenities = amenities.filter(a => 
+        a.name_de.toLowerCase().includes(query) || 
+        a.slug.toLowerCase().includes(query)
+      );
+    }
+    renderAmenities();
   });
 
   async function loadAmenities() {
+    loadingState.classList.remove('hidden');
+    amenityTable.classList.add('hidden');
+    emptyState.classList.add('hidden');
+    noResultsState.classList.add('hidden');
+
     try {
       const res = await fetch(`${API_URL}/api/admin/amenities`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -151,7 +274,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       if (!res.ok) throw new Error('Failed to load');
       
       const data = await res.json();
-      amenities = data.data;
+      amenities = data.data || [];
+      filteredAmenities = [...amenities];
       
       // Count unconfirmed
       const totalUnconfirmed = amenities.reduce((sum, a) => sum + (a.unconfirmed_count || 0), 0);
@@ -160,13 +284,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       renderAmenities();
     } catch (e) {
       console.error(e);
-      amenityList.innerHTML = '<p class="text-red-500 text-center py-8">Fehler beim Laden</p>';
+      amenityTbody.innerHTML = '<tr><td colspan="5" class="text-red-500 text-center py-8">Fehler beim Laden</td></tr>';
+      amenityTable.classList.remove('hidden');
     } finally {
       loadingState.classList.add('hidden');
     }
   }
 
   async function loadUnconfirmed() {
+    unconfirmedLoading.classList.remove('hidden');
+    unconfirmedList.innerHTML = '';
+    unconfirmedEmpty.classList.add('hidden');
+    bulkActions.classList.add('hidden');
+
     try {
       const res = await fetch(`${API_URL}/api/admin/amenities/events/unconfirmed?limit=100`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -175,70 +305,110 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       if (!res.ok) throw new Error('Failed to load');
       
       const data = await res.json();
-      unconfirmed = data.data;
+      unconfirmed = data.data || [];
       renderUnconfirmed();
     } catch (e) {
       console.error(e);
       unconfirmedList.innerHTML = '<p class="text-red-500 text-center py-8">Fehler beim Laden</p>';
+    } finally {
+      unconfirmedLoading.classList.add('hidden');
     }
   }
 
   function renderAmenities() {
+    const searchQuery = searchInput.value.trim();
+    
     if (amenities.length === 0) {
       emptyState.classList.remove('hidden');
-      amenityList.classList.add('hidden');
+      amenityTable.classList.add('hidden');
+      noResultsState.classList.add('hidden');
+      return;
+    }
+
+    if (filteredAmenities.length === 0 && searchQuery) {
+      noResultsState.classList.remove('hidden');
+      amenityTable.classList.add('hidden');
+      emptyState.classList.add('hidden');
       return;
     }
 
     emptyState.classList.add('hidden');
-    amenityList.classList.remove('hidden');
+    noResultsState.classList.add('hidden');
+    amenityTable.classList.remove('hidden');
 
-    amenityList.innerHTML = amenities
+    amenityTbody.innerHTML = filteredAmenities
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(a => `
-        <div class="bg-white rounded-xl shadow-card p-4 flex items-center gap-4">
-          <span class="text-2xl">${a.icon || '🎯'}</span>
-          <div class="flex-1 min-w-0">
+        <tr class="hover:bg-gray-50 transition-colors cursor-pointer group" onclick="editAmenity('${a.id}')">
+          <td class="px-4 py-3">
+            <span class="text-2xl">${a.icon || '🎯'}</span>
+          </td>
+          <td class="px-4 py-3">
             <div class="font-medium text-gray-900">${a.name_de}</div>
-            <div class="text-xs text-gray-500 font-mono">${a.slug}</div>
-          </div>
-          <div class="text-sm text-gray-500">${a._count?.events || 0} Events</div>
-          ${a.unconfirmed_count > 0 ? `<span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">${a.unconfirmed_count} unbestätigt</span>` : ''}
-          <div class="flex items-center gap-2">
-            <button onclick="editAmenity('${a.id}')" class="p-2 text-gray-400 hover:text-primary-500 rounded-lg hover:bg-gray-100">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-              </svg>
-            </button>
-            <button onclick="confirmDelete('${a.id}', ${a._count?.events || 0})" class="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
+            ${a.unconfirmed_count > 0 ? `<span class="inline-flex items-center px-2 py-0.5 mt-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">${a.unconfirmed_count} unbestätigt</span>` : ''}
+          </td>
+          <td class="px-4 py-3 hidden sm:table-cell">
+            <code class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">${a.slug}</code>
+          </td>
+          <td class="px-4 py-3 text-center">
+            <span class="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">${a._count?.events || 0}</span>
+          </td>
+          <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onclick="editAmenity('${a.id}')" class="p-2 text-gray-400 hover:text-primary-500 rounded-lg hover:bg-primary-50 transition-colors" title="Bearbeiten">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+              </button>
+              <button onclick="confirmDelete('${a.id}', ${a._count?.events || 0})" class="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors" title="Löschen">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+              </button>
+            </div>
+          </td>
+        </tr>
       `).join('');
   }
 
   function renderUnconfirmed() {
     if (unconfirmed.length === 0) {
-      unconfirmedList.innerHTML = '<p class="text-center py-8 text-gray-500">Alle Ausstattungen bestätigt!</p>';
+      unconfirmedEmpty.classList.remove('hidden');
+      unconfirmedList.innerHTML = '';
+      bulkActions.classList.add('hidden');
       return;
     }
 
+    unconfirmedEmpty.classList.add('hidden');
+    bulkActions.classList.remove('hidden');
+    unconfirmedCountEl.textContent = unconfirmed.length;
+
     unconfirmedList.innerHTML = unconfirmed.map(item => `
-      <div class="bg-white rounded-xl shadow-card p-4 flex items-center gap-4">
-        <span class="text-2xl">${item.amenity?.icon || '🎯'}</span>
+      <div class="bg-gray-50 hover:bg-gray-100 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-4 transition-colors">
+        <span class="text-2xl flex-shrink-0">${item.amenity?.icon || '🎯'}</span>
         <div class="flex-1 min-w-0">
           <div class="font-medium text-gray-900">${item.amenity?.name_de || 'Unknown'}</div>
-          <div class="text-sm text-gray-500">Event: ${item.event?.title || item.event_id}</div>
+          <a href="/admin/review?id=${item.event_id}" class="text-sm text-primary-500 hover:text-primary-600 hover:underline">
+            ${item.event?.title || item.event_id}
+          </a>
+          <div class="text-xs text-gray-400 mt-1">
+            Vorgeschlagen von: <span class="font-medium">${item.source || 'AI'}</span>
+          </div>
         </div>
-        <button onclick="confirmAmenity('${item.event_id}', '${item.amenity_id}')" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm">
-          Bestätigen
-        </button>
-        <button onclick="removeAmenity('${item.event_id}', '${item.amenity_id}')" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-          Entfernen
-        </button>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button onclick="confirmAmenity('${item.event_id}', '${item.amenity_id}')" class="inline-flex items-center gap-1.5 px-3 py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors font-medium" title="Bestätigen">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span class="hidden sm:inline">Bestätigen</span>
+          </button>
+          <button onclick="removeAmenity('${item.event_id}', '${item.amenity_id}')" class="inline-flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-white transition-colors font-medium" title="Entfernen">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            <span class="hidden sm:inline">Entfernen</span>
+          </button>
+        </div>
       </div>
     `).join('');
   }
@@ -274,25 +444,54 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   };
 
-  // Modal handlers (similar to categories)
+  // Bulk confirm all
+  document.getElementById('confirm-all-btn').addEventListener('click', async () => {
+    if (!confirm(`Alle ${unconfirmed.length} Zuweisungen bestätigen?`)) return;
+    
+    const btn = document.getElementById('confirm-all-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Wird bestätigt...';
+    
+    try {
+      const promises = unconfirmed.map(item => 
+        fetch(`${API_URL}/api/admin/amenities/events/${item.event_id}/amenities/${item.amenity_id}/confirm`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      );
+      await Promise.all(promises);
+      loadUnconfirmed();
+      loadAmenities();
+    } catch (e) {
+      alert('Fehler beim Bestätigen');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg> Alle bestätigen';
+    }
+  });
+
+  // Modal handlers
   document.getElementById('add-amenity-btn').addEventListener('click', () => {
-    document.getElementById('modal-title').textContent = 'Neue Ausstattung';
+    document.getElementById('modal-title').textContent = 'Neue Amenity';
     document.getElementById('amenity-form').reset();
     document.getElementById('edit-id').value = '';
     document.getElementById('input-slug').disabled = false;
+    iconPreview.textContent = '🎯';
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    document.getElementById('input-name').focus();
   });
 
   window.editAmenity = function(id) {
     const a = amenities.find(am => am.id === id);
     if (!a) return;
-    document.getElementById('modal-title').textContent = 'Ausstattung bearbeiten';
+    document.getElementById('modal-title').textContent = 'Amenity bearbeiten';
     document.getElementById('edit-id').value = id;
     document.getElementById('input-name').value = a.name_de;
     document.getElementById('input-slug').value = a.slug;
     document.getElementById('input-slug').disabled = true;
     document.getElementById('input-icon').value = a.icon || '';
+    iconPreview.textContent = a.icon || '🎯';
     modal.classList.remove('hidden');
     modal.classList.add('flex');
   };
@@ -300,6 +499,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('modal-cancel').addEventListener('click', () => {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+  });
+
+  // Close modal on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
   });
 
   document.getElementById('amenity-form').addEventListener('submit', async (e) => {
@@ -335,18 +542,25 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   });
 
+  // Icon preview
+  document.getElementById('input-icon').addEventListener('input', (e) => {
+    iconPreview.textContent = e.target.value || '🎯';
+  });
+
   window.confirmDelete = function(id, eventCount) {
     deleteTargetId = id;
     const warning = document.getElementById('delete-warning');
+    const confirmBtn = document.getElementById('delete-confirm');
+    
     if (eventCount > 0) {
-      warning.textContent = `Diese Ausstattung hat ${eventCount} Events und kann nicht gelöscht werden.`;
+      warning.textContent = `Diese Amenity wird von ${eventCount} Events verwendet und kann nicht gelöscht werden.`;
       warning.classList.remove('hidden');
-      document.getElementById('delete-confirm').disabled = true;
-      document.getElementById('delete-confirm').classList.add('opacity-50');
+      confirmBtn.disabled = true;
+      confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
     } else {
       warning.classList.add('hidden');
-      document.getElementById('delete-confirm').disabled = false;
-      document.getElementById('delete-confirm').classList.remove('opacity-50');
+      confirmBtn.disabled = false;
+      confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
     deleteModal.classList.remove('hidden');
     deleteModal.classList.add('flex');
@@ -355,6 +569,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('delete-cancel').addEventListener('click', () => {
     deleteModal.classList.add('hidden');
     deleteModal.classList.remove('flex');
+  });
+
+  // Close delete modal on backdrop click
+  deleteModal.addEventListener('click', (e) => {
+    if (e.target === deleteModal) {
+      deleteModal.classList.add('hidden');
+      deleteModal.classList.remove('flex');
+    }
   });
 
   document.getElementById('delete-confirm').addEventListener('click', async () => {
@@ -391,6 +613,20 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   document.getElementById('input-slug').addEventListener('input', () => {
     document.getElementById('input-slug').dataset.manual = 'true';
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+      if (!deleteModal.classList.contains('hidden')) {
+        deleteModal.classList.add('hidden');
+        deleteModal.classList.remove('flex');
+      }
+    }
   });
 
   loadAmenities();

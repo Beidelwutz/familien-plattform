@@ -1,0 +1,937 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  currentPage: string;
+}
+
+const { title, currentPage } = Astro.props;
+
+// Navigation groups with their items
+const navGroups = [
+  {
+    id: 'monitoring',
+    label: 'Systemüberwachung',
+    icon: '📊',
+    items: [
+      { href: '/admin', icon: '📊', label: 'Dashboard', id: 'dashboard' },
+      { href: '/admin/health', icon: '💚', label: 'System Health', id: 'health' },
+      { href: '/admin/dlq', icon: '📭', label: 'DLQ Manager', id: 'dlq' },
+    ]
+  },
+  {
+    id: 'events',
+    label: 'Event-Management',
+    icon: '📋',
+    items: [
+      { href: '/admin/review', icon: '📋', label: 'Review Queue', id: 'review' },
+      { href: '/admin/dedup', icon: '⚠️', label: 'Duplikate', id: 'dedup' },
+    ]
+  },
+  {
+    id: 'import',
+    label: 'Datenimport',
+    icon: '📡',
+    items: [
+      { href: '/admin/sources', icon: '📡', label: 'Quellen', id: 'sources' },
+      { href: '/admin/runs', icon: '🔄', label: 'Ingest-Runs', id: 'runs' },
+      { href: '/admin/test-crawl', icon: '🔬', label: 'Test Crawl', id: 'test-crawl' },
+    ]
+  },
+  {
+    id: 'content',
+    label: 'Inhaltsverwaltung',
+    icon: '🏷️',
+    items: [
+      { href: '/admin/categories', icon: '🏷️', label: 'Kategorien', id: 'categories' },
+      { href: '/admin/amenities', icon: '🎯', label: 'Ausstattung', id: 'amenities' },
+    ]
+  },
+  {
+    id: 'analytics',
+    label: 'Analyse',
+    icon: '🔥',
+    items: [
+      { href: '/admin/trends', icon: '🔥', label: 'Trends', id: 'trends' },
+    ]
+  },
+  {
+    id: 'ai',
+    label: 'KI-Management',
+    icon: '🤖',
+    items: [
+      { href: '/admin/ai-worker', icon: '🤖', label: 'AI Worker', id: 'ai-worker' },
+      { href: '/admin/ai-usage', icon: '📈', label: 'AI Monitor', id: 'ai-usage' },
+    ]
+  },
+];
+
+// Find which group contains the current page
+function getActiveGroup(pageId: string): string | null {
+  for (const group of navGroups) {
+    if (group.items.some(item => item.id === pageId)) {
+      return group.id;
+    }
+  }
+  return null;
+}
+
+const activeGroupId = getActiveGroup(currentPage);
+---
+
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    
+    <!-- Preconnect -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#4F46E5" />
+    
+    <style>
+      /* Admin Layout Specific Styles */
+      :root {
+        --sidebar-width: 240px;
+        --sidebar-collapsed-width: 64px;
+        --header-height: 56px;
+        --primary-500: #4f46e5;
+        --primary-600: #4338ca;
+        --primary-100: #e0e7ff;
+        --primary-700: #3730a3;
+      }
+
+      /* Sidebar */
+      .admin-sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--sidebar-width);
+        background: white;
+        border-right: 1px solid #e5e7eb;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        transition: width 0.3s ease, transform 0.3s ease;
+      }
+
+      .admin-sidebar.collapsed {
+        width: var(--sidebar-collapsed-width);
+      }
+
+      .admin-sidebar.collapsed .sidebar-label,
+      .admin-sidebar.collapsed .nav-group-header span,
+      .admin-sidebar.collapsed .nav-item-label {
+        display: none;
+      }
+
+      .admin-sidebar.collapsed .nav-group-header {
+        justify-content: center;
+        padding: 0.5rem;
+      }
+
+      .admin-sidebar.collapsed .nav-item {
+        justify-content: center;
+        padding: 0.5rem;
+      }
+
+      .admin-sidebar.collapsed .logo-text {
+        display: none;
+      }
+
+      /* Mobile sidebar */
+      @media (max-width: 1023px) {
+        .admin-sidebar {
+          transform: translateX(-100%);
+          width: var(--sidebar-width);
+        }
+
+        .admin-sidebar.mobile-open {
+          transform: translateX(0);
+        }
+
+        .admin-sidebar.collapsed {
+          width: var(--sidebar-width);
+        }
+
+        .admin-sidebar.collapsed .sidebar-label,
+        .admin-sidebar.collapsed .nav-group-header span,
+        .admin-sidebar.collapsed .nav-item-label,
+        .admin-sidebar.collapsed .logo-text {
+          display: inline;
+        }
+
+        .admin-sidebar.collapsed .nav-group-header,
+        .admin-sidebar.collapsed .nav-item {
+          justify-content: flex-start;
+          padding: 0.5rem 0.75rem;
+        }
+      }
+
+      /* Mobile overlay */
+      .mobile-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 35;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .mobile-overlay.visible {
+        display: block;
+        opacity: 1;
+      }
+
+      /* Header */
+      .admin-header {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: var(--sidebar-width);
+        height: var(--header-height);
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1rem;
+        transition: left 0.3s ease;
+      }
+
+      .admin-header.sidebar-collapsed {
+        left: var(--sidebar-collapsed-width);
+      }
+
+      @media (max-width: 1023px) {
+        .admin-header {
+          left: 0;
+        }
+
+        .admin-header.sidebar-collapsed {
+          left: 0;
+        }
+      }
+
+      /* Main content */
+      .admin-main {
+        margin-left: var(--sidebar-width);
+        margin-top: var(--header-height);
+        min-height: calc(100vh - var(--header-height));
+        transition: margin-left 0.3s ease;
+      }
+
+      .admin-main.sidebar-collapsed {
+        margin-left: var(--sidebar-collapsed-width);
+      }
+
+      @media (max-width: 1023px) {
+        .admin-main {
+          margin-left: 0;
+        }
+
+        .admin-main.sidebar-collapsed {
+          margin-left: 0;
+        }
+      }
+
+      /* Nav Group */
+      .nav-group {
+        border-bottom: 1px solid #f3f4f6;
+      }
+
+      .nav-group:last-child {
+        border-bottom: none;
+      }
+
+      .nav-group-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        color: #6b7280;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        transition: background-color 0.2s;
+      }
+
+      .nav-group-header:hover {
+        background-color: #f9fafb;
+      }
+
+      .nav-group-header .chevron {
+        margin-left: auto;
+        transition: transform 0.2s;
+      }
+
+      .nav-group.collapsed .chevron {
+        transform: rotate(-90deg);
+      }
+
+      .nav-group.collapsed .nav-group-items {
+        display: none;
+      }
+
+      .nav-group-items {
+        padding: 0.25rem 0;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem 0.5rem 1.5rem;
+        color: #374151;
+        font-size: 0.875rem;
+        text-decoration: none;
+        transition: background-color 0.2s, color 0.2s;
+        border-radius: 0.375rem;
+        margin: 0.125rem 0.5rem;
+      }
+
+      .nav-item:hover {
+        background-color: #f3f4f6;
+      }
+
+      .nav-item.active {
+        background-color: var(--primary-100);
+        color: var(--primary-700);
+        font-weight: 500;
+      }
+
+      /* Search */
+      .search-container {
+        position: relative;
+        max-width: 400px;
+        flex: 1;
+      }
+
+      .search-input {
+        width: 100%;
+        padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+
+      .search-input:focus {
+        border-color: var(--primary-500);
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+      }
+
+      .search-icon {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #9ca3af;
+      }
+
+      .search-shortcut {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 0.125rem 0.375rem;
+        background: #f3f4f6;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+        font-family: monospace;
+      }
+
+      /* User dropdown */
+      .user-dropdown {
+        position: relative;
+      }
+
+      .user-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 0.5rem;
+        min-width: 180px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        z-index: 50;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.5rem);
+        transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+      }
+
+      .user-dropdown.open .user-dropdown-menu {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+      }
+
+      .user-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        color: #374151;
+        font-size: 0.875rem;
+        text-decoration: none;
+        transition: background-color 0.2s;
+        cursor: pointer;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+      }
+
+      .user-dropdown-item:hover {
+        background-color: #f3f4f6;
+      }
+
+      .user-dropdown-item:first-child {
+        border-radius: 0.5rem 0.5rem 0 0;
+      }
+
+      .user-dropdown-item:last-child {
+        border-radius: 0 0 0.5rem 0.5rem;
+      }
+
+      .user-dropdown-divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 0.25rem 0;
+      }
+
+      /* Notification badge */
+      .notification-badge {
+        position: relative;
+      }
+
+      .notification-count {
+        position: absolute;
+        top: -0.25rem;
+        right: -0.25rem;
+        min-width: 1.25rem;
+        height: 1.25rem;
+        padding: 0 0.25rem;
+        background: #ef4444;
+        color: white;
+        font-size: 0.625rem;
+        font-weight: 600;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* Collapse button */
+      .collapse-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        margin: 0.5rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: white;
+        color: #6b7280;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s;
+      }
+
+      .collapse-btn:hover {
+        background-color: #f3f4f6;
+        color: #374151;
+      }
+
+      .admin-sidebar.collapsed .collapse-btn span {
+        display: none;
+      }
+
+      .admin-sidebar.collapsed .collapse-btn svg {
+        transform: rotate(180deg);
+      }
+
+      /* Mobile menu button */
+      .mobile-menu-btn {
+        display: none;
+        padding: 0.5rem;
+        border: none;
+        background: none;
+        color: #374151;
+        cursor: pointer;
+        border-radius: 0.375rem;
+        transition: background-color 0.2s;
+      }
+
+      .mobile-menu-btn:hover {
+        background-color: #f3f4f6;
+      }
+
+      @media (max-width: 1023px) {
+        .mobile-menu-btn {
+          display: flex;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50">
+    <!-- Auth Token Sync -->
+    <script>
+      import { syncAuthToken } from '../lib/authSync';
+      syncAuthToken();
+    </script>
+
+    <!-- Mobile Overlay -->
+    <div id="mobile-overlay" class="mobile-overlay"></div>
+
+    <!-- Sidebar -->
+    <aside id="admin-sidebar" class="admin-sidebar">
+      <!-- Logo -->
+      <div class="p-4 border-b border-gray-100">
+        <a href="/admin" class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <span class="text-white text-sm">🏠</span>
+          </div>
+          <span class="logo-text font-semibold text-gray-900">
+            kiez<span class="text-primary-500">ling</span> <span class="text-gray-400 font-normal">Admin</span>
+          </span>
+        </a>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="flex-1 overflow-y-auto py-2">
+        {navGroups.map((group) => (
+          <div 
+            class={`nav-group ${activeGroupId !== group.id ? 'collapsed' : ''}`}
+            data-group-id={group.id}
+          >
+            <button class="nav-group-header w-full" type="button">
+              <span class="text-base">{group.icon}</span>
+              <span>{group.label}</span>
+              <svg class="chevron w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <div class="nav-group-items">
+              {group.items.map((item) => (
+                <a 
+                  href={item.href} 
+                  class={`nav-item ${currentPage === item.id ? 'active' : ''}`}
+                  data-page-id={item.id}
+                >
+                  <span class="text-base">{item.icon}</span>
+                  <span class="nav-item-label">{item.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <!-- Collapse Button -->
+      <div class="border-t border-gray-100 p-2">
+        <button id="collapse-btn" class="collapse-btn w-full" type="button">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          </svg>
+          <span>Einklappen</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Header -->
+    <header id="admin-header" class="admin-header">
+      <div class="flex items-center gap-4">
+        <!-- Mobile Menu Button -->
+        <button id="mobile-menu-btn" class="mobile-menu-btn" type="button" aria-label="Menü öffnen">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+
+        <!-- Search -->
+        <div class="search-container hidden sm:block">
+          <svg class="search-icon w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input 
+            id="admin-search"
+            type="text" 
+            class="search-input" 
+            placeholder="Suchen..."
+            autocomplete="off"
+          />
+          <span class="search-shortcut hidden md:inline">
+            <span id="search-shortcut-key">⌘</span>K
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Notifications -->
+        <button id="notifications-btn" class="notification-badge p-2 rounded-lg hover:bg-gray-100 transition-colors" type="button" aria-label="Benachrichtigungen">
+          <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span id="notification-count" class="notification-count hidden">0</span>
+        </button>
+
+        <!-- User Dropdown -->
+        <div id="user-dropdown" class="user-dropdown">
+          <button id="user-dropdown-btn" class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 transition-colors" type="button">
+            <div class="w-8 h-8 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-sm font-medium">
+              <span id="user-avatar">A</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-500 hidden sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <div class="user-dropdown-menu">
+            <a href="/" class="user-dropdown-item">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Zur Startseite
+            </a>
+            <div class="user-dropdown-divider"></div>
+            <button id="logout-btn" class="user-dropdown-item text-red-600">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Abmelden
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="admin-main" class="admin-main">
+      <div class="p-4 sm:p-6 lg:p-8">
+        <slot />
+      </div>
+    </main>
+
+    <!-- Client-side scripts -->
+    <script>
+      import { supabase, getSession } from '../lib/supabase';
+      import { logout } from '../lib/authSync';
+
+      const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+
+      // DOM Elements
+      const sidebar = document.getElementById('admin-sidebar');
+      const header = document.getElementById('admin-header');
+      const main = document.getElementById('admin-main');
+      const collapseBtn = document.getElementById('collapse-btn');
+      const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+      const mobileOverlay = document.getElementById('mobile-overlay');
+      const userDropdownBtn = document.getElementById('user-dropdown-btn');
+      const userDropdown = document.getElementById('user-dropdown');
+      const logoutBtn = document.getElementById('logout-btn');
+      const searchInput = document.getElementById('admin-search') as HTMLInputElement;
+      const searchShortcutKey = document.getElementById('search-shortcut-key');
+      const notificationCount = document.getElementById('notification-count');
+      const userAvatar = document.getElementById('user-avatar');
+
+      // Detect OS for keyboard shortcut display
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      if (searchShortcutKey) {
+        searchShortcutKey.textContent = isMac ? '⌘' : 'Ctrl+';
+      }
+
+      // Sidebar collapse state
+      const SIDEBAR_COLLAPSED_KEY = 'admin_sidebar_collapsed';
+      const NAV_GROUPS_STATE_KEY = 'admin_nav_groups_state';
+
+      // Initialize sidebar state from localStorage
+      function initSidebarState() {
+        const isCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+        if (isCollapsed) {
+          sidebar?.classList.add('collapsed');
+          header?.classList.add('sidebar-collapsed');
+          main?.classList.add('sidebar-collapsed');
+        }
+      }
+
+      // Initialize nav groups state from localStorage
+      function initNavGroupsState() {
+        try {
+          const savedState = localStorage.getItem(NAV_GROUPS_STATE_KEY);
+          if (savedState) {
+            const groupStates = JSON.parse(savedState) as Record<string, boolean>;
+            document.querySelectorAll('.nav-group').forEach((group) => {
+              const groupId = (group as HTMLElement).dataset.groupId;
+              if (groupId && groupStates[groupId] !== undefined) {
+                if (groupStates[groupId]) {
+                  group.classList.remove('collapsed');
+                } else {
+                  group.classList.add('collapsed');
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error loading nav groups state:', e);
+        }
+      }
+
+      // Save nav groups state to localStorage
+      function saveNavGroupsState() {
+        try {
+          const groupStates: Record<string, boolean> = {};
+          document.querySelectorAll('.nav-group').forEach((group) => {
+            const groupId = (group as HTMLElement).dataset.groupId;
+            if (groupId) {
+              groupStates[groupId] = !group.classList.contains('collapsed');
+            }
+          });
+          localStorage.setItem(NAV_GROUPS_STATE_KEY, JSON.stringify(groupStates));
+        } catch (e) {
+          console.error('Error saving nav groups state:', e);
+        }
+      }
+
+      // Toggle sidebar collapse
+      collapseBtn?.addEventListener('click', () => {
+        const isCollapsed = sidebar?.classList.toggle('collapsed');
+        header?.classList.toggle('sidebar-collapsed');
+        main?.classList.toggle('sidebar-collapsed');
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed));
+      });
+
+      // Mobile menu toggle
+      function openMobileMenu() {
+        sidebar?.classList.add('mobile-open');
+        mobileOverlay?.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeMobileMenu() {
+        sidebar?.classList.remove('mobile-open');
+        mobileOverlay?.classList.remove('visible');
+        document.body.style.overflow = '';
+      }
+
+      mobileMenuBtn?.addEventListener('click', openMobileMenu);
+      mobileOverlay?.addEventListener('click', closeMobileMenu);
+
+      // Close mobile menu on escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeMobileMenu();
+          userDropdown?.classList.remove('open');
+        }
+      });
+
+      // Nav group toggle
+      document.querySelectorAll('.nav-group-header').forEach((header) => {
+        header.addEventListener('click', () => {
+          const group = header.closest('.nav-group');
+          group?.classList.toggle('collapsed');
+          saveNavGroupsState();
+        });
+      });
+
+      // User dropdown
+      userDropdownBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        userDropdown?.classList.toggle('open');
+      });
+
+      document.addEventListener('click', () => {
+        userDropdown?.classList.remove('open');
+      });
+
+      // Logout
+      logoutBtn?.addEventListener('click', async () => {
+        await logout('/login');
+      });
+
+      // Search shortcut (Cmd/Ctrl + K)
+      document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          searchInput?.focus();
+        }
+      });
+
+      // Search functionality
+      searchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const query = searchInput.value.trim();
+          if (query) {
+            // Navigate to search or filter current page
+            window.location.href = `/admin/review?search=${encodeURIComponent(query)}`;
+          }
+        }
+      });
+
+      // Auth check and notification loading
+      async function waitForAuth(maxWaitMs = 3000): Promise<string | null> {
+        let token = localStorage.getItem('auth_token');
+        if (token) return token;
+
+        return new Promise((resolve) => {
+          let resolved = false;
+
+          const timeout = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve(localStorage.getItem('auth_token'));
+            }
+          }, maxWaitMs);
+
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!resolved && session?.access_token) {
+              resolved = true;
+              clearTimeout(timeout);
+              localStorage.setItem('auth_token', session.access_token);
+              subscription.unsubscribe();
+              resolve(session.access_token);
+            }
+          });
+
+          getSession().then(session => {
+            if (!resolved && session?.access_token) {
+              resolved = true;
+              clearTimeout(timeout);
+              localStorage.setItem('auth_token', session.access_token);
+              subscription.unsubscribe();
+              resolve(session.access_token);
+            }
+          });
+        });
+      }
+
+      // Initialize
+      async function init() {
+        initSidebarState();
+        initNavGroupsState();
+
+        // Check auth
+        let token = await waitForAuth();
+
+        if (!token) {
+          window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+          return;
+        }
+
+        // Verify admin role
+        try {
+          const meRes = await fetch(`${API_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (!meRes.ok) {
+            // Try to refresh token from Supabase
+            const session = await getSession();
+            if (session?.access_token) {
+              token = session.access_token;
+              localStorage.setItem('auth_token', token);
+              const retryRes = await fetch(`${API_URL}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (!retryRes.ok) {
+                localStorage.removeItem('auth_token');
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+                return;
+              }
+              const retryData = await retryRes.json();
+              if (retryData.data.role !== 'admin') {
+                window.location.href = '/?error=not_admin';
+                return;
+              }
+              // Set avatar
+              if (userAvatar && retryData.data.email) {
+                userAvatar.textContent = retryData.data.email.charAt(0).toUpperCase();
+              }
+            } else {
+              localStorage.removeItem('auth_token');
+              window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
+              return;
+            }
+          } else {
+            const meData = await meRes.json();
+            if (meData.data.role !== 'admin') {
+              window.location.href = '/?error=not_admin';
+              return;
+            }
+            // Set avatar
+            if (userAvatar && meData.data.email) {
+              userAvatar.textContent = meData.data.email.charAt(0).toUpperCase();
+            }
+          }
+        } catch (e) {
+          // Network error - don't redirect, let page show error
+          console.error('Auth check error:', e);
+        }
+
+        // Load notification counts
+        loadNotificationCounts(token);
+      }
+
+      async function loadNotificationCounts(token: string) {
+        try {
+          const [statsRes, dupsRes, attentionRes] = await Promise.all([
+            fetch(`${API_URL}/api/admin/stats`, {
+              headers: { Authorization: `Bearer ${token}` }
+            }),
+            fetch(`${API_URL}/api/admin/duplicates?status=pending&limit=1`, {
+              headers: { Authorization: `Bearer ${token}` }
+            }),
+            fetch(`${API_URL}/api/admin/ingest-runs/needs-attention`, {
+              headers: { Authorization: `Bearer ${token}` }
+            }),
+          ]);
+
+          let totalCount = 0;
+
+          if (statsRes.ok) {
+            const stats = await statsRes.json();
+            totalCount += stats.data?.events?.pending_review || 0;
+          }
+
+          if (dupsRes.ok) {
+            const dups = await dupsRes.json();
+            totalCount += dups.pagination?.total || 0;
+          }
+
+          if (attentionRes.ok) {
+            const attention = await attentionRes.json();
+            totalCount += attention.total || 0;
+          }
+
+          if (notificationCount && totalCount > 0) {
+            notificationCount.textContent = totalCount > 99 ? '99+' : String(totalCount);
+            notificationCount.classList.remove('hidden');
+          }
+        } catch (e) {
+          console.error('Error loading notification counts:', e);
+        }
+      }
+
+      init();
+    </script>
+  </body>
+</html>

@@ -1,134 +1,478 @@
 ---
-import BaseLayout from "../../layouts/BaseLayout.astro";
-import StickyHeader from "../../components/layout/StickyHeader.astro";
-
-const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:5000";
 ---
 
-<BaseLayout title="DLQ Manager - Admin - kiezling">
-  <StickyHeader />
-  <main class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
-        <h1 class="text-2xl font-bold text-gray-900">Dead Letter Queue</h1>
-        <p class="text-gray-500">Jobs die nach mehrfachen Versuchen fehlgeschlagen sind</p>
-      </header>
+<AdminLayout title="DLQ Manager - kiezling Admin" currentPage="dlq">
+  <!-- Header -->
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900">Dead Letter Queue</h1>
+    <p class="text-gray-500 mt-1">Jobs die nach mehrfachen Versuchen fehlgeschlagen sind</p>
+  </div>
 
-      <!-- Stats -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="text-sm text-gray-500">DLQ Jobs</div>
-          <div class="text-3xl font-bold text-red-600" id="dlq-count">-</div>
+  <!-- Stats Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- DLQ Count -->
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-medium text-gray-500">DLQ Jobs</div>
+          <div class="text-4xl font-bold text-red-600 mt-1" id="dlq-count">-</div>
         </div>
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="text-sm text-gray-500">Ältester Job</div>
-          <div class="text-xl font-semibold text-gray-900" id="oldest-job">-</div>
-        </div>
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="text-sm text-gray-500">Häufigster Fehler</div>
-          <div class="text-xl font-semibold text-gray-900 truncate" id="common-error">-</div>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="mb-6 flex flex-wrap gap-3">
-        <button id="refresh-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium">
-          Aktualisieren
-        </button>
-        <button id="retry-all-btn" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium">
-          Alle erneut versuchen
-        </button>
-        <button id="clear-btn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-medium">
-          DLQ leeren
-        </button>
-      </div>
-
-      <!-- Job List -->
-      <div class="bg-white shadow rounded-lg overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Job ID</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Typ</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Versuche</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Letzter Fehler</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Zeitpunkt</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktionen</th>
-              </tr>
-            </thead>
-            <tbody id="dlq-table" class="bg-white divide-y divide-gray-200">
-              <tr>
-                <td colspan="6" class="px-6 py-4 text-center text-gray-500">Laden...</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="p-3 bg-red-100 rounded-full">
+          <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
         </div>
       </div>
     </div>
-  </main>
 
-  <script is:inline define:vars={{ API_URL, WORKER_URL }}>
-    const workerUrl = WORKER_URL;
+    <!-- Oldest Job -->
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm font-medium text-gray-500">Ältester Job</div>
+          <div class="text-xl font-semibold text-gray-900 mt-1" id="oldest-job">-</div>
+        </div>
+        <div class="p-3 bg-yellow-100 rounded-full">
+          <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      </div>
+    </div>
 
-    async function loadDLQJobs() {
-      try {
-        const response = await fetch(`${workerUrl}/metrics`);
-        if (!response.ok) throw new Error('Worker nicht erreichbar');
-        
-        const data = await response.json();
-        const dlqCount = data.dlq?.count ?? 0;
-        
-        document.getElementById('dlq-count').textContent = dlqCount;
-        
-        if (dlqCount === 0) {
-          document.getElementById('dlq-table').innerHTML = `
-            <tr>
-              <td colspan="6" class="px-6 py-8 text-center text-gray-500">
-                <div class="text-green-600 font-medium">Keine Jobs in der DLQ</div>
-                <div class="text-sm mt-1">Alle Jobs wurden erfolgreich verarbeitet</div>
-              </td>
-            </tr>
-          `;
-          document.getElementById('oldest-job').textContent = '-';
-          document.getElementById('common-error').textContent = '-';
-        } else {
-          document.getElementById('dlq-table').innerHTML = `
-            <tr>
-              <td colspan="6" class="px-6 py-4 text-center text-gray-500">
-                ${dlqCount} Jobs in der DLQ. Details-Endpoint in Entwicklung.
-              </td>
-            </tr>
-          `;
-        }
-      } catch (error) {
-        console.error('Failed to load DLQ:', error);
-        document.getElementById('dlq-count').textContent = '?';
+    <!-- Most Common Error -->
+    <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+      <div class="flex items-center justify-between">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-gray-500">Häufigster Fehler</div>
+          <div class="text-xl font-semibold text-gray-900 mt-1 truncate" id="common-error">-</div>
+        </div>
+        <div class="p-3 bg-orange-100 rounded-full flex-shrink-0 ml-4">
+          <svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Row -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <div class="flex flex-wrap items-center gap-3">
+      <!-- Error Type Filter -->
+      <div class="flex-1 min-w-[150px] max-w-[200px]">
+        <label for="filter-error" class="sr-only">Fehlertyp</label>
+        <select id="filter-error" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+          <option value="all">Alle Fehler</option>
+          <option value="429">429 - Rate Limit</option>
+          <option value="500">500 - Server Error</option>
+          <option value="timeout">Timeout</option>
+          <option value="network">Netzwerkfehler</option>
+          <option value="validation">Validierung</option>
+        </select>
+      </div>
+
+      <!-- Queue Filter -->
+      <div class="flex-1 min-w-[150px] max-w-[200px]">
+        <label for="filter-queue" class="sr-only">Queue</label>
+        <select id="filter-queue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+          <option value="all">Alle Queues</option>
+          <option value="crawl">Crawl</option>
+          <option value="classify">Classify</option>
+          <option value="score">Score</option>
+          <option value="geocode">Geocode</option>
+        </select>
+      </div>
+
+      <!-- Spacer -->
+      <div class="flex-1"></div>
+
+      <!-- Action Buttons -->
+      <button id="refresh-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Aktualisieren
+      </button>
+
+      <button id="retry-all-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Alle wiederholen
+      </button>
+
+      <button id="clear-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-medium">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        DLQ leeren
+      </button>
+    </div>
+  </div>
+
+  <!-- Jobs Table -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" data-sort="id">
+              <div class="flex items-center gap-1">
+                Job ID
+                <svg class="w-4 h-4 text-gray-400 sort-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" data-sort="type">
+              <div class="flex items-center gap-1">
+                Typ
+                <svg class="w-4 h-4 text-gray-400 sort-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" data-sort="attempts">
+              <div class="flex items-center gap-1">
+                Versuche
+                <svg class="w-4 h-4 text-gray-400 sort-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" data-sort="error">
+              <div class="flex items-center gap-1">
+                Letzter Fehler
+                <svg class="w-4 h-4 text-gray-400 sort-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none" data-sort="time">
+              <div class="flex items-center gap-1">
+                Zeitpunkt
+                <svg class="w-4 h-4 text-gray-400 sort-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </div>
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Aktionen
+            </th>
+          </tr>
+        </thead>
+        <tbody id="dlq-table" class="bg-white divide-y divide-gray-200">
+          <tr>
+            <td colspan="6" class="px-6 py-8 text-center text-gray-500">
+              <div class="flex flex-col items-center justify-center">
+                <svg class="w-8 h-8 text-gray-400 animate-spin mb-3" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Laden...
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Auto-refresh indicator -->
+  <div class="mt-4 text-sm text-gray-500 flex items-center gap-2">
+    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+    <span>Auto-Aktualisierung alle 30 Sekunden</span>
+    <span class="text-gray-400">|</span>
+    <span id="last-update">Letzte Aktualisierung: -</span>
+  </div>
+
+  <!-- Job Detail Modal -->
+  <div id="job-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" id="modal-backdrop"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Job Details</h3>
+            <p class="text-sm text-gray-500" id="modal-job-id">-</p>
+          </div>
+          <button id="modal-close" class="p-2 hover:bg-gray-200 rounded-lg transition">
+            <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-4">
+          <!-- Job Info -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs font-medium text-gray-500 uppercase">Typ</label>
+              <p class="text-sm text-gray-900 mt-1" id="modal-type">-</p>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 uppercase">Queue</label>
+              <p class="text-sm text-gray-900 mt-1" id="modal-queue">-</p>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 uppercase">Versuche</label>
+              <p class="text-sm text-gray-900 mt-1" id="modal-attempts">-</p>
+            </div>
+            <div>
+              <label class="text-xs font-medium text-gray-500 uppercase">Zeitpunkt</label>
+              <p class="text-sm text-gray-900 mt-1" id="modal-time">-</p>
+            </div>
+          </div>
+
+          <!-- Error Stack -->
+          <div>
+            <label class="text-xs font-medium text-gray-500 uppercase">Fehler / Stack Trace</label>
+            <pre class="mt-2 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 overflow-x-auto" id="modal-error">-</pre>
+          </div>
+
+          <!-- Job Data -->
+          <div>
+            <label class="text-xs font-medium text-gray-500 uppercase">Job Daten (JSON)</label>
+            <pre class="mt-2 p-4 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-800 overflow-x-auto" id="modal-data">-</pre>
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+          <button id="modal-delete" class="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Löschen
+          </button>
+          <button id="modal-retry" class="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Wiederholen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script is:inline define:vars={{ WORKER_URL }}>
+  const workerUrl = WORKER_URL;
+  let currentSort = { field: 'time', direction: 'desc' };
+  let currentFilters = { error: 'all', queue: 'all' };
+  let refreshInterval = null;
+  let currentJobId = null;
+
+  // Format relative time
+  function formatRelativeTime(date) {
+    const now = new Date();
+    const diff = now - new Date(date);
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'gerade eben';
+    if (minutes < 60) return `vor ${minutes}m`;
+    if (hours < 24) return `vor ${hours}h`;
+    return `vor ${days}d`;
+  }
+
+  // Update last update time
+  function updateLastUpdateTime() {
+    const now = new Date();
+    document.getElementById('last-update').textContent = 
+      `Letzte Aktualisierung: ${now.toLocaleTimeString('de-DE')}`;
+  }
+
+  // Load DLQ jobs from metrics
+  async function loadDLQJobs() {
+    try {
+      const response = await fetch(`${workerUrl}/metrics`);
+      if (!response.ok) throw new Error('Worker nicht erreichbar');
+      
+      const data = await response.json();
+      const dlqCount = data.dlq?.count ?? 0;
+      
+      // Update stats
+      document.getElementById('dlq-count').textContent = dlqCount;
+      
+      // Since we don't have detailed DLQ data from metrics, show placeholder
+      if (dlqCount === 0) {
+        document.getElementById('oldest-job').textContent = '-';
+        document.getElementById('common-error').textContent = '-';
         document.getElementById('dlq-table').innerHTML = `
           <tr>
-            <td colspan="6" class="px-6 py-4 text-center text-red-500">
-              Fehler: ${error.message}
+            <td colspan="6" class="px-6 py-12 text-center">
+              <div class="flex flex-col items-center justify-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                  <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p class="text-lg font-medium text-green-600">Keine Jobs in der DLQ</p>
+                <p class="text-sm text-gray-500 mt-1">Alle Jobs wurden erfolgreich verarbeitet</p>
+              </div>
+            </td>
+          </tr>
+        `;
+      } else {
+        // We have DLQ jobs but no detailed data yet
+        document.getElementById('oldest-job').textContent = '-';
+        document.getElementById('common-error').textContent = '-';
+        document.getElementById('dlq-table').innerHTML = `
+          <tr>
+            <td colspan="6" class="px-6 py-12 text-center">
+              <div class="flex flex-col items-center justify-center">
+                <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+                  <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <p class="text-lg font-medium text-gray-900">${dlqCount} Jobs in der DLQ</p>
+                <p class="text-sm text-gray-500 mt-1">Details-Endpoint in Entwicklung</p>
+                <p class="text-xs text-gray-400 mt-3 max-w-md">
+                  Um detaillierte Job-Informationen anzuzeigen, muss der Backend-Endpoint 
+                  <code class="px-1 py-0.5 bg-gray-100 rounded">GET /api/admin/dlq</code> implementiert werden.
+                </p>
+              </div>
             </td>
           </tr>
         `;
       }
+      
+      updateLastUpdateTime();
+      
+    } catch (error) {
+      console.error('Failed to load DLQ:', error);
+      document.getElementById('dlq-count').textContent = '?';
+      document.getElementById('oldest-job').textContent = '-';
+      document.getElementById('common-error').textContent = '-';
+      document.getElementById('dlq-table').innerHTML = `
+        <tr>
+          <td colspan="6" class="px-6 py-8 text-center">
+            <div class="flex flex-col items-center justify-center">
+              <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <p class="text-lg font-medium text-red-600">Verbindungsfehler</p>
+              <p class="text-sm text-gray-500 mt-1">${error.message}</p>
+            </div>
+          </td>
+        </tr>
+      `;
     }
+  }
 
-    document.getElementById('refresh-btn')?.addEventListener('click', loadDLQJobs);
+  // Open modal with job details
+  function openJobModal(job) {
+    currentJobId = job.id;
+    const modal = document.getElementById('job-modal');
     
-    document.getElementById('retry-all-btn')?.addEventListener('click', () => {
-      if (!confirm('Alle DLQ Jobs erneut versuchen?')) return;
-      alert('Funktion noch nicht implementiert');
-    });
+    document.getElementById('modal-job-id').textContent = `ID: ${job.id}`;
+    document.getElementById('modal-type').textContent = job.type || '-';
+    document.getElementById('modal-queue').textContent = job.queue || '-';
+    document.getElementById('modal-attempts').textContent = job.attempts || '-';
+    document.getElementById('modal-time').textContent = job.timestamp ? new Date(job.timestamp).toLocaleString('de-DE') : '-';
+    document.getElementById('modal-error').textContent = job.error || 'Keine Fehlerdetails verfügbar';
+    document.getElementById('modal-data').textContent = job.data ? JSON.stringify(job.data, null, 2) : 'Keine Job-Daten verfügbar';
     
-    document.getElementById('clear-btn')?.addEventListener('click', () => {
-      if (!confirm('DLQ wirklich leeren?')) return;
-      alert('Funktion noch nicht implementiert');
-    });
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
 
+  // Close modal
+  function closeModal() {
+    const modal = document.getElementById('job-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+    currentJobId = null;
+  }
+
+  // Retry single job
+  async function retryJob(jobId) {
+    alert('Funktion noch nicht implementiert\n\nBenötigt: POST /api/admin/dlq/' + jobId + '/retry');
+  }
+
+  // Delete single job
+  async function deleteJob(jobId) {
+    if (!confirm('Job wirklich löschen?')) return;
+    alert('Funktion noch nicht implementiert\n\nBenötigt: DELETE /api/admin/dlq/' + jobId);
+  }
+
+  // Retry all jobs
+  async function retryAllJobs() {
+    if (!confirm('Alle DLQ Jobs erneut versuchen?\n\nDies wird alle fehlgeschlagenen Jobs zurück in die Queue verschieben.')) return;
+    alert('Funktion noch nicht implementiert\n\nBenötigt: POST /api/admin/dlq/retry-all');
+  }
+
+  // Clear all jobs
+  async function clearAllJobs() {
+    if (!confirm('DLQ wirklich komplett leeren?\n\nDiese Aktion kann nicht rückgängig gemacht werden!')) return;
+    if (!confirm('Sind Sie sicher? Alle fehlgeschlagenen Jobs werden unwiderruflich gelöscht.')) return;
+    alert('Funktion noch nicht implementiert\n\nBenötigt: DELETE /api/admin/dlq/clear');
+  }
+
+  // Event Listeners
+  document.getElementById('refresh-btn')?.addEventListener('click', loadDLQJobs);
+  document.getElementById('retry-all-btn')?.addEventListener('click', retryAllJobs);
+  document.getElementById('clear-btn')?.addEventListener('click', clearAllJobs);
+
+  // Filter listeners
+  document.getElementById('filter-error')?.addEventListener('change', (e) => {
+    currentFilters.error = e.target.value;
     loadDLQJobs();
-    setInterval(loadDLQJobs, 30000);
-  </script>
-</BaseLayout>
+  });
+
+  document.getElementById('filter-queue')?.addEventListener('change', (e) => {
+    currentFilters.queue = e.target.value;
+    loadDLQJobs();
+  });
+
+  // Sort listeners
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      if (currentSort.field === field) {
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        currentSort.field = field;
+        currentSort.direction = 'asc';
+      }
+      loadDLQJobs();
+    });
+  });
+
+  // Modal listeners
+  document.getElementById('modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('modal-backdrop')?.addEventListener('click', closeModal);
+  document.getElementById('modal-retry')?.addEventListener('click', () => {
+    if (currentJobId) retryJob(currentJobId);
+  });
+  document.getElementById('modal-delete')?.addEventListener('click', () => {
+    if (currentJobId) deleteJob(currentJobId);
+  });
+
+  // Close modal on Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // Initial load
+  loadDLQJobs();
+
+  // Auto-refresh every 30 seconds
+  refreshInterval = setInterval(loadDLQJobs, 30000);
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    if (refreshInterval) clearInterval(refreshInterval);
+  });
+</script>

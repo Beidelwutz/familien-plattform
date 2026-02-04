@@ -1,199 +1,280 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
-
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="AI Worker - Admin - kiezling">
-  <StickyHeader />
-  <AdminMobileNav currentPage="ai-worker" />
-  
-  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
+<AdminLayout title="AI Worker - kiezling Admin" currentPage="ai-worker">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
         <h1 class="text-2xl font-bold text-gray-900">AI Worker</h1>
         <p class="text-gray-500 text-sm mt-1">Pending-Events klassifizieren und Status setzen</p>
-      </header>
-
-      <!-- Loading State -->
-      <div id="loading-state" class="text-center py-12">
-        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-        <p class="text-gray-500 mt-4">Lade Status...</p>
       </div>
+      <div id="health-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-sm font-medium">
+        <span id="health-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+        <span id="health-text">Prüfe...</span>
+      </div>
+    </header>
 
-      <!-- Content -->
-      <div id="content" class="hidden space-y-6">
-        <!-- Pending AI Card -->
-        <div class="bg-white rounded-2xl shadow-card p-6">
-          <div class="flex items-center justify-between mb-4">
+    <!-- Loading State -->
+    <div id="loading-state" class="text-center py-12">
+      <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
+      <p class="text-gray-500 mt-4">Lade Status...</p>
+    </div>
+
+    <!-- Content -->
+    <div id="content" class="hidden space-y-6">
+      <!-- Stats Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <!-- Large KPI: Pending AI Events -->
+        <div id="pending-card" class="lg:col-span-1 bg-white rounded-2xl shadow-card p-6 border-l-4 border-gray-300">
+          <div class="flex items-center justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-gray-900">Warten auf AI-Klassifizierung</h2>
-              <p class="text-sm text-gray-500">Events mit Status <code class="bg-gray-100 px-1 rounded">pending_ai</code></p>
+              <p class="text-sm text-gray-500 font-medium">Pending AI</p>
+              <p id="pending-ai-count" class="text-4xl font-bold text-gray-900 mt-1">--</p>
+              <p class="text-xs text-gray-400 mt-1">Events warten</p>
             </div>
-            <div class="text-right">
-              <span id="pending-ai-count" class="text-4xl font-bold text-amber-500">--</span>
-              <span class="block text-sm text-gray-500">Events</span>
+            <div class="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">
+              🤖
             </div>
           </div>
-          
-          <div class="border-t border-gray-100 pt-4 mt-4">
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div class="flex items-center gap-2">
-                <label for="limit-select" class="text-sm text-gray-600">Limit:</label>
-                <select id="limit-select" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50" selected>50</option>
-                  <option value="100">100</option>
-                </select>
+        </div>
+
+        <!-- Mini Stats -->
+        <div class="lg:col-span-3 grid grid-cols-3 gap-4">
+          <div class="bg-white rounded-2xl shadow-card p-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-lg">
+                ✅
               </div>
-              <button 
-                id="process-btn" 
-                class="flex-1 sm:flex-none px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                <span id="btn-icon">🚀</span>
-                <span id="btn-text">Pending-AI verarbeiten</span>
-              </button>
+              <div>
+                <p class="text-sm text-gray-500">Heute verarbeitet</p>
+                <p id="processed-today" class="text-xl font-bold text-gray-900">--</p>
+              </div>
             </div>
           </div>
-        </div>
-
-        <!-- Processing Progress (shown during processing) -->
-        <div id="progress-card" class="hidden bg-white rounded-2xl shadow-card p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">AI-Klassifizierung läuft...</h3>
-            <button id="cancel-btn" class="text-sm text-gray-500 hover:text-red-500 transition-colors">
-              Abbrechen
-            </button>
-          </div>
-          
-          <!-- Progress Bar -->
-          <div class="mb-4">
-            <div class="flex justify-between text-sm text-gray-600 mb-1">
-              <span id="progress-text">0 von 0</span>
-              <span id="progress-percent">0%</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-              <div id="progress-bar" class="bg-primary-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+          <div class="bg-white rounded-2xl shadow-card p-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-lg">
+                📊
+              </div>
+              <div>
+                <p class="text-sm text-gray-500">Erfolgsrate</p>
+                <p id="success-rate" class="text-xl font-bold text-gray-900">--%</p>
+              </div>
             </div>
           </div>
-          
-          <!-- Current Event -->
-          <div class="flex items-center gap-2 text-sm text-gray-600 mb-2">
-            <span class="animate-pulse">▸</span>
-            <span>Aktuell:</span>
-            <span id="current-event" class="font-medium text-gray-900 truncate">-</span>
-          </div>
-          
-          <!-- Estimated Time -->
-          <div class="flex items-center gap-2 text-sm text-gray-500 mb-4">
-            <span>⏱</span>
-            <span>Geschätzt:</span>
-            <span id="estimated-time">Berechne...</span>
-          </div>
-          
-          <!-- Live Results Summary -->
-          <div class="grid grid-cols-4 gap-2 mb-4">
-            <div class="bg-green-50 rounded-lg p-2 text-center">
-              <span id="live-published" class="text-lg font-bold text-green-600">0</span>
-              <span class="block text-xs text-green-600">Veröff.</span>
+          <div class="bg-white rounded-2xl shadow-card p-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-lg">
+                ⏱️
+              </div>
+              <div>
+                <p class="text-sm text-gray-500">Ø Zeit/Event</p>
+                <p id="avg-time" class="text-xl font-bold text-gray-900">-- ms</p>
+              </div>
             </div>
-            <div class="bg-amber-50 rounded-lg p-2 text-center">
-              <span id="live-review" class="text-lg font-bold text-amber-600">0</span>
-              <span class="block text-xs text-amber-600">Review</span>
-            </div>
-            <div class="bg-red-50 rounded-lg p-2 text-center">
-              <span id="live-rejected" class="text-lg font-bold text-red-600">0</span>
-              <span class="block text-xs text-red-600">Abgel.</span>
-            </div>
-            <div class="bg-gray-100 rounded-lg p-2 text-center">
-              <span id="live-failed" class="text-lg font-bold text-gray-600">0</span>
-              <span class="block text-xs text-gray-600">Fehler</span>
-            </div>
-          </div>
-          
-          <!-- Live Results List -->
-          <div class="border-t border-gray-100 pt-4">
-            <h4 class="text-sm font-medium text-gray-700 mb-2">Bisherige Ergebnisse:</h4>
-            <div id="live-result-list" class="max-h-48 overflow-y-auto space-y-1 text-sm">
-              <p class="text-gray-400 text-center py-4">Noch keine Ergebnisse...</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Processing Result (shown after completion) -->
-        <div id="result-card" class="hidden bg-white rounded-2xl shadow-card p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="text-2xl">✅</span>
-            <h3 class="text-lg font-semibold text-gray-900">Verarbeitung abgeschlossen</h3>
-          </div>
-          
-          <!-- Result Summary -->
-          <div id="result-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-            <div class="bg-green-50 rounded-xl p-4 text-center">
-              <span id="result-published" class="text-2xl font-bold text-green-600">0</span>
-              <span class="block text-sm text-green-600">Veröffentlicht</span>
-            </div>
-            <div class="bg-amber-50 rounded-xl p-4 text-center">
-              <span id="result-review" class="text-2xl font-bold text-amber-600">0</span>
-              <span class="block text-sm text-amber-600">Zur Prüfung</span>
-            </div>
-            <div class="bg-red-50 rounded-xl p-4 text-center">
-              <span id="result-rejected" class="text-2xl font-bold text-red-600">0</span>
-              <span class="block text-sm text-red-600">Abgelehnt</span>
-            </div>
-            <div class="bg-gray-50 rounded-xl p-4 text-center">
-              <span id="result-failed" class="text-2xl font-bold text-gray-600">0</span>
-              <span class="block text-sm text-gray-600">Fehler</span>
-            </div>
-          </div>
-
-          <!-- Result Details -->
-          <div id="result-details" class="hidden">
-            <div class="border-t border-gray-100 pt-4">
-              <h4 class="text-sm font-medium text-gray-700 mb-2">Details:</h4>
-              <div id="result-list" class="max-h-64 overflow-y-auto space-y-2 text-sm"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Worker Status (Optional - wenn Backend-Proxy existiert) -->
-        <div id="worker-status-card" class="hidden bg-white rounded-2xl shadow-card p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Worker Status</h3>
-          <div class="flex items-center gap-3">
-            <span id="worker-indicator" class="w-3 h-3 rounded-full bg-gray-300"></span>
-            <span id="worker-status-text" class="text-gray-600">Prüfe...</span>
-          </div>
-        </div>
-
-        <!-- Quick Links -->
-        <div class="bg-white rounded-2xl shadow-card p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Schnellzugriff</h3>
-          <div class="flex flex-wrap gap-3">
-            <a href="/admin/review?status=pending_ai" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium">
-              📋 Pending-AI Events ansehen
-            </a>
-            <a href="/admin/review?status=pending_review" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
-              👁️ Review Queue
-            </a>
-            <a href="/admin/ai-usage" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
-              📊 AI Usage Monitor
-            </a>
           </div>
         </div>
       </div>
 
-      <!-- Error State -->
-      <div id="error-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
-        <p class="text-red-500 text-lg mb-4">Fehler beim Laden</p>
-        <button onclick="loadData()" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Erneut versuchen</button>
+      <!-- Batch Processing Section -->
+      <div class="bg-white rounded-2xl shadow-card p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Batch-Verarbeitung</h2>
+        
+        <div class="space-y-4">
+          <!-- Batch Limit Slider -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label for="batch-slider" class="text-sm font-medium text-gray-700">Batch-Größe</label>
+              <span id="slider-value" class="text-sm font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">25</span>
+            </div>
+            <div class="relative">
+              <input 
+                type="range" 
+                id="batch-slider" 
+                min="10" 
+                max="100" 
+                value="25" 
+                step="5"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
+              />
+              <div class="flex justify-between text-xs text-gray-400 mt-1">
+                <span>10</span>
+                <span>50</span>
+                <span>100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Start Button -->
+          <button 
+            id="start-batch-btn" 
+            class="w-full sm:w-auto px-8 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-lg"
+          >
+            <span id="btn-icon">🚀</span>
+            <span id="btn-text">Start Batch</span>
+          </button>
+          
+          <p id="btn-hint" class="text-sm text-gray-500 hidden"></p>
+        </div>
+      </div>
+
+      <!-- Progress Section (hidden by default) -->
+      <div id="progress-section" class="hidden bg-white rounded-2xl shadow-card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Verarbeitung läuft...</h3>
+          <button id="cancel-btn" class="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium">
+            Abbrechen
+          </button>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mb-6">
+          <div class="flex justify-between text-sm mb-2">
+            <span id="progress-text" class="text-gray-600">0 / 0</span>
+            <span id="progress-percent" class="font-bold text-primary-600">0%</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+            <div 
+              id="progress-bar" 
+              class="bg-gradient-to-r from-primary-500 to-primary-400 h-4 rounded-full transition-all duration-300 relative overflow-hidden"
+              style="width: 0%"
+            >
+              <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Breakdown -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div class="bg-gray-50 rounded-xl p-3 text-center">
+            <span id="stat-processed" class="text-2xl font-bold text-gray-900">0</span>
+            <span class="block text-xs text-gray-500 mt-1">Verarbeitet</span>
+          </div>
+          <div class="bg-green-50 rounded-xl p-3 text-center">
+            <span id="stat-published" class="text-2xl font-bold text-green-600">0</span>
+            <span class="block text-xs text-green-600 mt-1">→ Published</span>
+          </div>
+          <div class="bg-amber-50 rounded-xl p-3 text-center">
+            <span id="stat-review" class="text-2xl font-bold text-amber-600">0</span>
+            <span class="block text-xs text-amber-600 mt-1">→ pending_review</span>
+          </div>
+          <div class="bg-red-50 rounded-xl p-3 text-center">
+            <span id="stat-failed" class="text-2xl font-bold text-red-600">0</span>
+            <span class="block text-xs text-red-600 mt-1">Fehler</span>
+          </div>
+        </div>
+
+        <!-- Elapsed Time -->
+        <div class="flex items-center gap-2 text-sm text-gray-500">
+          <span>⏱️</span>
+          <span>Vergangene Zeit:</span>
+          <span id="elapsed-time" class="font-medium text-gray-700">0:00</span>
+        </div>
+      </div>
+
+      <!-- Results Section -->
+      <div id="results-section" class="hidden bg-white rounded-2xl shadow-card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">Ergebnisse</h3>
+          <button id="clear-results-btn" class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+            Leeren
+          </button>
+        </div>
+
+        <!-- Results List -->
+        <div id="results-list" class="max-h-96 overflow-y-auto space-y-2">
+          <p class="text-gray-400 text-center py-8">Keine Ergebnisse</p>
+        </div>
+      </div>
+
+      <!-- Quick Links -->
+      <div class="bg-white rounded-2xl shadow-card p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Schnellzugriff</h3>
+        <div class="flex flex-wrap gap-3">
+          <a href="/admin/review?status=pending_ai" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium">
+            📋 Pending-AI Events ansehen
+          </a>
+          <a href="/admin/review?status=pending_review" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
+            👁️ Review Queue
+          </a>
+          <a href="/admin/ai-usage" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
+            📊 AI Usage Monitor
+          </a>
+        </div>
       </div>
     </div>
-  </main>
-</BaseLayout>
+
+    <!-- Error State -->
+    <div id="error-state" class="hidden text-center py-12 bg-white rounded-2xl shadow-card">
+      <p class="text-red-500 text-lg mb-4">Fehler beim Laden</p>
+      <button onclick="loadData()" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">
+        Erneut versuchen
+      </button>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  /* Custom slider styles */
+  .slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  
+  .slider-thumb::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #4f46e5;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: transform 0.15s ease;
+  }
+  
+  .slider-thumb::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+  }
+  
+  .slider-thumb::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #4f46e5;
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  
+  /* Result item styles */
+  .result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #f9fafb;
+    border-radius: 0.75rem;
+    transition: background-color 0.2s;
+  }
+  
+  .result-item:hover {
+    background: #f3f4f6;
+  }
+  
+  .result-item.new {
+    animation: highlight 1s ease-out;
+  }
+  
+  @keyframes highlight {
+    0% { background-color: #e0e7ff; }
+    100% { background-color: #f9fafb; }
+  }
+</style>
 
 <script is:inline define:vars={{ API_URL }}>
   const token = localStorage.getItem('auth_token');
@@ -201,82 +282,159 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     window.location.href = '/login?redirect=/admin/ai-worker';
   }
 
+  // State
   let isProcessing = false;
   let currentJobId = null;
   let pollInterval = null;
+  let elapsedInterval = null;
+  let startTime = null;
+  let results = [];
 
+  // DOM Elements
+  const elements = {
+    loadingState: document.getElementById('loading-state'),
+    content: document.getElementById('content'),
+    errorState: document.getElementById('error-state'),
+    healthBadge: document.getElementById('health-badge'),
+    healthDot: document.getElementById('health-dot'),
+    healthText: document.getElementById('health-text'),
+    pendingCard: document.getElementById('pending-card'),
+    pendingAiCount: document.getElementById('pending-ai-count'),
+    processedToday: document.getElementById('processed-today'),
+    successRate: document.getElementById('success-rate'),
+    avgTime: document.getElementById('avg-time'),
+    batchSlider: document.getElementById('batch-slider'),
+    sliderValue: document.getElementById('slider-value'),
+    startBatchBtn: document.getElementById('start-batch-btn'),
+    btnIcon: document.getElementById('btn-icon'),
+    btnText: document.getElementById('btn-text'),
+    btnHint: document.getElementById('btn-hint'),
+    progressSection: document.getElementById('progress-section'),
+    progressText: document.getElementById('progress-text'),
+    progressPercent: document.getElementById('progress-percent'),
+    progressBar: document.getElementById('progress-bar'),
+    statProcessed: document.getElementById('stat-processed'),
+    statPublished: document.getElementById('stat-published'),
+    statReview: document.getElementById('stat-review'),
+    statFailed: document.getElementById('stat-failed'),
+    elapsedTime: document.getElementById('elapsed-time'),
+    cancelBtn: document.getElementById('cancel-btn'),
+    resultsSection: document.getElementById('results-section'),
+    resultsList: document.getElementById('results-list'),
+    clearResultsBtn: document.getElementById('clear-results-btn'),
+  };
+
+  // Initialize slider
+  elements.batchSlider.addEventListener('input', (e) => {
+    elements.sliderValue.textContent = e.target.value;
+  });
+
+  // Load initial data
   async function loadData() {
-    document.getElementById('loading-state').classList.remove('hidden');
-    document.getElementById('content').classList.add('hidden');
-    document.getElementById('error-state').classList.add('hidden');
+    elements.loadingState.classList.remove('hidden');
+    elements.content.classList.add('hidden');
+    elements.errorState.classList.add('hidden');
 
     try {
-      const pendingRes = await fetch(`${API_URL}/api/admin/pending-ai-count`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Fetch pending count and worker health in parallel
+      const [pendingRes, healthRes, statsRes] = await Promise.all([
+        fetch(`${API_URL}/api/admin/pending-ai-count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/admin/ai-worker/health`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => null),
+        fetch(`${API_URL}/api/admin/ai-worker/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => null),
+      ]);
 
       if (!pendingRes.ok) throw new Error('Failed to load pending count');
 
       const pending = await pendingRes.json();
-      document.getElementById('pending-ai-count').textContent = pending.data?.count || 0;
+      const pendingCount = pending.data?.count || 0;
+      elements.pendingAiCount.textContent = pendingCount;
 
-      // Optional: Check worker health
-      checkWorkerHealth();
+      // Update pending card color based on count
+      if (pendingCount > 0) {
+        elements.pendingCard.classList.remove('border-gray-300');
+        elements.pendingCard.classList.add('border-amber-400');
+        elements.pendingAiCount.classList.remove('text-gray-900');
+        elements.pendingAiCount.classList.add('text-amber-500');
+      } else {
+        elements.pendingCard.classList.remove('border-amber-400');
+        elements.pendingCard.classList.add('border-gray-300');
+        elements.pendingAiCount.classList.remove('text-amber-500');
+        elements.pendingAiCount.classList.add('text-gray-900');
+      }
 
-      document.getElementById('loading-state').classList.add('hidden');
-      document.getElementById('content').classList.remove('hidden');
-    } catch (e) {
-      console.error('Load error:', e);
-      document.getElementById('loading-state').classList.add('hidden');
-      document.getElementById('error-state').classList.remove('hidden');
-    }
-  }
-
-  async function checkWorkerHealth() {
-    const card = document.getElementById('worker-status-card');
-    const indicator = document.getElementById('worker-indicator');
-    const statusText = document.getElementById('worker-status-text');
-
-    try {
-      const res = await fetch(`${API_URL}/api/admin/ai-worker/health`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        card.classList.remove('hidden');
-        if (data.success && data.data?.status === 'healthy') {
-          indicator.className = 'w-3 h-3 rounded-full bg-green-500';
-          statusText.textContent = 'Erreichbar';
-          statusText.className = 'text-green-600';
+      // Update worker health
+      if (healthRes && healthRes.ok) {
+        const healthData = await healthRes.json();
+        if (healthData.success && healthData.data?.status === 'healthy') {
+          elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-sm font-medium';
+          elements.healthDot.className = 'w-2 h-2 rounded-full bg-green-500';
+          elements.healthText.textContent = 'OK';
         } else {
-          indicator.className = 'w-3 h-3 rounded-full bg-yellow-500';
-          statusText.textContent = 'Eingeschränkt';
-          statusText.className = 'text-yellow-600';
+          elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-medium';
+          elements.healthDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+          elements.healthText.textContent = 'Eingeschränkt';
+        }
+      } else {
+        elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-sm font-medium';
+        elements.healthDot.className = 'w-2 h-2 rounded-full bg-red-500';
+        elements.healthText.textContent = 'Offline';
+      }
+
+      // Update stats
+      if (statsRes && statsRes.ok) {
+        const statsData = await statsRes.json();
+        if (statsData.data) {
+          elements.processedToday.textContent = statsData.data.processedToday || 0;
+          elements.successRate.textContent = statsData.data.successRate ? `${statsData.data.successRate}%` : '--%';
+          elements.avgTime.textContent = statsData.data.avgProcessingTime ? `${statsData.data.avgProcessingTime} ms` : '-- ms';
         }
       }
+
+      // Update button state
+      updateButtonState(pendingCount);
+
+      elements.loadingState.classList.add('hidden');
+      elements.content.classList.remove('hidden');
     } catch (e) {
-      // Worker health endpoint nicht verfügbar - Card versteckt lassen
-      console.log('Worker health check not available');
+      console.error('Load error:', e);
+      elements.loadingState.classList.add('hidden');
+      elements.errorState.classList.remove('hidden');
     }
   }
 
-  async function processEvents() {
+  function updateButtonState(pendingCount) {
+    if (pendingCount === 0) {
+      elements.startBatchBtn.disabled = true;
+      elements.btnHint.textContent = 'Keine Events in der Queue';
+      elements.btnHint.classList.remove('hidden');
+    } else if (isProcessing) {
+      elements.startBatchBtn.disabled = true;
+      elements.btnHint.textContent = 'Verarbeitung läuft...';
+      elements.btnHint.classList.remove('hidden');
+    } else {
+      elements.startBatchBtn.disabled = false;
+      elements.btnHint.classList.add('hidden');
+    }
+  }
+
+  // Start batch processing
+  async function startBatch() {
     if (isProcessing) return;
 
-    const btn = document.getElementById('process-btn');
-    const btnIcon = document.getElementById('btn-icon');
-    const btnText = document.getElementById('btn-text');
-    const limit = document.getElementById('limit-select').value;
-
-    // Set loading state
+    const limit = elements.batchSlider.value;
+    
     isProcessing = true;
-    btn.disabled = true;
-    btnIcon.textContent = '⏳';
-    btnText.textContent = 'Startet...';
-
-    // Hide result card if visible
-    document.getElementById('result-card').classList.add('hidden');
+    elements.startBatchBtn.disabled = true;
+    elements.btnIcon.textContent = '⏳';
+    elements.btnText.textContent = 'Startet...';
+    elements.btnHint.textContent = '';
+    elements.btnHint.classList.add('hidden');
 
     try {
       const res = await fetch(`${API_URL}/api/admin/process-pending-ai?limit=${limit}`, {
@@ -293,14 +451,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         throw new Error(data.error || 'Processing failed');
       }
 
-      // Check if we got a jobId (async processing) or direct results (no events)
       if (data.jobId) {
         currentJobId = data.jobId;
-        showProgressUI(data.total);
+        startTime = Date.now();
+        showProgressSection(data.total || limit);
         startPolling();
+        startElapsedTimer();
       } else {
-        // No events to process or synchronous response
-        showResults({ summary: data.summary, results: [] });
+        // No events to process
+        alert('Keine Events zu verarbeiten');
         resetButton();
       }
 
@@ -311,36 +470,24 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
-  function showProgressUI(total) {
-    const progressCard = document.getElementById('progress-card');
-    progressCard.classList.remove('hidden');
+  function showProgressSection(total) {
+    elements.progressSection.classList.remove('hidden');
+    elements.progressBar.style.width = '0%';
+    elements.progressText.textContent = `0 / ${total}`;
+    elements.progressPercent.textContent = '0%';
+    elements.statProcessed.textContent = '0';
+    elements.statPublished.textContent = '0';
+    elements.statReview.textContent = '0';
+    elements.statFailed.textContent = '0';
+    elements.elapsedTime.textContent = '0:00';
+    elements.btnText.textContent = 'Verarbeite...';
     
-    // Reset progress UI
-    document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('progress-text').textContent = `0 von ${total}`;
-    document.getElementById('progress-percent').textContent = '0%';
-    document.getElementById('current-event').textContent = 'Starte...';
-    document.getElementById('estimated-time').textContent = 'Berechne...';
-    document.getElementById('live-published').textContent = '0';
-    document.getElementById('live-review').textContent = '0';
-    document.getElementById('live-rejected').textContent = '0';
-    document.getElementById('live-failed').textContent = '0';
-    document.getElementById('live-result-list').innerHTML = '<p class="text-gray-400 text-center py-4">Noch keine Ergebnisse...</p>';
-    
-    // Update button
-    document.getElementById('btn-text').textContent = 'Verarbeite...';
-    
-    // Scroll to progress
-    progressCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    elements.progressSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function startPolling() {
     if (pollInterval) clearInterval(pollInterval);
-    
-    // Poll every 1.5 seconds
     pollInterval = setInterval(pollJobStatus, 1500);
-    
-    // Also poll immediately
     pollJobStatus();
   }
 
@@ -349,6 +496,26 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       clearInterval(pollInterval);
       pollInterval = null;
     }
+  }
+
+  function startElapsedTimer() {
+    if (elapsedInterval) clearInterval(elapsedInterval);
+    elapsedInterval = setInterval(updateElapsedTime, 1000);
+  }
+
+  function stopElapsedTimer() {
+    if (elapsedInterval) {
+      clearInterval(elapsedInterval);
+      elapsedInterval = null;
+    }
+  }
+
+  function updateElapsedTime() {
+    if (!startTime) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    elements.elapsedTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
   async function pollJobStatus() {
@@ -365,14 +532,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       }
 
       const { data } = await res.json();
-      
       if (!data) return;
 
       updateProgressUI(data);
 
-      // Check if job is completed or failed
       if (data.status === 'completed' || data.status === 'failed') {
         stopPolling();
+        stopElapsedTimer();
         onJobComplete(data);
       }
 
@@ -384,93 +550,96 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   function updateProgressUI(data) {
     const percent = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
     
-    // Update progress bar
-    document.getElementById('progress-bar').style.width = `${percent}%`;
-    document.getElementById('progress-text').textContent = `${data.processed} von ${data.total}`;
-    document.getElementById('progress-percent').textContent = `${percent}%`;
+    elements.progressBar.style.width = `${percent}%`;
+    elements.progressText.textContent = `${data.processed} / ${data.total}`;
+    elements.progressPercent.textContent = `${percent}%`;
     
-    // Update current event
-    if (data.currentEvent) {
-      document.getElementById('current-event').textContent = data.currentEvent.title || data.currentEvent.id;
-    } else if (data.status === 'completed') {
-      document.getElementById('current-event').textContent = 'Fertig!';
-    }
+    elements.statProcessed.textContent = data.processed || 0;
     
-    // Update estimated time
-    if (data.estimatedSecondsRemaining !== null && data.estimatedSecondsRemaining > 0) {
-      const mins = Math.floor(data.estimatedSecondsRemaining / 60);
-      const secs = data.estimatedSecondsRemaining % 60;
-      if (mins > 0) {
-        document.getElementById('estimated-time').textContent = `~${mins} Min ${secs} Sek verbleibend`;
-      } else {
-        document.getElementById('estimated-time').textContent = `~${secs} Sek verbleibend`;
-      }
-    } else if (data.status === 'completed') {
-      document.getElementById('estimated-time').textContent = 'Abgeschlossen';
-    }
-    
-    // Update live summary
     if (data.summary) {
-      document.getElementById('live-published').textContent = data.summary.published || 0;
-      document.getElementById('live-review').textContent = data.summary.pending_review || 0;
-      document.getElementById('live-rejected').textContent = data.summary.rejected || 0;
-      document.getElementById('live-failed').textContent = data.summary.failed || 0;
+      elements.statPublished.textContent = data.summary.published || 0;
+      elements.statReview.textContent = data.summary.pending_review || 0;
+      elements.statFailed.textContent = data.summary.failed || 0;
     }
-    
-    // Update live results list
-    if (data.results && data.results.length > 0) {
-      const listEl = document.getElementById('live-result-list');
-      listEl.innerHTML = data.results.slice(-10).reverse().map(r => {
-        let statusIcon = '❓';
-        let statusClass = 'text-gray-500';
-        
-        if (r.status === 'published') {
-          statusIcon = '✅';
-          statusClass = 'text-green-600';
-        } else if (r.status === 'pending_review') {
-          statusIcon = '👁️';
-          statusClass = 'text-amber-600';
-        } else if (r.status === 'rejected') {
-          statusIcon = '❌';
-          statusClass = 'text-red-600';
-        } else if (r.error) {
-          statusIcon = '⚠️';
-          statusClass = 'text-gray-500';
-        }
 
-        return `
-          <div class="flex items-center justify-between py-1 px-2 rounded ${r === data.results[data.results.length - 1] ? 'bg-primary-50' : ''}">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="text-xs">${statusIcon}</span>
-              <span class="truncate text-xs" title="${r.title}">${r.title}</span>
-            </div>
-            <span class="${statusClass} text-xs whitespace-nowrap ml-2">
-              ${r.error ? 'Fehler' : r.status}
-              ${r.familyFit ? `(${r.familyFit}%)` : ''}
-            </span>
-          </div>
-        `;
-      }).join('');
-      
-      // Show count if more than 10
-      if (data.results.length > 10) {
-        listEl.innerHTML += `<p class="text-xs text-gray-400 text-center mt-2">... und ${data.results.length - 10} weitere</p>`;
-      }
+    // Update results list in real-time
+    if (data.results && data.results.length > results.length) {
+      const newResults = data.results.slice(results.length);
+      results = data.results;
+      addResultsToList(newResults);
     }
   }
 
+  function addResultsToList(newResults) {
+    if (!elements.resultsSection.classList.contains('hidden') === false) {
+      elements.resultsSection.classList.remove('hidden');
+    }
+    
+    // Clear "no results" message if present
+    if (elements.resultsList.querySelector('p.text-gray-400')) {
+      elements.resultsList.innerHTML = '';
+    }
+    
+    elements.resultsSection.classList.remove('hidden');
+    
+    newResults.forEach(r => {
+      const item = createResultItem(r, true);
+      elements.resultsList.insertBefore(item, elements.resultsList.firstChild);
+    });
+  }
+
+  function createResultItem(r, isNew = false) {
+    const div = document.createElement('div');
+    div.className = `result-item ${isNew ? 'new' : ''}`;
+    
+    let statusBadge = '';
+    let statusClass = '';
+    
+    if (r.status === 'published') {
+      statusBadge = '→ Published';
+      statusClass = 'bg-green-100 text-green-700';
+    } else if (r.status === 'pending_review') {
+      statusBadge = '→ Review';
+      statusClass = 'bg-amber-100 text-amber-700';
+    } else if (r.error) {
+      statusBadge = 'Fehler';
+      statusClass = 'bg-red-100 text-red-700';
+    } else {
+      statusBadge = r.status || 'Unbekannt';
+      statusClass = 'bg-gray-100 text-gray-700';
+    }
+
+    div.innerHTML = `
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <a href="/event/${r.slug || r.id}" target="_blank" class="font-medium text-gray-900 hover:text-primary-600 truncate" title="${r.title || r.id}">
+          ${r.title || r.id}
+        </a>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span class="text-xs px-2 py-1 rounded-full ${statusClass}">${statusBadge}</span>
+        ${r.familyFit ? `<span class="text-xs text-gray-500">${r.familyFit}%</span>` : ''}
+        ${r.processingTime ? `<span class="text-xs text-gray-400">${r.processingTime}ms</span>` : ''}
+      </div>
+    `;
+    
+    return div;
+  }
+
   function onJobComplete(data) {
-    // Hide progress card
-    document.getElementById('progress-card').classList.add('hidden');
-    
-    // Show results
-    showResults(data);
-    
-    // Reset button and state
+    elements.progressSection.classList.add('hidden');
     resetButton();
-    
-    // Reload pending count
     reloadPendingCount();
+    
+    // Show final results
+    if (results.length === 0 && data.results) {
+      results = data.results;
+      elements.resultsSection.classList.remove('hidden');
+      elements.resultsList.innerHTML = '';
+      data.results.slice().reverse().forEach(r => {
+        const item = createResultItem(r);
+        elements.resultsList.appendChild(item);
+      });
+    }
   }
 
   async function reloadPendingCount() {
@@ -480,7 +649,22 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       });
       if (pendingRes.ok) {
         const pending = await pendingRes.json();
-        document.getElementById('pending-ai-count').textContent = pending.data?.count || 0;
+        const pendingCount = pending.data?.count || 0;
+        elements.pendingAiCount.textContent = pendingCount;
+        updateButtonState(pendingCount);
+        
+        // Update card color
+        if (pendingCount > 0) {
+          elements.pendingCard.classList.remove('border-gray-300');
+          elements.pendingCard.classList.add('border-amber-400');
+          elements.pendingAiCount.classList.remove('text-gray-900');
+          elements.pendingAiCount.classList.add('text-amber-500');
+        } else {
+          elements.pendingCard.classList.remove('border-amber-400');
+          elements.pendingCard.classList.add('border-gray-300');
+          elements.pendingAiCount.classList.remove('text-amber-500');
+          elements.pendingAiCount.classList.add('text-gray-900');
+        }
       }
     } catch (e) {
       console.error('Failed to reload pending count:', e);
@@ -490,81 +674,29 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   function resetButton() {
     isProcessing = false;
     currentJobId = null;
-    const btn = document.getElementById('process-btn');
-    btn.disabled = false;
-    document.getElementById('btn-icon').textContent = '🚀';
-    document.getElementById('btn-text').textContent = 'Pending-AI verarbeiten';
+    elements.startBatchBtn.disabled = false;
+    elements.btnIcon.textContent = '🚀';
+    elements.btnText.textContent = 'Start Batch';
   }
 
   function cancelProcessing() {
-    // Note: This only stops polling, the backend job continues
     stopPolling();
-    document.getElementById('progress-card').classList.add('hidden');
+    stopElapsedTimer();
+    elements.progressSection.classList.add('hidden');
     resetButton();
-    
-    // Reload to show current state
     reloadPendingCount();
   }
 
-  function showResults(data) {
-    const resultCard = document.getElementById('result-card');
-    resultCard.classList.remove('hidden');
-
-    // Summary
-    const summary = data.summary || {};
-    document.getElementById('result-published').textContent = summary.published || 0;
-    document.getElementById('result-review').textContent = summary.pending_review || 0;
-    document.getElementById('result-rejected').textContent = summary.rejected || 0;
-    document.getElementById('result-failed').textContent = summary.failed || 0;
-
-    // Details
-    const results = data.results || [];
-    if (results.length > 0) {
-      document.getElementById('result-details').classList.remove('hidden');
-      const listEl = document.getElementById('result-list');
-      
-      listEl.innerHTML = results.map(r => {
-        let statusClass = 'text-gray-600';
-        let statusIcon = '❓';
-        
-        if (r.status === 'published') {
-          statusClass = 'text-green-600';
-          statusIcon = '✅';
-        } else if (r.status === 'pending_review') {
-          statusClass = 'text-amber-600';
-          statusIcon = '👁️';
-        } else if (r.status === 'rejected') {
-          statusClass = 'text-red-600';
-          statusIcon = '❌';
-        } else if (r.error) {
-          statusClass = 'text-gray-500';
-          statusIcon = '⚠️';
-        }
-
-        return `
-          <div class="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-            <div class="flex items-center gap-2 min-w-0">
-              <span>${statusIcon}</span>
-              <span class="truncate" title="${r.title || r.id}">${r.title || r.id}</span>
-            </div>
-            <span class="${statusClass} text-xs font-medium whitespace-nowrap ml-2">
-              ${r.error ? r.error : r.status}
-              ${r.familyFit ? `(${r.familyFit}%)` : ''}
-            </span>
-          </div>
-        `;
-      }).join('');
-    } else {
-      document.getElementById('result-details').classList.add('hidden');
-    }
-
-    // Scroll to results
-    resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  function clearResults() {
+    results = [];
+    elements.resultsList.innerHTML = '<p class="text-gray-400 text-center py-8">Keine Ergebnisse</p>';
+    elements.resultsSection.classList.add('hidden');
   }
 
   // Event listeners
-  document.getElementById('process-btn').addEventListener('click', processEvents);
-  document.getElementById('cancel-btn').addEventListener('click', cancelProcessing);
+  elements.startBatchBtn.addEventListener('click', startBatch);
+  elements.cancelBtn.addEventListener('click', cancelProcessing);
+  elements.clearResultsBtn.addEventListener('click', clearResults);
 
   // Initial load
   loadData();

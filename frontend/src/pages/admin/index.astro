@@ -1,378 +1,367 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
 ---
 
-<BaseLayout title="Admin Dashboard - kiezling">
-  <StickyHeader />
-  <AdminMobileNav currentPage="dashboard" />
-  <main class="min-h-screen bg-gray-50 py-6 lg:py-8 lg:ml-56">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6 lg:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1">Admin Dashboard</h1>
-          <p class="text-sm sm:text-base text-gray-500">Verwaltung von Events, Quellen und Datenqualität</p>
-        </div>
-        <button id="logout-btn" class="hidden lg:block text-sm text-gray-500 hover:text-gray-700">Abmelden</button>
-      </header>
-
-      <!-- Loading State -->
-      <div id="loading-state" class="text-center py-12">
-        <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-        <p class="text-gray-500 mt-4">Lade Dashboard...</p>
-      </div>
-
-      <!-- Dashboard Content (hidden until loaded) -->
-      <div id="dashboard-content" class="hidden">
-        <!-- System Health Widget -->
-        <a href="/admin/health" id="health-widget" class="block bg-white rounded-2xl shadow-card p-4 mb-6 hover:shadow-lg transition-shadow border border-gray-100">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="font-semibold text-gray-900">System Status</h2>
-            <span id="health-status-badge" class="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-500">
-              Prüfe...
-            </span>
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div class="flex items-center gap-2">
-              <span id="health-db-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-              <span class="text-gray-600">Database</span>
-              <span id="health-db-latency" class="text-xs text-gray-400 ml-auto"></span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span id="health-redis-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-              <span class="text-gray-600">Redis</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span id="health-ai-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-              <span class="text-gray-600">AI Worker</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <span id="health-queue-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-              <span class="text-gray-600">Queue</span>
-              <span id="health-queue-count" class="text-xs text-gray-400 ml-auto"></span>
-            </div>
-          </div>
-          <div class="mt-3 text-xs text-gray-400 flex items-center justify-between">
-            <span id="health-last-update">Letzte Aktualisierung: --</span>
-            <span id="health-uptime" class="text-gray-500"></span>
-          </div>
-        </a>
-
-        <!-- Dashboard Cards - Horizontal scroll on mobile -->
-        <div class="flex lg:grid lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6 mb-6 lg:mb-8 overflow-x-auto pb-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:overflow-visible snap-x snap-mandatory lg:snap-none">
-          <!-- Review Queue -->
-          <a href="/admin/review" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
-            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">📋</div>
-            <div>
-              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Review Queue</h2>
-              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Events zur manuellen Prüfung</p>
-              <div class="mt-2">
-                <span id="review-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
-                <span class="block text-xs text-gray-500">ausstehend</span>
-              </div>
-            </div>
-          </a>
-
-          <!-- AI Worker / Pending AI -->
-          <a href="/admin/ai-worker" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
-            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">🤖</div>
-            <div>
-              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">AI Worker</h2>
-              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Warten auf Klassifizierung</p>
-              <div class="mt-2">
-                <span id="pending-ai-count" class="text-lg sm:text-xl font-bold text-amber-500">--</span>
-                <span class="block text-xs text-gray-500">warten auf AI</span>
-              </div>
-            </div>
-          </a>
-
-          <a href="/admin/sources" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
-            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">📡</div>
-            <div>
-              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Quellen-Status</h2>
-              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Gesundheit der Datenquellen</p>
-              <div class="mt-2">
-                <span id="source-health" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
-                <span class="block text-xs text-gray-500">aktive Quellen</span>
-              </div>
-            </div>
-          </a>
-
-          <a href="/admin/dedup" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
-            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">⚠️</div>
-            <div>
-              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Duplikate</h2>
-              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Mögliche Duplikate prüfen</p>
-              <div class="mt-2">
-                <span id="dup-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
-                <span class="block text-xs text-gray-500">offen</span>
-              </div>
-            </div>
-          </a>
-
-          <a href="/admin/runs" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
-            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">🔄</div>
-            <div>
-              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Ingest-Runs</h2>
-              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Import-Jobs überwachen</p>
-              <div class="mt-2">
-                <span id="attention-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
-                <span class="block text-xs text-gray-500">brauchen Aufmerksamkeit</span>
-              </div>
-            </div>
-          </a>
-
-          <a href="/admin/trends" class="flex-shrink-0 w-40 sm:w-auto lg:w-auto snap-start bg-white rounded-2xl shadow-card p-4 sm:p-6 hover:shadow-lg transition-shadow border border-gray-100">
-            <div class="text-2xl sm:text-3xl mb-2 sm:mb-4">🔥</div>
-            <div>
-              <h2 class="font-semibold text-gray-900 text-sm sm:text-base">Trends & Suche</h2>
-              <p class="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">Suchtrends und Autocomplete</p>
-              <div class="mt-2">
-                <span id="trending-count" class="text-lg sm:text-xl font-bold text-primary-500">--</span>
-                <span class="block text-xs text-gray-500">aktive Trends</span>
-              </div>
-            </div>
-          </a>
-        </div>
-
-        <section class="mb-8">
-          <h2 class="text-xl font-semibold text-gray-900 mb-4">Übersicht</h2>
-          <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <a href="/admin/review?status=all" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
-              <span id="total-events" class="block text-xl font-bold text-primary-500">--</span>
-              <span class="text-sm text-gray-500">Events gesamt</span>
-            </a>
-            <a href="/admin/review?status=published" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
-              <span id="published-events" class="block text-xl font-bold text-primary-500">--</span>
-              <span class="text-sm text-gray-500">Veröffentlicht</span>
-            </a>
-            <a href="/admin/review?status=pending_review" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
-              <span id="pending-events" class="block text-xl font-bold text-primary-500">--</span>
-              <span class="text-sm text-gray-500">Ausstehend</span>
-            </a>
-            <a href="/admin/ai-worker" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-amber-300 hover:shadow-md transition-all block">
-              <span id="pending-ai-overview" class="block text-xl font-bold text-amber-500">--</span>
-              <span class="text-sm text-gray-500">Warten auf AI</span>
-            </a>
-            <a href="/admin/runs" class="bg-white rounded-xl p-4 text-center border border-gray-100 hover:border-primary-300 hover:shadow-md transition-all block">
-              <span id="today-imports" class="block text-xl font-bold text-primary-500">--</span>
-              <span class="text-sm text-gray-500">Heute importiert</span>
-            </a>
-          </div>
-        </section>
-
-        <section>
-          <h2 class="text-xl font-semibold text-gray-900 mb-4">Quellen-Gesundheit</h2>
-          <a href="/admin/sources" class="block bg-white rounded-2xl shadow-card p-4 hover:shadow-lg transition-shadow">
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-              <div>
-                <span id="sources-healthy" class="block text-lg font-bold text-green-500">--</span>
-                <span class="text-xs text-gray-500">Gesund</span>
-              </div>
-              <div>
-                <span id="sources-degraded" class="block text-lg font-bold text-yellow-500">--</span>
-                <span class="text-xs text-gray-500">Eingeschränkt</span>
-              </div>
-              <div>
-                <span id="sources-failing" class="block text-lg font-bold text-orange-500">--</span>
-                <span class="text-xs text-gray-500">Fehlerhaft</span>
-              </div>
-              <div>
-                <span id="sources-dead" class="block text-lg font-bold text-red-500">--</span>
-                <span class="text-xs text-gray-500">Tot</span>
-              </div>
-              <div>
-                <span id="sources-unknown" class="block text-lg font-bold text-gray-400">--</span>
-                <span class="text-xs text-gray-500">Unbekannt</span>
-              </div>
-            </div>
-          </a>
-        </section>
-      </div>
-
-      <!-- Error State -->
-      <div id="error-state" class="hidden text-center py-12">
-        <p class="text-red-500 text-lg mb-4">Fehler beim Laden des Dashboards</p>
-        <button onclick="location.reload()" class="px-4 py-2 bg-primary-500 text-white rounded-lg">Erneut versuchen</button>
-      </div>
+<AdminLayout title="Dashboard - kiezling Admin" currentPage="dashboard">
+  <!-- Loading State -->
+  <div id="loading-state" class="flex items-center justify-center py-16">
+    <div class="text-center">
+      <div class="animate-spin inline-block w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full mb-4"></div>
+      <p class="text-gray-500">Lade Dashboard...</p>
     </div>
-  </main>
-</BaseLayout>
+  </div>
 
-<script>
-  import { supabase, getSession } from '../../lib/supabase';
-  
-  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
-  
-  // Hilfsfunktion: Warte auf Auth-Initialisierung
-  async function waitForAuth(maxWaitMs = 3000): Promise<string | null> {
-    let token = localStorage.getItem('auth_token');
-    if (token) return token;
+  <!-- Dashboard Content (hidden until loaded) -->
+  <div id="dashboard-content" class="hidden">
+    <!-- Page Header -->
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+      <p class="text-gray-500 mt-1">Übersicht über Events, Quellen und Systemstatus</p>
+    </header>
 
-    // Warte auf Supabase Auth State Change (robuster als getSession allein)
-    return new Promise((resolve) => {
-      let resolved = false;
+    <!-- KPI Cards: Top Section - 2x3 Grid -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+      <!-- Events Total -->
+      <a href="/admin/review?status=all" class="kpi-card group">
+        <div class="kpi-icon bg-blue-100 text-blue-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+        <span id="kpi-total" class="kpi-number">--</span>
+        <span class="kpi-label">Events gesamt</span>
+      </a>
 
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          resolve(localStorage.getItem('auth_token'));
-        }
-      }, maxWaitMs);
+      <!-- Published -->
+      <a href="/admin/review?status=published" class="kpi-card group">
+        <div class="kpi-icon bg-green-100 text-green-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <span id="kpi-published" class="kpi-number text-green-600">--</span>
+        <span class="kpi-label">Veröffentlicht</span>
+      </a>
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (!resolved && session?.access_token) {
-          resolved = true;
-          clearTimeout(timeout);
-          localStorage.setItem('auth_token', session.access_token);
-          subscription.unsubscribe();
-          resolve(session.access_token);
-        }
-      });
+      <!-- Pending Review -->
+      <a href="/admin/review?status=pending_review" class="kpi-card group">
+        <div class="kpi-icon bg-purple-100 text-purple-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+        <span id="kpi-pending" class="kpi-number text-purple-600">--</span>
+        <span class="kpi-label">Zur Prüfung</span>
+      </a>
 
-      getSession().then(session => {
-        if (!resolved && session?.access_token) {
-          resolved = true;
-          clearTimeout(timeout);
-          localStorage.setItem('auth_token', session.access_token);
-          subscription.unsubscribe();
-          resolve(session.access_token);
-        }
-      });
-    });
+      <!-- Today Imports -->
+      <a href="/admin/runs" class="kpi-card group">
+        <div class="kpi-icon bg-cyan-100 text-cyan-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+        </div>
+        <span id="kpi-today" class="kpi-number text-cyan-600">--</span>
+        <span class="kpi-label">Heute importiert</span>
+      </a>
+
+      <!-- Pending AI -->
+      <a href="/admin/ai-worker" class="kpi-card group">
+        <div class="kpi-icon bg-amber-100 text-amber-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <span id="kpi-pending-ai" class="kpi-number text-amber-600">--</span>
+        <span class="kpi-label">Warten auf AI</span>
+      </a>
+
+      <!-- Duplicates -->
+      <a href="/admin/dedup" class="kpi-card group">
+        <div class="kpi-icon bg-red-100 text-red-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+          </svg>
+        </div>
+        <span id="kpi-duplicates" class="kpi-number text-red-600">--</span>
+        <span class="kpi-label">Duplikate</span>
+      </a>
+    </section>
+
+    <!-- Middle Section: Two Columns -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <!-- System Health Widget -->
+      <a href="/admin/health" class="bento-card group">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-gray-900 flex items-center gap-2">
+            <span class="text-lg">💚</span>
+            System Health
+          </h2>
+          <span id="health-status-badge" class="px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-500">
+            Prüfe...
+          </span>
+        </div>
+        
+        <div class="grid grid-cols-4 gap-3 mb-4">
+          <div class="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-gray-50">
+            <span id="health-db-indicator" class="w-3 h-3 rounded-full bg-gray-300"></span>
+            <span class="text-xs text-gray-600 font-medium">Database</span>
+          </div>
+          <div class="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-gray-50">
+            <span id="health-redis-indicator" class="w-3 h-3 rounded-full bg-gray-300"></span>
+            <span class="text-xs text-gray-600 font-medium">Redis</span>
+          </div>
+          <div class="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-gray-50">
+            <span id="health-ai-indicator" class="w-3 h-3 rounded-full bg-gray-300"></span>
+            <span class="text-xs text-gray-600 font-medium">AI Worker</span>
+          </div>
+          <div class="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-gray-50">
+            <span id="health-queue-indicator" class="w-3 h-3 rounded-full bg-gray-300"></span>
+            <span class="text-xs text-gray-600 font-medium">Queue</span>
+          </div>
+        </div>
+
+        <div class="text-xs text-gray-400 flex items-center justify-between">
+          <span id="health-last-update">Letzte Aktualisierung: --</span>
+          <span id="health-uptime" class="text-gray-500"></span>
+        </div>
+      </a>
+
+      <!-- Sources Health -->
+      <a href="/admin/sources" class="bento-card group">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-gray-900 flex items-center gap-2">
+            <span class="text-lg">📡</span>
+            Quellen-Gesundheit
+          </h2>
+          <span id="sources-total" class="text-sm text-gray-500">-- Quellen</span>
+        </div>
+
+        <div class="grid grid-cols-5 gap-2">
+          <div class="text-center p-3 rounded-lg bg-green-50">
+            <span id="sources-healthy" class="block text-xl font-bold text-green-600">--</span>
+            <span class="text-xs text-green-700">Gesund</span>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-yellow-50">
+            <span id="sources-degraded" class="block text-xl font-bold text-yellow-600">--</span>
+            <span class="text-xs text-yellow-700">Eingeschr.</span>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-orange-50">
+            <span id="sources-failing" class="block text-xl font-bold text-orange-600">--</span>
+            <span class="text-xs text-orange-700">Fehler</span>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-red-50">
+            <span id="sources-dead" class="block text-xl font-bold text-red-600">--</span>
+            <span class="text-xs text-red-700">Tot</span>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-gray-50">
+            <span id="sources-unknown" class="block text-xl font-bold text-gray-500">--</span>
+            <span class="text-xs text-gray-600">Unbek.</span>
+          </div>
+        </div>
+      </a>
+    </section>
+
+    <!-- Bottom Section: Two Columns -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Trends Mini Stats -->
+      <a href="/admin/trends" class="bento-card group">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-gray-900 flex items-center gap-2">
+            <span class="text-lg">🔥</span>
+            Trends & Suche
+          </h2>
+          <svg class="w-5 h-5 text-gray-400 group-hover:text-primary-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <div class="flex-1 p-4 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50">
+            <span id="trends-count" class="block text-3xl font-bold text-orange-600">--</span>
+            <span class="text-sm text-orange-700">Trending Terms</span>
+          </div>
+          <div class="flex-1 text-sm text-gray-500">
+            <p>Zuletzt berechnet:</p>
+            <p id="trends-last-computed" class="font-medium text-gray-700">--</p>
+          </div>
+        </div>
+      </a>
+
+      <!-- Ingest Attention List -->
+      <a href="/admin/runs" class="bento-card group">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-gray-900 flex items-center gap-2">
+            <span class="text-lg">🔄</span>
+            Ingest-Runs
+          </h2>
+          <span class="text-sm text-primary-600 group-hover:underline">Alle anzeigen →</span>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <div id="attention-container" class="flex-1 p-4 rounded-xl bg-gradient-to-br from-red-50 to-orange-50">
+            <span id="attention-count" class="block text-3xl font-bold text-red-600">--</span>
+            <span class="text-sm text-red-700">brauchen Aufmerksamkeit</span>
+          </div>
+          <div class="flex-1 text-sm text-gray-500">
+            <p>Runs mit Fehlern oder</p>
+            <p>ungewöhnlichem Verhalten</p>
+          </div>
+        </div>
+      </a>
+    </section>
+  </div>
+
+  <!-- Error State -->
+  <div id="error-state" class="hidden">
+    <div class="text-center py-16">
+      <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <p class="text-red-600 text-lg font-medium mb-2">Fehler beim Laden des Dashboards</p>
+      <p id="error-message" class="text-gray-500 mb-4">Bitte versuche es erneut.</p>
+      <button onclick="location.reload()" class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+        Erneut versuchen
+      </button>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  /* KPI Card Styles */
+  .kpi-card {
+    @apply relative bg-white rounded-2xl shadow-sm p-4 
+           border border-gray-100 
+           hover:shadow-md hover:border-gray-200
+           transition-all duration-200
+           flex flex-col items-center text-center;
   }
 
-  (async function() {
-    let token = await waitForAuth();
+  .kpi-icon {
+    @apply absolute top-3 right-3 w-8 h-8 rounded-lg 
+           flex items-center justify-center
+           opacity-70 group-hover:opacity-100 transition-opacity;
+  }
 
-    if (!token) {
-      window.location.href = '/login?redirect=/admin';
-      return;
-    }
+  .kpi-number {
+    @apply text-3xl font-bold text-gray-900 mt-2 mb-1;
+  }
 
-    // Verify admin role
-    try {
-      const meRes = await fetch(`${API_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  .kpi-label {
+    @apply text-xs text-gray-500 font-medium;
+  }
 
-      if (!meRes.ok) {
-        // Token ungültig - versuche Supabase-Session als Fallback
-        const session = await getSession();
-        if (session?.access_token) {
-          token = session.access_token;
-          localStorage.setItem('auth_token', token);
-          const retryRes = await fetch(`${API_URL}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (!retryRes.ok) {
-            localStorage.removeItem('auth_token');
-            window.location.href = '/login?redirect=/admin';
-            return;
-          }
-          const retryData = await retryRes.json();
-          if (retryData.data.role !== 'admin') {
-            window.location.href = '/?error=not_admin';
-            return;
-          }
-        } else {
-          localStorage.removeItem('auth_token');
-          window.location.href = '/login?redirect=/admin';
-          return;
-        }
-      } else {
-        const meData = await meRes.json();
-        if (meData.data.role !== 'admin') {
-          window.location.href = '/?error=not_admin';
-          return;
-        }
-      }
-    } catch (e) {
-      // Netzwerkfehler (z. B. Backend nicht erreichbar): nicht zu Login weiterleiten
-      const isNetworkError = e instanceof TypeError && (e.message === 'Failed to fetch' || e.message?.includes('fetch'));
-      if (isNetworkError) {
-        document.getElementById('loading-state')?.classList.add('hidden');
-        document.getElementById('error-state')?.classList.remove('hidden');
-        const errEl = document.querySelector('#error-state p');
-        if (errEl) errEl.textContent = 'Backend nicht erreichbar. Bitte prüfe, ob der Server läuft, und versuche es erneut.';
-        return;
-      }
-      window.location.href = '/login?redirect=/admin';
-      return;
-    }
+  /* Bento Card Styles */
+  .bento-card {
+    @apply block bg-white rounded-2xl shadow-sm p-5
+           border border-gray-100
+           hover:shadow-md hover:border-gray-200
+           transition-all duration-200;
+  }
 
-    // Load dashboard data
+  /* Health Status Colors */
+  .health-ok { @apply bg-green-500; }
+  .health-degraded { @apply bg-yellow-500; }
+  .health-error { @apply bg-red-500; }
+  .health-unknown { @apply bg-gray-400; }
+</style>
+
+<script>
+  const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+
+  // Get auth token
+  function getToken(): string | null {
+    return localStorage.getItem('auth_token');
+  }
+
+  // Fetch with auth
+  async function fetchWithAuth(url: string) {
+    const token = getToken();
+    if (!token) throw new Error('No auth token');
+    
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  // Format relative time
+  function formatRelativeTime(dateStr: string | null): string {
+    if (!dateStr) return 'Nie';
+    
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Gerade eben';
+    if (diffMins < 60) return `vor ${diffMins} Min.`;
+    if (diffHours < 24) return `vor ${diffHours} Std.`;
+    return `vor ${diffDays} Tagen`;
+  }
+
+  // Load all dashboard data
+  async function loadDashboardData() {
     try {
       const [statsRes, dupsRes, attentionRes, trendsRes, pendingAiRes] = await Promise.all([
-        fetch(`${API_URL}/api/admin/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`${API_URL}/api/admin/duplicates?status=pending&limit=1`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`${API_URL}/api/admin/ingest-runs/needs-attention`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`${API_URL}/api/admin/trends/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        fetch(`${API_URL}/api/admin/pending-ai-count`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
+        fetchWithAuth(`${API_URL}/api/admin/stats`),
+        fetchWithAuth(`${API_URL}/api/admin/duplicates?status=pending&limit=1`).catch(() => ({ pagination: { total: 0 } })),
+        fetchWithAuth(`${API_URL}/api/admin/ingest-runs/needs-attention`).catch(() => ({ total: 0 })),
+        fetchWithAuth(`${API_URL}/api/admin/trends/stats`).catch(() => ({ uniqueTerms: 0, lastComputed: null })),
+        fetchWithAuth(`${API_URL}/api/admin/pending-ai-count`).catch(() => ({ data: { count: 0 } })),
       ]);
 
-      if (!statsRes.ok) throw new Error('Stats fetch failed');
+      // Update KPI Cards
+      const setText = (id: string, value: string | number) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(value);
+      };
 
-      const stats = await statsRes.json();
-      const dups = dupsRes.ok ? await dupsRes.json() : { pagination: { total: 0 } };
-      const attention = attentionRes.ok ? await attentionRes.json() : { total: 0 };
-      const trends = trendsRes.ok ? await trendsRes.json() : { uniqueTerms: 0, lastComputed: null };
-      const pendingAi = pendingAiRes.ok ? await pendingAiRes.json() : { data: { count: 0 } };
+      setText('kpi-total', statsRes.data.events.total);
+      setText('kpi-published', statsRes.data.events.published);
+      setText('kpi-pending', statsRes.data.events.pending_review);
+      setText('kpi-today', statsRes.data.events.today_imports);
+      setText('kpi-pending-ai', pendingAiRes.data?.count || 0);
+      setText('kpi-duplicates', dupsRes.pagination?.total || 0);
 
-      // Update DOM
-      const totalEvents = document.getElementById('total-events');
-      const publishedEvents = document.getElementById('published-events');
-      const pendingEvents = document.getElementById('pending-events');
-      const todayImports = document.getElementById('today-imports');
-      const reviewCount = document.getElementById('review-count');
-      if (totalEvents) totalEvents.textContent = stats.data.events.total;
-      if (publishedEvents) publishedEvents.textContent = stats.data.events.published;
-      if (pendingEvents) pendingEvents.textContent = stats.data.events.pending_review;
-      if (todayImports) todayImports.textContent = stats.data.events.today_imports;
-      if (reviewCount) reviewCount.textContent = stats.data.events.pending_review;
+      // Update Source Health
+      const sources = statsRes.data.sources;
+      const totalSources = Object.values(sources).reduce((a: number, b) => a + (b as number), 0);
+      setText('sources-total', `${totalSources} Quellen`);
+      setText('sources-healthy', sources.healthy);
+      setText('sources-degraded', sources.degraded);
+      setText('sources-failing', sources.failing);
+      setText('sources-dead', sources.dead);
+      setText('sources-unknown', sources.unknown);
 
-      // Source health
-      const sourceTotal = (Object.values(stats.data.sources) as number[]).reduce((a, b) => a + b, 0);
-      const sourceHealth = document.getElementById('source-health');
-      const sourcesHealthy = document.getElementById('sources-healthy');
-      const sourcesDegraded = document.getElementById('sources-degraded');
-      const sourcesFailing = document.getElementById('sources-failing');
-      const sourcesDead = document.getElementById('sources-dead');
-      const sourcesUnknown = document.getElementById('sources-unknown');
-      if (sourceHealth) sourceHealth.textContent = String(sourceTotal);
-      if (sourcesHealthy) sourcesHealthy.textContent = stats.data.sources.healthy;
-      if (sourcesDegraded) sourcesDegraded.textContent = stats.data.sources.degraded;
-      if (sourcesFailing) sourcesFailing.textContent = stats.data.sources.failing;
-      if (sourcesDead) sourcesDead.textContent = stats.data.sources.dead;
-      if (sourcesUnknown) sourcesUnknown.textContent = stats.data.sources.unknown;
+      // Update Trends
+      setText('trends-count', trendsRes.uniqueTerms || 0);
+      setText('trends-last-computed', formatRelativeTime(trendsRes.lastComputed));
 
-      // Duplicates & attention
-      const dupCount = document.getElementById('dup-count');
-      const attentionCount = document.getElementById('attention-count');
-      if (dupCount) dupCount.textContent = String(dups.pagination?.total || 0);
-      if (attentionCount) attentionCount.textContent = String(attention.total || 0);
-
-      // Trends
-      const trendingCount = document.getElementById('trending-count');
-      if (trendingCount) trendingCount.textContent = String(trends.lastComputed ? (trends.uniqueTerms || 0) : 0);
-
-      // Pending AI
-      const pendingAiCountValue = String(pendingAi.data?.count || 0);
-      const pendingAiCount = document.getElementById('pending-ai-count');
-      const pendingAiOverview = document.getElementById('pending-ai-overview');
-      if (pendingAiCount) pendingAiCount.textContent = pendingAiCountValue;
-      if (pendingAiOverview) pendingAiOverview.textContent = pendingAiCountValue;
+      // Update Attention Count
+      const attentionCount = attentionRes.total || 0;
+      setText('attention-count', attentionCount);
+      
+      // Update attention container color based on count
+      const attentionContainer = document.getElementById('attention-container');
+      if (attentionContainer) {
+        if (attentionCount === 0) {
+          attentionContainer.className = 'flex-1 p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50';
+          const countEl = attentionContainer.querySelector('#attention-count');
+          const labelEl = attentionContainer.querySelector('span:last-child');
+          if (countEl) countEl.className = 'block text-3xl font-bold text-green-600';
+          if (labelEl) {
+            labelEl.className = 'text-sm text-green-700';
+            labelEl.textContent = 'alles in Ordnung';
+          }
+        }
+      }
 
       // Show content
       document.getElementById('loading-state')?.classList.add('hidden');
@@ -382,126 +371,127 @@ import AdminMobileNav from '../../components/admin/AdminMobileNav.astro';
       console.error('Dashboard load error:', e);
       document.getElementById('loading-state')?.classList.add('hidden');
       document.getElementById('error-state')?.classList.remove('hidden');
-    }
-
-    // Logout handler
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('auth_token');
-      window.location.href = '/login';
-    });
-
-    // System Health Widget
-    async function updateHealthWidget() {
-      try {
-        const healthRes = await fetch(`${API_URL}/api/health/detailed`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (!healthRes.ok) throw new Error('Health check failed');
-
-        const health = await healthRes.json();
-        
-        // Status badge
-        const statusBadge = document.getElementById('health-status-badge');
-        if (statusBadge) {
-          const statusStyles: Record<string, string> = {
-            ok: 'bg-green-100 text-green-700',
-            degraded: 'bg-yellow-100 text-yellow-700',
-            error: 'bg-red-100 text-red-700',
-          };
-          const statusLabels: Record<string, string> = {
-            ok: 'Alles OK',
-            degraded: 'Eingeschränkt',
-            error: 'Fehler',
-          };
-          const statusKey = String(health.status ?? '');
-          statusBadge.className = `px-3 py-1 text-xs font-medium rounded-full ${statusStyles[statusKey] || 'bg-gray-100 text-gray-500'}`;
-          statusBadge.textContent = statusLabels[statusKey] || statusKey || 'Unbekannt';
-        }
-
-        // Database indicator
-        const dbIndicator = document.getElementById('health-db-indicator');
-        const dbLatency = document.getElementById('health-db-latency');
-        if (dbIndicator && health.services?.database) {
-          const dbStatus = health.services.database.status;
-          dbIndicator.className = `w-2.5 h-2.5 rounded-full ${dbStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'}`;
-          if (dbLatency && health.services.database.latencyMs) {
-            dbLatency.textContent = `${health.services.database.latencyMs}ms`;
-          }
-        }
-
-        // Redis indicator
-        const redisIndicator = document.getElementById('health-redis-indicator');
-        if (redisIndicator && health.services?.redis) {
-          const redisStatus = health.services.redis.status;
-          const redisOk = ['connected', 'ok'].includes(redisStatus);
-          const redisDisabled = redisStatus === 'disabled';
-          redisIndicator.className = `w-2.5 h-2.5 rounded-full ${redisOk ? 'bg-green-500' : redisDisabled ? 'bg-gray-400' : 'bg-red-500'}`;
-        }
-
-        // AI Worker indicator (check if AI worker is reachable)
-        const aiIndicator = document.getElementById('health-ai-indicator');
-        if (aiIndicator) {
-          // Try to check AI worker health
-          try {
-            const aiHealthRes = await fetch(`${API_URL}/api/admin/ai-worker/health`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            if (aiHealthRes.ok) {
-              const aiHealth = await aiHealthRes.json();
-              const aiOk = aiHealth.success && aiHealth.data?.status === 'healthy';
-              aiIndicator.className = `w-2.5 h-2.5 rounded-full ${aiOk ? 'bg-green-500' : 'bg-yellow-500'}`;
-            } else {
-              aiIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-            }
-          } catch {
-            aiIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-          }
-        }
-
-        // Queue indicator
-        const queueIndicator = document.getElementById('health-queue-indicator');
-        const queueCount = document.getElementById('health-queue-count');
-        if (queueIndicator && health.queue) {
-          const totalJobs = (health.queue.queued || 0) + (health.queue.running || 0);
-          const hasFailedJobs = (health.queue.failed || 0) > 0;
-          queueIndicator.className = `w-2.5 h-2.5 rounded-full ${hasFailedJobs ? 'bg-yellow-500' : 'bg-green-500'}`;
-          if (queueCount) {
-            queueCount.textContent = totalJobs > 0 ? `${totalJobs} Jobs` : '';
-          }
-        } else if (queueIndicator) {
-          queueIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-        }
-
-        // Last update timestamp
-        const lastUpdate = document.getElementById('health-last-update');
-        if (lastUpdate) {
-          lastUpdate.textContent = `Aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`;
-        }
-
-        // Uptime
-        const uptimeEl = document.getElementById('health-uptime');
-        if (uptimeEl && health.uptime) {
-          const uptimeHours = Math.floor(health.uptime / 3600);
-          const uptimeMins = Math.floor((health.uptime % 3600) / 60);
-          uptimeEl.textContent = `Uptime: ${uptimeHours}h ${uptimeMins}m`;
-        }
-
-      } catch (e) {
-        console.error('Health widget error:', e);
-        const statusBadge = document.getElementById('health-status-badge');
-        if (statusBadge) {
-          statusBadge.className = 'px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-700';
-          statusBadge.textContent = 'Nicht erreichbar';
+      
+      const errorMsg = document.getElementById('error-message');
+      if (errorMsg && e instanceof Error) {
+        if (e.message.includes('Failed to fetch')) {
+          errorMsg.textContent = 'Backend nicht erreichbar. Bitte prüfe, ob der Server läuft.';
         }
       }
     }
+  }
 
-    // Initial health check
-    updateHealthWidget();
+  // Update health widget
+  async function updateHealthWidget() {
+    try {
+      const health = await fetchWithAuth(`${API_URL}/api/health/detailed`);
 
-    // Auto-refresh health widget every 60 seconds
-    setInterval(updateHealthWidget, 60000);
-  })();
+      // Status badge
+      const statusBadge = document.getElementById('health-status-badge');
+      if (statusBadge) {
+        const statusStyles: Record<string, string> = {
+          ok: 'bg-green-100 text-green-700',
+          degraded: 'bg-yellow-100 text-yellow-700',
+          error: 'bg-red-100 text-red-700',
+        };
+        const statusLabels: Record<string, string> = {
+          ok: 'Alles OK',
+          degraded: 'Eingeschränkt',
+          error: 'Fehler',
+        };
+        const statusKey = String(health.status ?? '');
+        statusBadge.className = `px-3 py-1 text-xs font-medium rounded-full ${statusStyles[statusKey] || 'bg-gray-100 text-gray-500'}`;
+        statusBadge.textContent = statusLabels[statusKey] || 'Unbekannt';
+      }
+
+      // Database indicator
+      const dbIndicator = document.getElementById('health-db-indicator');
+      if (dbIndicator && health.services?.database) {
+        const dbStatus = health.services.database.status;
+        dbIndicator.className = `w-3 h-3 rounded-full ${dbStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'}`;
+      }
+
+      // Redis indicator
+      const redisIndicator = document.getElementById('health-redis-indicator');
+      if (redisIndicator && health.services?.redis) {
+        const redisStatus = health.services.redis.status;
+        const redisOk = ['connected', 'ok'].includes(redisStatus);
+        const redisDisabled = redisStatus === 'disabled';
+        redisIndicator.className = `w-3 h-3 rounded-full ${redisOk ? 'bg-green-500' : redisDisabled ? 'bg-gray-400' : 'bg-red-500'}`;
+      }
+
+      // AI Worker indicator
+      const aiIndicator = document.getElementById('health-ai-indicator');
+      if (aiIndicator) {
+        try {
+          const aiHealth = await fetchWithAuth(`${API_URL}/api/admin/ai-worker/health`);
+          const aiOk = aiHealth.success && aiHealth.data?.status === 'healthy';
+          aiIndicator.className = `w-3 h-3 rounded-full ${aiOk ? 'bg-green-500' : 'bg-yellow-500'}`;
+        } catch {
+          aiIndicator.className = 'w-3 h-3 rounded-full bg-gray-400';
+        }
+      }
+
+      // Queue indicator
+      const queueIndicator = document.getElementById('health-queue-indicator');
+      if (queueIndicator && health.queue) {
+        const hasFailedJobs = (health.queue.failed || 0) > 0;
+        queueIndicator.className = `w-3 h-3 rounded-full ${hasFailedJobs ? 'bg-yellow-500' : 'bg-green-500'}`;
+      } else if (queueIndicator) {
+        queueIndicator.className = 'w-3 h-3 rounded-full bg-gray-400';
+      }
+
+      // Last update timestamp
+      const lastUpdate = document.getElementById('health-last-update');
+      if (lastUpdate) {
+        lastUpdate.textContent = `Aktualisiert: ${new Date().toLocaleTimeString('de-DE')}`;
+      }
+
+      // Uptime
+      const uptimeEl = document.getElementById('health-uptime');
+      if (uptimeEl && health.uptime) {
+        const uptimeHours = Math.floor(health.uptime / 3600);
+        const uptimeMins = Math.floor((health.uptime % 3600) / 60);
+        uptimeEl.textContent = `Uptime: ${uptimeHours}h ${uptimeMins}m`;
+      }
+
+    } catch (e) {
+      console.error('Health widget error:', e);
+      const statusBadge = document.getElementById('health-status-badge');
+      if (statusBadge) {
+        statusBadge.className = 'px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-700';
+        statusBadge.textContent = 'Nicht erreichbar';
+      }
+    }
+  }
+
+  // Initialize dashboard
+  async function initDashboard() {
+    // Wait a bit for AdminLayout auth check to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Check if we have a token (AdminLayout handles redirect if not)
+    const token = getToken();
+    if (!token) {
+      // AdminLayout will handle redirect
+      return;
+    }
+
+    // Load initial data
+    await loadDashboardData();
+    await updateHealthWidget();
+
+    // Auto-refresh every 30 seconds
+    setInterval(() => {
+      loadDashboardData();
+      updateHealthWidget();
+    }, 30000);
+  }
+
+  // Start when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  } else {
+    initDashboard();
+  }
 </script>

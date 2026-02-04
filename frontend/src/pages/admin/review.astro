@@ -1,188 +1,376 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import StickyHeader from '../../components/layout/StickyHeader.astro';
-
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
-<BaseLayout title="Review Queue - Admin - kiezling">
-  <StickyHeader />
-  <main class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6">
-        <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
-        <h1 class="text-2xl font-bold text-gray-900">Review Queue</h1>
-        <p class="text-gray-500">Events mit niedriger Konfidenz zur manuellen Prüfung</p>
-      </header>
+<AdminLayout title="Review Queue - kiezling Admin" currentPage="review">
+  <div class="flex gap-6 min-h-[calc(100vh-120px)]">
+    <!-- Filter Sidebar (Desktop) -->
+    <aside id="filter-sidebar" class="hidden lg:block w-60 flex-shrink-0">
+      <div class="bg-white rounded-xl border border-gray-200 p-4 sticky top-4">
+        <h2 class="font-semibold text-gray-900 mb-4">Filter</h2>
+        
+        <!-- Status Filter -->
+        <div class="mb-6">
+          <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Status</h3>
+          
+          <!-- Aktiv Group -->
+          <div class="mb-3">
+            <span class="text-xs text-gray-400 block mb-1">Aktiv</span>
+            <div class="space-y-1">
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5">
+                <input type="radio" name="status" value="pending_review" class="status-radio text-primary-500 focus:ring-primary-500" checked>
+                <span class="text-sm text-gray-700">Ausstehend</span>
+                <span id="count-pending_review" class="ml-auto text-xs text-gray-400"></span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5">
+                <input type="radio" name="status" value="pending_ai" class="status-radio text-primary-500 focus:ring-primary-500">
+                <span class="text-sm text-gray-700">Warte auf AI</span>
+                <span id="count-pending_ai" class="ml-auto text-xs text-gray-400"></span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5">
+                <input type="radio" name="status" value="incomplete" class="status-radio text-primary-500 focus:ring-primary-500">
+                <span class="text-sm text-gray-700">Unvollständig</span>
+                <span id="count-incomplete" class="ml-auto text-xs text-gray-400"></span>
+              </label>
+            </div>
+          </div>
 
-      <!-- Filters -->
-      <div class="flex flex-wrap gap-3 mb-6">
-        <select id="status-filter" class="px-4 py-2 border-2 border-gray-200 rounded-lg bg-white text-sm">
-          <optgroup label="Aktiv">
-            <option value="pending_review">Ausstehend</option>
-            <option value="pending_ai">Warte auf AI</option>
-            <option value="incomplete">Unvollständig</option>
-          </optgroup>
-          <optgroup label="Entschieden">
-            <option value="published">Veröffentlicht</option>
-            <option value="rejected">Abgelehnt (AI/Manuell)</option>
-          </optgroup>
-          <optgroup label="Archiv">
-            <option value="archived">Archiviert</option>
-            <option value="cancelled">Abgesagt</option>
-            <option value="stale">Veraltet</option>
-          </optgroup>
-          <option value="all">Alle Events</option>
-        </select>
-        <button class="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-sm hover:bg-gray-50" id="refresh-btn">
-          🔄 Aktualisieren
+          <!-- Entschieden Group -->
+          <div class="mb-3">
+            <span class="text-xs text-gray-400 block mb-1">Entschieden</span>
+            <div class="space-y-1">
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5">
+                <input type="radio" name="status" value="published" class="status-radio text-primary-500 focus:ring-primary-500">
+                <span class="text-sm text-gray-700">Veröffentlicht</span>
+                <span id="count-published" class="ml-auto text-xs text-gray-400"></span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5">
+                <input type="radio" name="status" value="rejected" class="status-radio text-primary-500 focus:ring-primary-500">
+                <span class="text-sm text-gray-700">Abgelehnt</span>
+                <span id="count-rejected" class="ml-auto text-xs text-gray-400"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Archiv Group -->
+          <div class="mb-3">
+            <span class="text-xs text-gray-400 block mb-1">Archiv</span>
+            <div class="space-y-1">
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5">
+                <input type="radio" name="status" value="archived" class="status-radio text-primary-500 focus:ring-primary-500">
+                <span class="text-sm text-gray-700">Archiviert</span>
+                <span id="count-archived" class="ml-auto text-xs text-gray-400"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- All -->
+          <div>
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1.5 border-t border-gray-100 pt-2">
+              <input type="radio" name="status" value="all" class="status-radio text-primary-500 focus:ring-primary-500">
+              <span class="text-sm text-gray-700 font-medium">Alle Events</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Source Filter -->
+        <div class="mb-6">
+          <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Quelle</h3>
+          <select id="source-filter" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <option value="">Alle Quellen</option>
+          </select>
+        </div>
+
+        <!-- Score Filter -->
+        <div class="mb-6">
+          <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Family Fit Score</h3>
+          <div class="px-2">
+            <input type="range" id="score-filter" min="0" max="100" value="0" class="w-full accent-primary-500">
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span>0</span>
+              <span id="score-value" class="font-medium text-gray-600">0+</span>
+              <span>100</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clear Filters -->
+        <button id="clear-filters" class="w-full px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+          Filter zurücksetzen
         </button>
-        <span id="event-count" class="ml-auto text-sm text-gray-500 self-center"></span>
+      </div>
+    </aside>
+
+    <!-- Mobile Filter Toggle -->
+    <button id="mobile-filter-btn" class="lg:hidden fixed bottom-4 left-4 z-40 bg-primary-500 text-white px-4 py-3 rounded-full shadow-lg flex items-center gap-2 hover:bg-primary-600 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+      </svg>
+      <span>Filter</span>
+    </button>
+
+    <!-- Mobile Filter Overlay -->
+    <div id="mobile-filter-overlay" class="lg:hidden fixed inset-0 bg-black/50 z-40 hidden">
+      <div id="mobile-filter-panel" class="absolute left-0 top-0 bottom-0 w-72 bg-white p-4 overflow-y-auto transform -translate-x-full transition-transform duration-300">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="font-semibold text-gray-900">Filter</h2>
+          <button id="close-mobile-filter" class="p-2 hover:bg-gray-100 rounded-lg">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Mobile Filter Content (cloned from desktop) -->
+        <div id="mobile-filter-content"></div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 min-w-0">
+      <!-- Header Row -->
+      <div class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div class="flex-1">
+            <h1 class="text-xl font-bold text-gray-900">Review Queue</h1>
+            <p id="event-count" class="text-sm text-gray-500">Lade Events...</p>
+          </div>
+          
+          <div class="flex flex-col sm:flex-row gap-3">
+            <!-- Search Input -->
+            <div class="relative">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input type="text" id="search-input" placeholder="Events durchsuchen..." class="w-full sm:w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            
+            <!-- Sort Dropdown -->
+            <select id="sort-select" class="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+              <option value="date_desc">Datum (neueste)</option>
+              <option value="date_asc">Datum (älteste)</option>
+              <option value="score_desc">Score (höchste)</option>
+              <option value="score_asc">Score (niedrigste)</option>
+              <option value="title_asc">Titel (A-Z)</option>
+              <option value="title_desc">Titel (Z-A)</option>
+            </select>
+            
+            <!-- Refresh Button -->
+            <button id="refresh-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Aktualisieren
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Loading State -->
-      <div id="loading-state" class="text-center py-12">
+      <div id="loading-state" class="bg-white rounded-xl border border-gray-200 p-12 text-center">
         <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
         <p class="text-gray-500 mt-4">Lade Events...</p>
       </div>
 
-      <!-- Review List -->
-      <div class="hidden space-y-4" id="review-list"></div>
+      <!-- Event List -->
+      <div id="review-list" class="hidden space-y-3"></div>
 
       <!-- Empty State -->
-      <div id="empty-state" class="hidden text-center py-12">
-        <p class="text-gray-500 text-lg">Keine Events zur Prüfung</p>
+      <div id="empty-state" class="hidden bg-white rounded-xl border border-gray-200 p-12 text-center">
+        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+        <p class="text-gray-500 text-lg">Keine Events gefunden</p>
+        <p class="text-gray-400 text-sm mt-1">Versuche andere Filter oder Suchbegriffe</p>
       </div>
 
-      <!-- Reject Modal -->
-      <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="reject-modal">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6">
-          <h3 class="text-lg font-semibold mb-4">Event ablehnen</h3>
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Grund</label>
-              <select id="reject-reason-code" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                <option value="">-- Bitte wählen --</option>
-                <option value="spam">Spam / Werbung</option>
-                <option value="incomplete">Unvollständig</option>
-                <option value="wrong_date">Falsches Datum</option>
-                <option value="duplicate">Duplikat</option>
-                <option value="not_relevant">Nicht relevant</option>
-                <option value="other">Sonstiges</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Kommentar (optional)</label>
-              <textarea id="reject-reason-text" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Zusätzliche Details..."></textarea>
-            </div>
-          </div>
-          <div class="flex gap-3 mt-6">
-            <button id="reject-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
-            <button id="reject-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Ablehnen</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quick Edit Modal -->
-      <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="edit-modal">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-          <h3 class="text-lg font-semibold mb-4">Event bearbeiten & genehmigen</h3>
-          <div class="space-y-4">
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label class="text-sm font-medium text-gray-700">Titel</label>
-                <label class="flex items-center gap-1 text-xs text-gray-500">
-                  <input type="checkbox" id="lock-title" class="lock-checkbox"> Sperren
-                </label>
-              </div>
-              <input type="text" id="edit-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label class="text-sm font-medium text-gray-700">Startdatum</label>
-                <label class="flex items-center gap-1 text-xs text-gray-500">
-                  <input type="checkbox" id="lock-start" class="lock-checkbox"> Sperren
-                </label>
-              </div>
-              <input type="datetime-local" id="edit-start" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label class="text-sm font-medium text-gray-700">Enddatum</label>
-                <label class="flex items-center gap-1 text-xs text-gray-500">
-                  <input type="checkbox" id="lock-end" class="lock-checkbox"> Sperren
-                </label>
-              </div>
-              <input type="datetime-local" id="edit-end" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label class="text-sm font-medium text-gray-700">Adresse</label>
-                <label class="flex items-center gap-1 text-xs text-gray-500">
-                  <input type="checkbox" id="lock-address" class="lock-checkbox"> Sperren
-                </label>
-              </div>
-              <input type="text" id="edit-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-            </div>
-          </div>
-          <p class="text-xs text-gray-500 mt-4">Gesperrte Felder werden nicht durch automatische Updates überschrieben.</p>
-          <div class="flex gap-3 mt-6">
-            <button id="edit-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Abbrechen</button>
-            <button id="edit-confirm" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600">Speichern & Genehmigen</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Detail Modal -->
-      <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="detail-modal">
-        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div class="p-6 border-b border-gray-200">
-            <div class="flex items-start justify-between">
-              <h2 id="detail-title" class="text-xl font-semibold pr-8">Event Details</h2>
-              <button id="detail-close" class="text-2xl text-gray-400 hover:text-gray-600">&times;</button>
-            </div>
-            <div id="detail-badges" class="flex flex-wrap gap-2 mt-2"></div>
-          </div>
-          <div class="p-6 space-y-6">
-            <div>
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Details</h3>
-              <div id="detail-info" class="grid grid-cols-2 gap-3"></div>
-            </div>
-            <div>
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Beschreibungen</h3>
-              <div id="detail-descriptions" class="space-y-4"></div>
-            </div>
-            <div>
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">AI-Scores</h3>
-              <div id="detail-scores" class="bg-gray-50 rounded-lg p-4"></div>
-            </div>
-            <div>
-              <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Quelle</h3>
-              <div id="detail-source" class="bg-gray-50 rounded-lg p-4"></div>
-            </div>
-          </div>
-          <div class="p-6 border-t border-gray-200 flex gap-3 justify-end">
-            <button id="detail-approve" class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">✓ Genehmigen</button>
-            <button id="detail-edit" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">✏️ Bearbeiten</button>
-            <button id="detail-reject" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">✗ Ablehnen</button>
-          </div>
-        </div>
+      <!-- Pagination / Load More -->
+      <div id="pagination" class="hidden mt-4 flex justify-center">
+        <button id="load-more-btn" class="px-6 py-3 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
+          <span>Mehr laden</span>
+          <span id="remaining-count" class="text-gray-400"></span>
+        </button>
       </div>
     </div>
-  </main>
-</BaseLayout>
+  </div>
+
+  <!-- Reject Modal -->
+  <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="reject-modal">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold">Event ablehnen</h3>
+        <button class="modal-close p-1 hover:bg-gray-100 rounded-lg">
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Grund</label>
+          <select id="reject-reason-code" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <option value="">-- Bitte wählen --</option>
+            <option value="spam">Spam / Werbung</option>
+            <option value="incomplete">Unvollständig</option>
+            <option value="wrong_date">Falsches Datum</option>
+            <option value="duplicate">Duplikat</option>
+            <option value="not_relevant">Nicht relevant</option>
+            <option value="other">Sonstiges</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Kommentar (optional)</label>
+          <textarea id="reject-reason-text" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="Zusätzliche Details..."></textarea>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button id="reject-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors">Abbrechen</button>
+        <button id="reject-confirm" class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium transition-colors">Ablehnen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Edit Modal -->
+  <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="edit-modal">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold">Event bearbeiten & genehmigen</h3>
+        <button class="modal-close p-1 hover:bg-gray-100 rounded-lg">
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-sm font-medium text-gray-700">Titel</label>
+            <label class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+              <input type="checkbox" id="lock-title" class="lock-checkbox rounded text-primary-500 focus:ring-primary-500"> Sperren
+            </label>
+          </div>
+          <input type="text" id="edit-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-sm font-medium text-gray-700">Startdatum</label>
+            <label class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+              <input type="checkbox" id="lock-start" class="lock-checkbox rounded text-primary-500 focus:ring-primary-500"> Sperren
+            </label>
+          </div>
+          <input type="datetime-local" id="edit-start" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-sm font-medium text-gray-700">Enddatum</label>
+            <label class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+              <input type="checkbox" id="lock-end" class="lock-checkbox rounded text-primary-500 focus:ring-primary-500"> Sperren
+            </label>
+          </div>
+          <input type="datetime-local" id="edit-end" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-sm font-medium text-gray-700">Adresse</label>
+            <label class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+              <input type="checkbox" id="lock-address" class="lock-checkbox rounded text-primary-500 focus:ring-primary-500"> Sperren
+            </label>
+          </div>
+          <input type="text" id="edit-address" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-4 bg-gray-50 p-3 rounded-lg">
+        <span class="font-medium">Hinweis:</span> Gesperrte Felder werden nicht durch automatische Updates überschrieben.
+      </p>
+      <div class="flex gap-3 mt-6">
+        <button id="edit-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors">Abbrechen</button>
+        <button id="edit-confirm" class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium transition-colors">Speichern & Genehmigen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="detail-modal">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl">
+      <div class="p-6 border-b border-gray-200">
+        <div class="flex items-start justify-between">
+          <h2 id="detail-title" class="text-xl font-semibold pr-8">Event Details</h2>
+          <button id="detail-close" class="p-1 hover:bg-gray-100 rounded-lg">
+            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div id="detail-badges" class="flex flex-wrap gap-2 mt-3"></div>
+      </div>
+      <div class="p-6 space-y-6">
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Details</h3>
+          <div id="detail-info" class="grid grid-cols-2 gap-3"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Beschreibungen</h3>
+          <div id="detail-descriptions" class="space-y-4"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">AI-Scores</h3>
+          <div id="detail-scores" class="bg-gray-50 rounded-lg p-4"></div>
+        </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Quelle</h3>
+          <div id="detail-source" class="bg-gray-50 rounded-lg p-4"></div>
+        </div>
+      </div>
+      <div class="p-6 border-t border-gray-200 flex flex-wrap gap-3 justify-end bg-gray-50 rounded-b-2xl">
+        <button id="detail-approve" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Genehmigen
+        </button>
+        <button id="detail-edit" class="px-5 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Bearbeiten
+        </button>
+        <button id="detail-reject" class="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Ablehnen
+        </button>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
 
 <script is:inline define:vars={{ API_URL }}>
+  // State
   let events = [];
+  let allEvents = []; // For client-side filtering/search
   let currentEventId = null;
+  let currentPage = 1;
+  let totalEvents = 0;
+  let hasMore = false;
+  const PAGE_SIZE = 50;
+  
+  // Filters state
+  let filters = {
+    status: 'pending_review',
+    source: '',
+    minScore: 0,
+    search: '',
+    sort: 'date_desc'
+  };
+
+  // Get auth token
   const token = localStorage.getItem('auth_token');
 
-  // Auth check
-  if (!token) {
-    window.location.href = '/login?redirect=/admin/review';
-  }
-
-  // Fetch helper
+  // API Fetch helper
   async function apiFetch(endpoint, options = {}) {
     const res = await fetch(`${API_URL}${endpoint}`, {
       ...options,
@@ -193,50 +381,190 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       },
     });
     if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem('auth_token');
-      window.location.href = '/login?redirect=/admin/review';
       throw new Error('Unauthorized');
     }
     return res.json();
   }
 
+  // Load sources for filter dropdown
+  async function loadSources() {
+    try {
+      const data = await apiFetch('/api/admin/sources?limit=100');
+      const sources = data.data || [];
+      const select = document.getElementById('source-filter');
+      
+      sources.forEach(source => {
+        const option = document.createElement('option');
+        option.value = source.id;
+        option.textContent = source.name;
+        select.appendChild(option);
+      });
+    } catch (e) {
+      console.error('Failed to load sources:', e);
+    }
+  }
+
+  // Load status counts
+  async function loadStatusCounts() {
+    try {
+      const data = await apiFetch('/api/admin/stats');
+      const stats = data.data?.events || {};
+      
+      const countMap = {
+        'pending_review': stats.pending_review || 0,
+        'pending_ai': stats.pending_ai || 0,
+        'incomplete': stats.incomplete || 0,
+        'published': stats.published || 0,
+        'rejected': stats.rejected || 0,
+        'archived': stats.archived || 0,
+      };
+      
+      Object.entries(countMap).forEach(([status, count]) => {
+        const el = document.getElementById(`count-${status}`);
+        if (el) el.textContent = count > 0 ? count : '';
+      });
+    } catch (e) {
+      console.error('Failed to load status counts:', e);
+    }
+  }
+
+  // Build query string from filters
+  function buildQueryString() {
+    const params = new URLSearchParams();
+    params.set('status', filters.status);
+    params.set('limit', PAGE_SIZE.toString());
+    params.set('offset', ((currentPage - 1) * PAGE_SIZE).toString());
+    
+    if (filters.source) params.set('source_id', filters.source);
+    if (filters.minScore > 0) params.set('min_score', filters.minScore.toString());
+    
+    return params.toString();
+  }
+
   // Load events
-  async function loadEvents() {
-    const status = document.getElementById('status-filter').value;
-    document.getElementById('loading-state').classList.remove('hidden');
-    document.getElementById('review-list').classList.add('hidden');
-    document.getElementById('empty-state').classList.add('hidden');
+  async function loadEvents(append = false) {
+    if (!append) {
+      currentPage = 1;
+      document.getElementById('loading-state').classList.remove('hidden');
+      document.getElementById('review-list').classList.add('hidden');
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('pagination').classList.add('hidden');
+    }
 
     try {
-      const data = await apiFetch(`/api/admin/review-queue?status=${status}&limit=50`);
-      console.log('API Response:', data); // Debug
-      events = data.data || [];
+      const queryString = buildQueryString();
+      const data = await apiFetch(`/api/admin/review-queue?${queryString}`);
       
-      document.getElementById('event-count').textContent = `${events.length} Events`;
+      const newEvents = data.data || [];
+      totalEvents = data.pagination?.total || newEvents.length;
       
-      if (events.length === 0) {
-        document.getElementById('empty-state').classList.remove('hidden');
+      if (append) {
+        allEvents = [...allEvents, ...newEvents];
       } else {
-        try {
-          renderEvents();
-          document.getElementById('review-list').classList.remove('hidden');
-        } catch (renderError) {
-          console.error('Render error:', renderError);
-          console.error('Events data:', JSON.stringify(events[0], null, 2));
-          document.getElementById('empty-state').classList.remove('hidden');
-          document.getElementById('empty-state').innerHTML = `<p class="text-red-500">Fehler beim Rendern: ${renderError.message}</p>`;
-        }
+        allEvents = newEvents;
       }
+      
+      // Apply client-side search filter
+      filterAndRenderEvents();
+      
+      // Check if there are more
+      hasMore = allEvents.length < totalEvents;
+      updatePagination();
+      
     } catch (e) {
       console.error('Load error:', e);
       document.getElementById('empty-state').classList.remove('hidden');
-      document.getElementById('empty-state').innerHTML = '<p class="text-red-500">Fehler beim Laden: ' + e.message + '</p>';
+      document.getElementById('empty-state').innerHTML = `
+        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <p class="text-red-500 text-lg">Fehler beim Laden</p>
+        <p class="text-gray-400 text-sm mt-1">${e.message}</p>
+      `;
     } finally {
       document.getElementById('loading-state').classList.add('hidden');
     }
   }
 
-  // Helper to get status badge styling
+  // Filter events client-side and render
+  function filterAndRenderEvents() {
+    let filtered = [...allEvents];
+    
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(event => 
+        event.title?.toLowerCase().includes(searchLower) ||
+        event.location_address?.toLowerCase().includes(searchLower) ||
+        event.description_short?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    // Score filter (client-side additional filtering)
+    if (filters.minScore > 0) {
+      filtered = filtered.filter(event => {
+        const score = event.scores?.family_fit_score;
+        return score !== null && score !== undefined && score >= filters.minScore;
+      });
+    }
+    
+    // Sort
+    filtered = sortEvents(filtered);
+    
+    events = filtered;
+    
+    // Update count
+    document.getElementById('event-count').textContent = `${events.length} von ${totalEvents} Events`;
+    
+    if (events.length === 0) {
+      document.getElementById('empty-state').classList.remove('hidden');
+      document.getElementById('review-list').classList.add('hidden');
+    } else {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('review-list').classList.remove('hidden');
+      renderEvents();
+    }
+  }
+
+  // Sort events
+  function sortEvents(eventList) {
+    return eventList.sort((a, b) => {
+      switch (filters.sort) {
+        case 'date_desc':
+          return new Date(b.start_datetime || 0) - new Date(a.start_datetime || 0);
+        case 'date_asc':
+          return new Date(a.start_datetime || 0) - new Date(b.start_datetime || 0);
+        case 'score_desc':
+          return (b.scores?.family_fit_score || 0) - (a.scores?.family_fit_score || 0);
+        case 'score_asc':
+          return (a.scores?.family_fit_score || 0) - (b.scores?.family_fit_score || 0);
+        case 'title_asc':
+          return (a.title || '').localeCompare(b.title || '');
+        case 'title_desc':
+          return (b.title || '').localeCompare(a.title || '');
+        default:
+          return 0;
+      }
+    });
+  }
+
+  // Update pagination
+  function updatePagination() {
+    const paginationEl = document.getElementById('pagination');
+    const remainingCount = document.getElementById('remaining-count');
+    
+    if (hasMore) {
+      paginationEl.classList.remove('hidden');
+      const remaining = totalEvents - allEvents.length;
+      remainingCount.textContent = `(${remaining} weitere)`;
+    } else {
+      paginationEl.classList.add('hidden');
+    }
+  }
+
+  // Helper functions
   function getStatusBadge(status) {
     const styles = {
       pending_review: 'bg-amber-100 text-amber-700',
@@ -261,22 +589,18 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     return { style: styles[status] || 'bg-gray-100 text-gray-600', label: labels[status] || status };
   }
 
-  // Helper to get family fit score styling
-  function getFamilyFitStyle(score) {
-    if (score === null || score === undefined) return { style: 'bg-gray-100 text-gray-500', label: '-' };
-    if (score >= 70) return { style: 'bg-green-100 text-green-700', label: `${score}%` };
-    if (score >= 50) return { style: 'bg-yellow-100 text-yellow-700', label: `${score}%` };
-    if (score >= 30) return { style: 'bg-orange-100 text-orange-700', label: `${score}%` };
-    return { style: 'bg-red-100 text-red-700', label: `${score}%` };
+  function getScoreBadge(score) {
+    if (score === null || score === undefined) return { style: 'bg-gray-100 text-gray-400', color: 'gray' };
+    if (score >= 80) return { style: 'bg-green-100 text-green-700', color: 'green' };
+    if (score >= 60) return { style: 'bg-yellow-100 text-yellow-700', color: 'yellow' };
+    return { style: 'bg-red-100 text-red-700', color: 'red' };
   }
 
-  // Helper to get review reason badge
   function getReviewReasonBadge(event) {
     if (event.status === 'rejected') {
-      // Show rejection reason
       const label = event.rejection_label || 'Abgelehnt';
       const isAI = event.rejection_type === 'AI_REJECTED';
-      return `<span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700" title="${label}">${isAI ? '🤖 AI: ' : ''}${label}</span>`;
+      return `<span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700" title="${label}">${isAI ? '🤖 ' : ''}${label}</span>`;
     }
     if (event.status === 'pending_review' && event.review_reason_label) {
       const reasonStyles = {
@@ -288,7 +612,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         'Warte auf AI': 'bg-blue-100 text-blue-700',
       };
       const style = reasonStyles[event.review_reason_label] || 'bg-gray-100 text-gray-600';
-      return `<span class="px-2 py-0.5 text-xs rounded-full ${style}">📋 ${event.review_reason_label}</span>`;
+      return `<span class="px-2 py-0.5 text-xs rounded-full ${style}">${event.review_reason_label}</span>`;
     }
     return '';
   }
@@ -297,78 +621,118 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   function renderEvents() {
     const list = document.getElementById('review-list');
     list.innerHTML = events.map(event => {
-      // Handle null/undefined start_datetime
+      // Format date
       let date = 'Kein Datum';
       try {
         if (event.start_datetime) {
           date = new Date(event.start_datetime).toLocaleDateString('de-DE', { 
-            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+            weekday: 'short',
+            day: '2-digit', 
+            month: '2-digit', 
+            year: 'numeric', 
+            hour: '2-digit', 
+            minute: '2-digit' 
           });
         }
-      } catch (e) {
-        console.error('Date parsing error:', e);
-      }
+      } catch (e) {}
+      
       const sourceName = event.primary_source?.source?.name || 'Unbekannt';
       const completenessScore = event.completeness_score || 0;
       const statusBadge = getStatusBadge(event.status);
-      
-      // AI Scores
       const scores = event.scores || {};
-      const familyFit = getFamilyFitStyle(scores.family_fit_score);
-      const hasScores = scores.family_fit_score !== null && scores.family_fit_score !== undefined;
-      
-      // Review/Rejection reason badge
+      const familyFitScore = scores.family_fit_score;
+      const scoreBadge = getScoreBadge(familyFitScore);
       const reasonBadge = getReviewReasonBadge(event);
-      
-      // Show action buttons only for actionable statuses
       const showActions = ['pending_review', 'pending_ai', 'incomplete'].includes(event.status);
+      const confidence = scores.confidence ? Math.round(Number(scores.confidence) * 100) : null;
       
       return `
-        <div class="bg-white rounded-xl p-4 border border-gray-100 hover:shadow-md transition-shadow cursor-pointer" data-id="${event.id}">
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              <h3 class="font-semibold text-gray-900 truncate">${event.title}</h3>
-              <div class="flex flex-wrap gap-3 text-sm text-gray-500 mt-1">
-                <span>📅 ${date}</span>
-                <span>📡 ${sourceName}</span>
-                ${event.location_address ? `<span class="truncate max-w-[200px]">📍 ${event.location_address}</span>` : ''}
-              </div>
-              
-              <!-- Status & Scores Row -->
-              <div class="flex flex-wrap gap-2 mt-2">
-                <span class="px-2 py-0.5 text-xs rounded-full ${statusBadge.style}">${statusBadge.label}</span>
-                ${hasScores ? `<span class="px-2 py-0.5 text-xs rounded-full ${familyFit.style}" title="Family Fit Score">👨‍👩‍👧 ${familyFit.label}</span>` : ''}
-                ${reasonBadge}
-              </div>
-              
-              <!-- Extended Scores (collapsed) -->
-              ${hasScores ? `
-              <div class="flex flex-wrap gap-2 mt-1 text-xs text-gray-500">
-                <span title="Relevanz">📊 ${scores.relevance_score || '-'}</span>
-                <span title="Qualität">⭐ ${scores.quality_score || '-'}</span>
-                <span title="Stressfrei">😌 ${scores.stressfree_score || '-'}</span>
-                <span title="Konfidenz">🎯 ${scores.confidence ? Math.round(Number(scores.confidence) * 100) + '%' : '-'}</span>
-              </div>
-              ` : ''}
-              
-              <!-- Completeness -->
-              <div class="mt-1">
-                <span class="text-xs ${completenessScore < 50 ? 'text-red-500' : completenessScore < 80 ? 'text-yellow-600' : 'text-green-600'}">
-                  Vollständigkeit: ${completenessScore}%
-                </span>
+        <div class="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer group" data-id="${event.id}">
+          <div class="flex items-start gap-4">
+            <!-- Score Badge (left) -->
+            <div class="flex-shrink-0 hidden sm:block">
+              <div class="w-14 h-14 rounded-xl ${scoreBadge.style} flex flex-col items-center justify-center">
+                <span class="text-lg font-bold">${familyFitScore !== null && familyFitScore !== undefined ? familyFitScore : '?'}</span>
+                <span class="text-[10px] uppercase tracking-wide opacity-75">Score</span>
               </div>
             </div>
             
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors truncate">${event.title}</h3>
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mt-1">
+                    <span class="flex items-center gap-1">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      ${date}
+                    </span>
+                    ${event.location_address ? `
+                      <span class="flex items-center gap-1 truncate max-w-[200px]">
+                        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        ${event.location_address}
+                      </span>
+                    ` : ''}
+                  </div>
+                </div>
+                
+                <!-- Mobile Score Badge -->
+                <div class="sm:hidden flex-shrink-0">
+                  <div class="w-10 h-10 rounded-lg ${scoreBadge.style} flex items-center justify-center">
+                    <span class="text-sm font-bold">${familyFitScore !== null && familyFitScore !== undefined ? familyFitScore : '?'}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Badges Row -->
+              <div class="flex flex-wrap items-center gap-2 mt-3">
+                <span class="px-2 py-0.5 text-xs rounded-full ${statusBadge.style}">${statusBadge.label}</span>
+                ${reasonBadge}
+                <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">${sourceName}</span>
+                <span class="px-2 py-0.5 text-xs rounded-full ${completenessScore < 50 ? 'bg-red-100 text-red-600' : completenessScore < 80 ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}">
+                  ${completenessScore}% vollständig
+                </span>
+                ${confidence !== null ? `
+                  <span class="px-2 py-0.5 text-xs rounded-full bg-primary-50 text-primary-600" title="AI Konfidenz">
+                    🎯 ${confidence}%
+                  </span>
+                ` : ''}
+              </div>
+            </div>
+            
+            <!-- Actions -->
             ${showActions ? `
-            <div class="flex gap-2 shrink-0">
-              <button class="action-btn w-10 h-10 rounded-lg bg-green-100 text-green-600 hover:bg-green-200" data-action="approve" data-id="${event.id}" title="Genehmigen">✓</button>
-              <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200" data-action="edit" data-id="${event.id}" title="Bearbeiten">✏️</button>
-              <button class="action-btn w-10 h-10 rounded-lg bg-red-100 text-red-600 hover:bg-red-200" data-action="reject" data-id="${event.id}" title="Ablehnen">✗</button>
-            </div>
+              <div class="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+                <button class="action-btn w-10 h-10 rounded-lg bg-green-100 text-green-600 hover:bg-green-200 transition-colors flex items-center justify-center" data-action="approve" data-id="${event.id}" title="Genehmigen">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+                <button class="action-btn w-10 h-10 rounded-lg bg-primary-100 text-primary-600 hover:bg-primary-200 transition-colors flex items-center justify-center" data-action="edit" data-id="${event.id}" title="Bearbeiten & Genehmigen">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button class="action-btn w-10 h-10 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors flex items-center justify-center" data-action="reject" data-id="${event.id}" title="Ablehnen">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             ` : `
-            <div class="flex gap-2 shrink-0">
-              <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-400" data-action="view" data-id="${event.id}" title="Details">👁</button>
-            </div>
+              <div class="flex-shrink-0">
+                <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors flex items-center justify-center" data-action="view" data-id="${event.id}" title="Details anzeigen">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
+              </div>
             `}
           </div>
         </div>
@@ -400,7 +764,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   // Detail Modal
   function openDetailModal(id) {
     currentEventId = id;
-    const event = events.find(e => e.id === id);
+    const event = events.find(e => e.id === id) || allEvents.find(e => e.id === id);
     if (!event) return;
 
     document.getElementById('detail-title').textContent = event.title;
@@ -408,81 +772,98 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     const statusBadge = getStatusBadge(event.status);
     const reasonBadge = getReviewReasonBadge(event);
     const scores = event.scores || {};
-    const familyFit = getFamilyFitStyle(scores.family_fit_score);
+    const scoreBadge = getScoreBadge(scores.family_fit_score);
     
     document.getElementById('detail-badges').innerHTML = `
-      <span class="px-2 py-1 text-xs rounded-full ${statusBadge.style}">${statusBadge.label}</span>
-      ${scores.family_fit_score !== null && scores.family_fit_score !== undefined ? `<span class="px-2 py-1 text-xs rounded-full ${familyFit.style}">👨‍👩‍👧 Family Fit: ${familyFit.label}</span>` : ''}
-      ${event.completeness_score ? `<span class="px-2 py-1 text-xs rounded-full ${event.completeness_score < 50 ? 'bg-red-100 text-red-700' : event.completeness_score < 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}">Vollständigkeit: ${event.completeness_score}%</span>` : ''}
+      <span class="px-2.5 py-1 text-xs rounded-full ${statusBadge.style} font-medium">${statusBadge.label}</span>
+      ${scores.family_fit_score !== null && scores.family_fit_score !== undefined ? `
+        <span class="px-2.5 py-1 text-xs rounded-full ${scoreBadge.style} font-medium">
+          Family Fit: ${scores.family_fit_score}%
+        </span>
+      ` : ''}
+      ${event.completeness_score ? `
+        <span class="px-2.5 py-1 text-xs rounded-full ${event.completeness_score < 50 ? 'bg-red-100 text-red-700' : event.completeness_score < 80 ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'} font-medium">
+          ${event.completeness_score}% vollständig
+        </span>
+      ` : ''}
       ${reasonBadge}
     `;
 
     const formatDate = (d) => d ? new Date(d).toLocaleString('de-DE') : '-';
     document.getElementById('detail-info').innerHTML = `
-      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Start</span><span class="font-medium">${formatDate(event.start_datetime)}</span></div>
-      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Ende</span><span class="font-medium">${formatDate(event.end_datetime)}</span></div>
-      <div class="bg-gray-50 p-3 rounded-lg col-span-2"><span class="text-xs text-gray-500 block">Adresse</span><span class="font-medium">${event.location_address || '-'}</span></div>
-      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Preis</span><span class="font-medium">${event.price_type || '-'}</span></div>
-      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block">Alter</span><span class="font-medium">${event.age_min || '?'} - ${event.age_max || '?'} Jahre</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Start</span><span class="font-medium text-gray-900">${formatDate(event.start_datetime)}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Ende</span><span class="font-medium text-gray-900">${formatDate(event.end_datetime)}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg col-span-2"><span class="text-xs text-gray-500 block mb-1">Adresse</span><span class="font-medium text-gray-900">${event.location_address || '-'}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Preis</span><span class="font-medium text-gray-900">${event.price_type || '-'}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Alter</span><span class="font-medium text-gray-900">${event.age_min || '?'} - ${event.age_max || '?'} Jahre</span></div>
     `;
 
-    // Descriptions: KI-Zusammenfassung + Original-Beschreibung
     document.getElementById('detail-descriptions').innerHTML = `
-      <!-- KI-generierte Beschreibung -->
       <div>
-        <div class="flex items-center gap-2 mb-1">
-          <span class="text-xs font-medium text-primary-600">✨ KI-Zusammenfassung</span>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-semibold text-primary-600 uppercase tracking-wide">KI-Zusammenfassung</span>
         </div>
-        <div class="bg-primary-50 border border-primary-100 p-3 rounded-lg text-sm text-gray-700">
+        <div class="bg-primary-50 border border-primary-100 p-4 rounded-lg text-sm text-gray-700">
           ${event.ai_summary_short ? `
-            <p class="mb-2">${event.ai_summary_short}</p>
-            ${event.ai_fit_blurb ? `<p class="text-primary-600 text-xs font-medium">💡 ${event.ai_fit_blurb}</p>` : ''}
+            <p>${event.ai_summary_short}</p>
+            ${event.ai_fit_blurb ? `<p class="text-primary-600 text-sm font-medium mt-2">💡 ${event.ai_fit_blurb}</p>` : ''}
           ` : '<em class="text-gray-400">Keine KI-Zusammenfassung vorhanden</em>'}
         </div>
       </div>
-      <!-- Original-Beschreibung aus RSS/Quelle -->
       <div>
-        <div class="flex items-center gap-2 mb-1">
-          <span class="text-xs font-medium text-gray-600">📄 Original-Beschreibung (Quelle)</span>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Original-Beschreibung</span>
         </div>
-        <div class="bg-gray-50 border border-gray-200 p-3 rounded-lg text-sm text-gray-700 max-h-48 overflow-y-auto">
+        <div class="bg-gray-50 border border-gray-200 p-4 rounded-lg text-sm text-gray-700 max-h-48 overflow-y-auto">
           ${event.description_long || event.description_short || '<em class="text-gray-400">Keine Beschreibung aus Quelle</em>'}
         </div>
       </div>
     `;
 
-    // Enhanced scores display with confidence
     const confidence = scores.confidence ? Math.round(Number(scores.confidence) * 100) : null;
     document.getElementById('detail-scores').innerHTML = scores && (scores.family_fit_score !== null || scores.relevance_score !== null) ? `
       <div class="grid grid-cols-2 gap-3 text-sm">
-        <div class="p-2 rounded ${scores.family_fit_score >= 50 ? 'bg-green-50' : scores.family_fit_score >= 30 ? 'bg-yellow-50' : 'bg-red-50'}">
-          <span class="text-gray-500">Family Fit:</span> <strong>${scores.family_fit_score !== null ? scores.family_fit_score + '%' : '-'}</strong>
+        <div class="p-3 rounded-lg ${scores.family_fit_score >= 60 ? 'bg-green-50 border border-green-100' : scores.family_fit_score >= 40 ? 'bg-yellow-50 border border-yellow-100' : 'bg-red-50 border border-red-100'}">
+          <span class="text-gray-500 block text-xs mb-1">Family Fit</span>
+          <strong class="text-lg">${scores.family_fit_score !== null ? scores.family_fit_score + '%' : '-'}</strong>
         </div>
-        <div class="p-2 rounded bg-gray-50">
-          <span class="text-gray-500">Relevanz:</span> <strong>${scores.relevance_score !== null ? scores.relevance_score + '%' : '-'}</strong>
+        <div class="p-3 rounded-lg bg-white border border-gray-100">
+          <span class="text-gray-500 block text-xs mb-1">Relevanz</span>
+          <strong class="text-lg">${scores.relevance_score !== null ? scores.relevance_score + '%' : '-'}</strong>
         </div>
-        <div class="p-2 rounded bg-gray-50">
-          <span class="text-gray-500">Qualität:</span> <strong>${scores.quality_score !== null ? scores.quality_score + '%' : '-'}</strong>
+        <div class="p-3 rounded-lg bg-white border border-gray-100">
+          <span class="text-gray-500 block text-xs mb-1">Qualität</span>
+          <strong class="text-lg">${scores.quality_score !== null ? scores.quality_score + '%' : '-'}</strong>
         </div>
-        <div class="p-2 rounded bg-gray-50">
-          <span class="text-gray-500">Stressfrei:</span> <strong>${scores.stressfree_score !== null ? scores.stressfree_score + '%' : '-'}</strong>
+        <div class="p-3 rounded-lg bg-white border border-gray-100">
+          <span class="text-gray-500 block text-xs mb-1">Stressfrei</span>
+          <strong class="text-lg">${scores.stressfree_score !== null ? scores.stressfree_score + '%' : '-'}</strong>
         </div>
       </div>
-      ${confidence !== null ? `<div class="mt-2 text-xs text-gray-500">AI-Konfidenz: ${confidence}%</div>` : ''}
-      ${event.review_reason_label && event.status === 'pending_review' ? `<div class="mt-2 text-sm"><span class="text-amber-600">📋 Review-Grund:</span> ${event.review_reason_label}</div>` : ''}
-      ${event.rejection_label && event.status === 'rejected' ? `<div class="mt-2 text-sm"><span class="text-red-600">❌ Ablehnungsgrund:</span> ${event.rejection_label}</div>` : ''}
-    ` : '<p class="text-sm text-gray-500">Keine Scores verfügbar</p>';
+      ${confidence !== null ? `<div class="mt-3 text-sm text-gray-600 flex items-center gap-2"><span class="text-primary-500">🎯</span> AI-Konfidenz: <strong>${confidence}%</strong></div>` : ''}
+      ${event.review_reason_label && event.status === 'pending_review' ? `<div class="mt-3 text-sm bg-amber-50 border border-amber-100 p-3 rounded-lg"><span class="text-amber-600 font-medium">📋 Review-Grund:</span> ${event.review_reason_label}</div>` : ''}
+      ${event.rejection_label && event.status === 'rejected' ? `<div class="mt-3 text-sm bg-red-50 border border-red-100 p-3 rounded-lg"><span class="text-red-600 font-medium">❌ Ablehnungsgrund:</span> ${event.rejection_label}</div>` : ''}
+    ` : '<p class="text-sm text-gray-500">Keine AI-Scores verfügbar</p>';
 
     document.getElementById('detail-source').innerHTML = event.primary_source?.source ? `
-      <p><strong>${event.primary_source.source.name}</strong> (${event.primary_source.source.type})</p>
-      ${event.primary_source.source_url ? `<a href="${event.primary_source.source_url}" target="_blank" class="text-primary-500 text-sm">Quelle öffnen →</a>` : ''}
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="font-medium text-gray-900">${event.primary_source.source.name}</p>
+          <p class="text-sm text-gray-500">${event.primary_source.source.type}</p>
+        </div>
+        ${event.primary_source.source_url ? `
+          <a href="${event.primary_source.source_url}" target="_blank" class="px-3 py-1.5 bg-primary-50 text-primary-600 rounded-lg text-sm hover:bg-primary-100 transition-colors">
+            Quelle öffnen →
+          </a>
+        ` : ''}
+      </div>
     ` : '<p class="text-sm text-gray-500">Keine Quellinformation</p>';
 
     // Show/hide action buttons based on status
     const showActions = ['pending_review', 'pending_ai', 'incomplete'].includes(event.status);
-    document.getElementById('detail-approve').style.display = showActions ? 'block' : 'none';
-    document.getElementById('detail-edit').style.display = showActions ? 'block' : 'none';
-    document.getElementById('detail-reject').style.display = showActions ? 'block' : 'none';
+    document.getElementById('detail-approve').style.display = showActions ? 'flex' : 'none';
+    document.getElementById('detail-edit').style.display = showActions ? 'flex' : 'none';
+    document.getElementById('detail-reject').style.display = showActions ? 'flex' : 'none';
 
     document.getElementById('detail-modal').classList.remove('hidden');
     document.getElementById('detail-modal').classList.add('flex');
@@ -491,7 +872,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   // Edit Modal
   function openEditModal(id) {
     currentEventId = id;
-    const event = events.find(e => e.id === id);
+    const event = events.find(e => e.id === id) || allEvents.find(e => e.id === id);
     if (!event) return;
 
     document.getElementById('edit-title').value = event.title || '';
@@ -499,12 +880,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     
     if (event.start_datetime) {
       document.getElementById('edit-start').value = new Date(event.start_datetime).toISOString().slice(0, 16);
+    } else {
+      document.getElementById('edit-start').value = '';
     }
     if (event.end_datetime) {
       document.getElementById('edit-end').value = new Date(event.end_datetime).toISOString().slice(0, 16);
+    } else {
+      document.getElementById('edit-end').value = '';
     }
 
-    // Reset lock checkboxes
     const lockedFields = event.locked_fields || [];
     document.getElementById('lock-title').checked = lockedFields.includes('title');
     document.getElementById('lock-start').checked = lockedFields.includes('start_datetime');
@@ -544,23 +928,24 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   async function handleApprove(id, btn) {
     if (!confirm('Event wirklich genehmigen?')) return;
     
-    const originalText = btn?.innerHTML;
+    const originalHTML = btn?.innerHTML;
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = '...';
+      btn.innerHTML = '<div class="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin"></div>';
     }
 
     try {
       await apiFetch(`/api/admin/review/${id}/approve`, { method: 'POST' });
-      events = events.filter(e => e.id !== id);
-      renderEvents();
+      allEvents = allEvents.filter(e => e.id !== id);
+      filterAndRenderEvents();
       closeDetailModal();
+      loadStatusCounts();
     } catch (e) {
       alert('Fehler: ' + e.message);
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = originalText;
+        btn.innerHTML = originalHTML;
       }
     }
   }
@@ -575,6 +960,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
 
     const btn = document.getElementById('reject-confirm');
+    const originalText = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Wird abgelehnt...';
 
@@ -583,14 +969,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         method: 'POST',
         body: JSON.stringify({ reason_code: reasonCode, reason: reasonText }),
       });
-      events = events.filter(e => e.id !== currentEventId);
-      renderEvents();
+      allEvents = allEvents.filter(e => e.id !== currentEventId);
+      filterAndRenderEvents();
       closeRejectModal();
+      loadStatusCounts();
     } catch (e) {
       alert('Fehler: ' + e.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Ablehnen';
+      btn.textContent = originalText;
     }
   }
 
@@ -602,6 +989,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     if (document.getElementById('lock-address').checked) lockedFields.push('location_address');
 
     const btn = document.getElementById('edit-confirm');
+    const originalText = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Wird gespeichert...';
 
@@ -616,21 +1004,188 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           locked_fields: lockedFields,
         }),
       });
-      events = events.filter(e => e.id !== currentEventId);
-      renderEvents();
+      allEvents = allEvents.filter(e => e.id !== currentEventId);
+      filterAndRenderEvents();
       closeEditModal();
+      loadStatusCounts();
     } catch (e) {
       alert('Fehler: ' + e.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Speichern & Genehmigen';
+      btn.textContent = originalText;
     }
   }
 
+  // Mobile filter sidebar
+  function openMobileFilter() {
+    const overlay = document.getElementById('mobile-filter-overlay');
+    const panel = document.getElementById('mobile-filter-panel');
+    overlay.classList.remove('hidden');
+    setTimeout(() => {
+      panel.style.transform = 'translateX(0)';
+    }, 10);
+  }
+
+  function closeMobileFilter() {
+    const overlay = document.getElementById('mobile-filter-overlay');
+    const panel = document.getElementById('mobile-filter-panel');
+    panel.style.transform = 'translateX(-100%)';
+    setTimeout(() => {
+      overlay.classList.add('hidden');
+    }, 300);
+  }
+
+  // Clone desktop filters to mobile
+  function setupMobileFilters() {
+    const desktopSidebar = document.getElementById('filter-sidebar');
+    const mobileContent = document.getElementById('mobile-filter-content');
+    
+    if (desktopSidebar && mobileContent) {
+      // Clone the inner content
+      const content = desktopSidebar.querySelector('.bg-white');
+      if (content) {
+        mobileContent.innerHTML = content.innerHTML;
+        
+        // Update IDs to avoid conflicts and sync state
+        const mobileRadios = mobileContent.querySelectorAll('.status-radio');
+        mobileRadios.forEach(radio => {
+          radio.name = 'status-mobile';
+          radio.addEventListener('change', () => {
+            filters.status = radio.value;
+            // Sync with desktop
+            document.querySelectorAll('.status-radio').forEach(r => {
+              r.checked = r.value === filters.status;
+            });
+            loadEvents();
+            closeMobileFilter();
+          });
+        });
+        
+        // Source filter
+        const mobileSourceFilter = mobileContent.querySelector('#source-filter');
+        if (mobileSourceFilter) {
+          mobileSourceFilter.id = 'source-filter-mobile';
+          mobileSourceFilter.addEventListener('change', () => {
+            filters.source = mobileSourceFilter.value;
+            document.getElementById('source-filter').value = filters.source;
+            loadEvents();
+          });
+        }
+        
+        // Score filter
+        const mobileScoreFilter = mobileContent.querySelector('#score-filter');
+        if (mobileScoreFilter) {
+          mobileScoreFilter.id = 'score-filter-mobile';
+          const mobileScoreValue = mobileContent.querySelector('#score-value');
+          if (mobileScoreValue) mobileScoreValue.id = 'score-value-mobile';
+          
+          mobileScoreFilter.addEventListener('input', () => {
+            filters.minScore = parseInt(mobileScoreFilter.value);
+            document.getElementById('score-filter').value = mobileScoreFilter.value;
+            document.getElementById('score-value').textContent = filters.minScore + '+';
+            if (mobileScoreValue) mobileScoreValue.textContent = filters.minScore + '+';
+            filterAndRenderEvents();
+          });
+        }
+        
+        // Clear filters button
+        const mobileClearBtn = mobileContent.querySelector('#clear-filters');
+        if (mobileClearBtn) {
+          mobileClearBtn.id = 'clear-filters-mobile';
+          mobileClearBtn.addEventListener('click', () => {
+            clearFilters();
+            closeMobileFilter();
+          });
+        }
+      }
+    }
+  }
+
+  // Clear all filters
+  function clearFilters() {
+    filters = {
+      status: 'pending_review',
+      source: '',
+      minScore: 0,
+      search: '',
+      sort: 'date_desc'
+    };
+    
+    // Update UI
+    document.querySelectorAll('.status-radio').forEach(r => {
+      r.checked = r.value === 'pending_review';
+    });
+    document.getElementById('source-filter').value = '';
+    document.getElementById('score-filter').value = '0';
+    document.getElementById('score-value').textContent = '0+';
+    document.getElementById('search-input').value = '';
+    document.getElementById('sort-select').value = 'date_desc';
+    
+    // Update mobile too
+    const mobileSource = document.getElementById('source-filter-mobile');
+    const mobileScore = document.getElementById('score-filter-mobile');
+    const mobileScoreValue = document.getElementById('score-value-mobile');
+    if (mobileSource) mobileSource.value = '';
+    if (mobileScore) mobileScore.value = '0';
+    if (mobileScoreValue) mobileScoreValue.textContent = '0+';
+    
+    loadEvents();
+  }
+
+  // Debounce helper
+  function debounce(fn, delay) {
+    let timeout;
+    return (...args) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn(...args), delay);
+    };
+  }
+
   // Event listeners
-  document.getElementById('status-filter').addEventListener('change', loadEvents);
-  document.getElementById('refresh-btn').addEventListener('click', loadEvents);
+  document.querySelectorAll('.status-radio').forEach(radio => {
+    radio.addEventListener('change', () => {
+      filters.status = radio.value;
+      loadEvents();
+    });
+  });
+
+  document.getElementById('source-filter').addEventListener('change', (e) => {
+    filters.source = e.target.value;
+    loadEvents();
+  });
+
+  document.getElementById('score-filter').addEventListener('input', (e) => {
+    filters.minScore = parseInt(e.target.value);
+    document.getElementById('score-value').textContent = filters.minScore + '+';
+    filterAndRenderEvents();
+  });
+
+  document.getElementById('search-input').addEventListener('input', debounce((e) => {
+    filters.search = e.target.value;
+    filterAndRenderEvents();
+  }, 300));
+
+  document.getElementById('sort-select').addEventListener('change', (e) => {
+    filters.sort = e.target.value;
+    filterAndRenderEvents();
+  });
+
+  document.getElementById('refresh-btn').addEventListener('click', () => loadEvents());
+  document.getElementById('clear-filters').addEventListener('click', clearFilters);
   
+  document.getElementById('load-more-btn').addEventListener('click', () => {
+    currentPage++;
+    loadEvents(true);
+  });
+
+  // Mobile filter controls
+  document.getElementById('mobile-filter-btn').addEventListener('click', openMobileFilter);
+  document.getElementById('close-mobile-filter').addEventListener('click', closeMobileFilter);
+  document.getElementById('mobile-filter-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeMobileFilter();
+  });
+
+  // Modal event listeners
   document.getElementById('detail-close').addEventListener('click', closeDetailModal);
   document.getElementById('detail-approve').addEventListener('click', () => handleApprove(currentEventId));
   document.getElementById('detail-edit').addEventListener('click', () => openEditModal(currentEventId));
@@ -652,12 +1207,45 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     });
   });
 
-  // Initial load: set filter from URL if present
-  const urlStatus = new URLSearchParams(window.location.search).get('status');
-  const statusSelect = document.getElementById('status-filter');
-  const validStatuses = ['pending_review', 'pending_ai', 'incomplete', 'published', 'rejected', 'archived', 'cancelled', 'stale', 'all'];
-  if (urlStatus && statusSelect && validStatuses.includes(urlStatus)) {
-    statusSelect.value = urlStatus;
+  // Modal close buttons
+  document.querySelectorAll('.modal-close').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('[id$="-modal"]').classList.add('hidden');
+      btn.closest('[id$="-modal"]').classList.remove('flex');
+    });
+  });
+
+  // Escape key to close modals
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeDetailModal();
+      closeEditModal();
+      closeRejectModal();
+      closeMobileFilter();
+    }
+  });
+
+  // Initial load
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlStatus = urlParams.get('status');
+  const urlSearch = urlParams.get('search');
+
+  if (urlStatus && ['pending_review', 'pending_ai', 'incomplete', 'published', 'rejected', 'archived', 'all'].includes(urlStatus)) {
+    filters.status = urlStatus;
+    document.querySelectorAll('.status-radio').forEach(r => {
+      r.checked = r.value === urlStatus;
+    });
   }
+
+  if (urlSearch) {
+    filters.search = urlSearch;
+    document.getElementById('search-input').value = urlSearch;
+  }
+
+  // Initialize
+  setupMobileFilters();
+  loadSources();
+  loadStatusCounts();
   loadEvents();
 </script>
+</AdminLayout>

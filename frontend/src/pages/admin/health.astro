@@ -1,279 +1,691 @@
 ---
-import BaseLayout from "../../layouts/BaseLayout.astro";
-import StickyHeader from "../../components/layout/StickyHeader.astro";
-
-const API_URL = import.meta.env.PUBLIC_API_URL || "http://localhost:4000";
+import AdminLayout from '../../layouts/AdminLayout.astro';
 const WORKER_URL = import.meta.env.PUBLIC_AI_WORKER_URL || "http://localhost:5000";
 ---
 
-<BaseLayout title="System Health - Admin - kiezling">
-  <StickyHeader />
-  <main class="min-h-screen bg-gray-50 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <header class="mb-6 flex justify-between items-start">
+<AdminLayout title="System Health - kiezling Admin" currentPage="health">
+  <!-- Overall Status Banner -->
+  <div id="overall-status" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div id="status-indicator" class="w-5 h-5 rounded-full bg-gray-300 animate-pulse"></div>
         <div>
-          <a href="/admin" class="text-sm text-primary-500 hover:text-primary-600 font-medium mb-2 inline-block">&larr; Zurück zum Dashboard</a>
-          <h1 class="text-2xl font-bold text-gray-900">System Health</h1>
-          <p class="text-gray-500">Übersicht aller Systemkomponenten</p>
+          <div id="status-text" class="text-xl font-semibold text-gray-600">Prüfe Status...</div>
+          <div id="status-time" class="text-sm text-gray-500">Letzte Prüfung: -</div>
         </div>
-        <button id="refresh-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium">
-          Aktualisieren
-        </button>
-      </header>
+      </div>
+      <button 
+        id="refresh-btn" 
+        class="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium"
+      >
+        <svg id="refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span>Aktualisieren</span>
+      </button>
+    </div>
+  </div>
 
-      <!-- Overall Status -->
-      <div id="overall-status" class="mb-6 bg-white rounded-lg shadow p-6">
-        <div class="flex items-center gap-4">
-          <div id="status-indicator" class="w-4 h-4 rounded-full bg-gray-400"></div>
+  <!-- Service Cards Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+    <!-- Backend API -->
+    <div class="service-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all hover:shadow-md" data-service="backend">
+      <div class="p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="backend-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
           <div>
-            <div id="status-text" class="text-lg font-semibold">Prüfe Status...</div>
-            <div id="status-time" class="text-sm text-gray-500">-</div>
-          </div>
-        </div>
-        <div id="status-issues" class="mt-4 hidden">
-          <div class="text-sm font-medium text-gray-700 mb-2">Probleme:</div>
-          <ul id="issues-list" class="list-disc list-inside text-sm text-red-600"></ul>
-        </div>
-      </div>
-
-      <!-- Service Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between mb-4">
             <h3 class="font-semibold text-gray-900">Backend API</h3>
-            <div id="backend-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
+            <p id="backend-short" class="text-sm text-gray-500">Prüfe...</p>
           </div>
-          <div id="backend-info" class="text-sm text-gray-600">Prüfe...</div>
         </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-900">AI Worker</h3>
-            <div id="worker-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-          </div>
-          <div id="worker-info" class="text-sm text-gray-600">Prüfe...</div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-900">Redis Queue</h3>
-            <div id="redis-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-          </div>
-          <div id="redis-info" class="text-sm text-gray-600">Prüfe...</div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-900">Database</h3>
-            <div id="db-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-          </div>
-          <div id="db-info" class="text-sm text-gray-600">Prüfe...</div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-900">OpenAI API</h3>
-            <div id="openai-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-          </div>
-          <div id="openai-info" class="text-sm text-gray-600">Prüfe...</div>
-        </div>
-
-        <div class="bg-white rounded-lg shadow p-6">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-900">AI Budget</h3>
-            <div id="budget-status" class="w-3 h-3 rounded-full bg-gray-400"></div>
-          </div>
-          <div id="budget-info" class="text-sm text-gray-600">Prüfe...</div>
-        </div>
+        <svg class="chevron w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
       </div>
-
-      <!-- Queue Stats -->
-      <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="font-semibold text-gray-900 mb-4">Queue Status</h3>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div class="text-center p-4 bg-gray-50 rounded">
-            <div id="queue-crawl" class="text-2xl font-bold text-gray-900">-</div>
-            <div class="text-sm text-gray-500">Crawl</div>
+      <div class="service-details hidden border-t border-gray-100 bg-gray-50 p-4">
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Latenz:</span>
+            <span id="backend-latency" class="font-medium text-gray-900">-</span>
           </div>
-          <div class="text-center p-4 bg-gray-50 rounded">
-            <div id="queue-classify" class="text-2xl font-bold text-gray-900">-</div>
-            <div class="text-sm text-gray-500">Classify</div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Version:</span>
+            <span id="backend-version" class="font-medium text-gray-900">-</span>
           </div>
-          <div class="text-center p-4 bg-gray-50 rounded">
-            <div id="queue-score" class="text-2xl font-bold text-gray-900">-</div>
-            <div class="text-sm text-gray-500">Score</div>
-          </div>
-          <div class="text-center p-4 bg-gray-50 rounded">
-            <div id="queue-geocode" class="text-2xl font-bold text-gray-900">-</div>
-            <div class="text-sm text-gray-500">Geocode</div>
-          </div>
-          <div class="text-center p-4 bg-red-50 rounded">
-            <div id="queue-dlq" class="text-2xl font-bold text-red-600">-</div>
-            <div class="text-sm text-gray-500">DLQ</div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Uptime:</span>
+            <span id="backend-uptime" class="font-medium text-gray-900">-</span>
           </div>
         </div>
       </div>
     </div>
-  </main>
 
-  <script is:inline define:vars={{ API_URL, WORKER_URL }}>
-    const workerUrl = WORKER_URL;
+    <!-- AI Worker -->
+    <div class="service-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all hover:shadow-md" data-service="worker">
+      <div class="p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="worker-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
+          <div>
+            <h3 class="font-semibold text-gray-900">AI Worker</h3>
+            <p id="worker-short" class="text-sm text-gray-500">Prüfe...</p>
+          </div>
+        </div>
+        <svg class="chevron w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div class="service-details hidden border-t border-gray-100 bg-gray-50 p-4">
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Latenz:</span>
+            <span id="worker-latency" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Version:</span>
+            <span id="worker-version" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Python:</span>
+            <span id="worker-python" class="font-medium text-gray-900">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    function setStatus(elementId, status) {
-      const el = document.getElementById(elementId);
-      if (!el) return;
-      el.className = 'w-3 h-3 rounded-full';
-      switch (status) {
-        case 'ok': el.classList.add('bg-green-500'); break;
-        case 'warning': el.classList.add('bg-yellow-500'); break;
-        case 'error': el.classList.add('bg-red-500'); break;
-        default: el.classList.add('bg-gray-400');
-      }
+    <!-- Redis Queue -->
+    <div class="service-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all hover:shadow-md" data-service="redis">
+      <div class="p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="redis-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
+          <div>
+            <h3 class="font-semibold text-gray-900">Redis Queue</h3>
+            <p id="redis-short" class="text-sm text-gray-500">Prüfe...</p>
+          </div>
+        </div>
+        <svg class="chevron w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div class="service-details hidden border-t border-gray-100 bg-gray-50 p-4">
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Status:</span>
+            <span id="redis-conn" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Memory:</span>
+            <span id="redis-memory" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Jobs verarbeitet:</span>
+            <span id="redis-processed" class="font-medium text-gray-900">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Database -->
+    <div class="service-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all hover:shadow-md" data-service="database">
+      <div class="p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="db-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
+          <div>
+            <h3 class="font-semibold text-gray-900">Database</h3>
+            <p id="db-short" class="text-sm text-gray-500">Prüfe...</p>
+          </div>
+        </div>
+        <svg class="chevron w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div class="service-details hidden border-t border-gray-100 bg-gray-50 p-4">
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Verbindungen:</span>
+            <span id="db-connections" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Response Time:</span>
+            <span id="db-response" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Provider:</span>
+            <span id="db-provider" class="font-medium text-gray-900">Supabase</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OpenAI API -->
+    <div class="service-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all hover:shadow-md" data-service="openai">
+      <div class="p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="openai-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
+          <div>
+            <h3 class="font-semibold text-gray-900">OpenAI API</h3>
+            <p id="openai-short" class="text-sm text-gray-500">Prüfe...</p>
+          </div>
+        </div>
+        <svg class="chevron w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div class="service-details hidden border-t border-gray-100 bg-gray-50 p-4">
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Status:</span>
+            <span id="openai-conn" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Modell:</span>
+            <span id="openai-model" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Rate Limit:</span>
+            <span id="openai-rate" class="font-medium text-gray-900">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Budget -->
+    <div class="service-card bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden cursor-pointer transition-all hover:shadow-md" data-service="budget">
+      <div class="p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="budget-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
+          <div>
+            <h3 class="font-semibold text-gray-900">AI Budget</h3>
+            <p id="budget-short" class="text-sm text-gray-500">Prüfe...</p>
+          </div>
+        </div>
+        <svg class="chevron w-5 h-5 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div class="service-details hidden border-t border-gray-100 bg-gray-50 p-4">
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-gray-500">Tagesverbrauch:</span>
+            <span id="budget-daily" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Monatsverbrauch:</span>
+            <span id="budget-monthly" class="font-medium text-gray-900">-</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-gray-500">Limit:</span>
+            <span id="budget-limit" class="font-medium text-gray-900">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Queue Depths Section -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Queue Status</h2>
+    <div class="space-y-4">
+      <!-- Crawl -->
+      <div class="queue-bar">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium text-gray-700">Crawl</span>
+          <span id="queue-crawl-num" class="text-sm font-semibold text-gray-900">-</span>
+        </div>
+        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div id="queue-crawl-bar" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Classify -->
+      <div class="queue-bar">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium text-gray-700">Classify</span>
+          <span id="queue-classify-num" class="text-sm font-semibold text-gray-900">-</span>
+        </div>
+        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div id="queue-classify-bar" class="h-full bg-purple-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Score -->
+      <div class="queue-bar">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium text-gray-700">Score</span>
+          <span id="queue-score-num" class="text-sm font-semibold text-gray-900">-</span>
+        </div>
+        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div id="queue-score-bar" class="h-full bg-green-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Geocode -->
+      <div class="queue-bar">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium text-gray-700">Geocode</span>
+          <span id="queue-geocode-num" class="text-sm font-semibold text-gray-900">-</span>
+        </div>
+        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div id="queue-geocode-bar" class="h-full bg-amber-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- DLQ -->
+      <div class="queue-bar" id="dlq-container">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-sm font-medium text-gray-700 flex items-center gap-2">
+            DLQ (Dead Letter Queue)
+            <a id="dlq-link" href="/admin/dlq" class="hidden text-xs text-red-600 hover:text-red-700 font-medium underline">
+              → Verwalten
+            </a>
+          </span>
+          <span id="queue-dlq-num" class="text-sm font-semibold text-gray-900">-</span>
+        </div>
+        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div id="queue-dlq-bar" class="h-full bg-red-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problems Accordion -->
+  <div id="problems-section" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
+      <button 
+        id="problems-toggle" 
+        class="w-full p-4 flex items-center justify-between bg-red-50 hover:bg-red-100 transition-colors"
+        type="button"
+      >
+        <div class="flex items-center gap-3">
+          <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span class="font-semibold text-red-700">
+            Aktuelle Probleme (<span id="problems-count">0</span>)
+          </span>
+        </div>
+        <svg id="problems-chevron" class="w-5 h-5 text-red-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      <div id="problems-content" class="hidden p-4 border-t border-red-200">
+        <ul id="problems-list" class="space-y-2">
+          <!-- Problems will be inserted here -->
+        </ul>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .service-card.expanded .chevron {
+    transform: rotate(180deg);
+  }
+  
+  .service-card.expanded .service-details {
+    display: block;
+  }
+  
+  #problems-section.expanded #problems-chevron {
+    transform: rotate(180deg);
+  }
+  
+  #problems-section.expanded #problems-content {
+    display: block;
+  }
+  
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  .spinning {
+    animation: spin 1s linear infinite;
+  }
+</style>
+
+<script is:inline define:vars={{ WORKER_URL }}>
+  const workerUrl = WORKER_URL;
+  const API_URL = localStorage.getItem('api_url') || 'http://localhost:4000';
+  
+  // Session storage keys for expanded state
+  const EXPANDED_CARDS_KEY = 'health_expanded_cards';
+  const PROBLEMS_EXPANDED_KEY = 'health_problems_expanded';
+  
+  // Get expanded cards from session storage
+  function getExpandedCards() {
+    try {
+      const saved = sessionStorage.getItem(EXPANDED_CARDS_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
     }
-
-    async function checkHealth() {
-      const issues = [];
-      let overallStatus = 'healthy';
-
-      // Check Backend
-      try {
-        const backendRes = await fetch(`${API_URL}/api/health`);
-        const backendData = await backendRes.json();
-        
-        setStatus('backend-status', backendData.status === 'ok' ? 'ok' : 'warning');
-        document.getElementById('backend-info').textContent = backendData.status === 'ok' ? 'Online' : 'Probleme';
-        
-        if (backendData.services?.database?.status === 'ok') {
-          setStatus('db-status', 'ok');
-          document.getElementById('db-info').textContent = 'Verbunden';
-        } else {
-          setStatus('db-status', 'error');
-          document.getElementById('db-info').textContent = 'Nicht erreichbar';
-          issues.push('Datenbank nicht erreichbar');
-          overallStatus = 'degraded';
-        }
-      } catch (e) {
-        setStatus('backend-status', 'error');
-        document.getElementById('backend-info').textContent = 'Nicht erreichbar';
-        setStatus('db-status', 'error');
-        document.getElementById('db-info').textContent = 'Unbekannt';
-        issues.push('Backend API nicht erreichbar');
-        overallStatus = 'unhealthy';
+  }
+  
+  // Save expanded cards to session storage
+  function saveExpandedCards(cards) {
+    try {
+      sessionStorage.setItem(EXPANDED_CARDS_KEY, JSON.stringify(cards));
+    } catch {}
+  }
+  
+  // Initialize card expansion state
+  function initCardStates() {
+    const expandedCards = getExpandedCards();
+    document.querySelectorAll('.service-card').forEach(card => {
+      const service = card.dataset.service;
+      if (service && expandedCards[service]) {
+        card.classList.add('expanded');
       }
-
-      // Check Worker
-      try {
-        const workerRes = await fetch(`${workerUrl}/health/ready`);
-        const workerData = await workerRes.json();
+    });
+    
+    // Problems section
+    const problemsExpanded = sessionStorage.getItem(PROBLEMS_EXPANDED_KEY) === 'true';
+    if (problemsExpanded) {
+      document.getElementById('problems-section')?.classList.add('expanded');
+    }
+  }
+  
+  // Toggle card expansion
+  function setupCardToggles() {
+    document.querySelectorAll('.service-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const service = card.dataset.service;
+        const isExpanded = card.classList.toggle('expanded');
         
-        if (workerData.status === 'ok') {
-          setStatus('worker-status', 'ok');
-          document.getElementById('worker-info').textContent = 'Online';
-        } else {
-          setStatus('worker-status', 'warning');
-          document.getElementById('worker-info').textContent = 'Degradiert';
-          overallStatus = 'degraded';
-        }
-        
-        if (workerData.checks?.redis?.status === 'ok') {
-          setStatus('redis-status', 'ok');
-          document.getElementById('redis-info').textContent = 'Verbunden';
-        } else {
-          setStatus('redis-status', 'warning');
-          document.getElementById('redis-info').textContent = 'Nicht verbunden';
-        }
-        
-        if (workerData.checks?.openai?.status === 'ok') {
-          setStatus('openai-status', 'ok');
-          document.getElementById('openai-info').textContent = 'Verbunden';
-        } else if (workerData.checks?.openai?.status === 'not_configured') {
-          setStatus('openai-status', 'warning');
-          document.getElementById('openai-info').textContent = 'Nicht konfiguriert';
-        } else {
-          setStatus('openai-status', 'error');
-          document.getElementById('openai-info').textContent = 'Fehler';
-        }
-      } catch (e) {
-        setStatus('worker-status', 'error');
-        document.getElementById('worker-info').textContent = 'Nicht erreichbar';
-        setStatus('redis-status', 'error');
-        document.getElementById('redis-info').textContent = 'Unbekannt';
-        setStatus('openai-status', 'error');
-        document.getElementById('openai-info').textContent = 'Unbekannt';
-        issues.push('AI Worker nicht erreichbar');
-        overallStatus = 'unhealthy';
-      }
-
-      // Check Metrics
-      try {
-        const metricsRes = await fetch(`${workerUrl}/metrics`);
-        const metrics = await metricsRes.json();
-        
-        document.getElementById('queue-crawl').textContent = metrics.queues?.depths?.crawl ?? '-';
-        document.getElementById('queue-classify').textContent = metrics.queues?.depths?.classify ?? '-';
-        document.getElementById('queue-score').textContent = metrics.queues?.depths?.score ?? '-';
-        document.getElementById('queue-geocode').textContent = metrics.queues?.depths?.geocode ?? '-';
-        document.getElementById('queue-dlq').textContent = metrics.dlq?.count ?? '-';
-        
-        if (metrics.dlq?.alert) {
-          issues.push(`DLQ hat ${metrics.dlq.count} Jobs`);
-          overallStatus = 'degraded';
-        }
-        
-        if (metrics.budget) {
-          const budgetStatus = metrics.budget.status;
-          if (budgetStatus === 'ok') {
-            setStatus('budget-status', 'ok');
-            document.getElementById('budget-info').textContent = `${metrics.budget.daily?.percent_used || 0}% verbraucht`;
-          } else if (budgetStatus === 'exceeded') {
-            setStatus('budget-status', 'error');
-            document.getElementById('budget-info').textContent = 'Budget überschritten!';
-            issues.push('AI Budget überschritten');
-            overallStatus = 'degraded';
-          } else {
-            setStatus('budget-status', 'warning');
-            document.getElementById('budget-info').textContent = 'Budget kritisch';
-          }
-        }
-      } catch (e) {
-        // Metrics not available
-      }
-
-      // Update overall status
-      const statusIndicator = document.getElementById('status-indicator');
-      const statusText = document.getElementById('status-text');
+        const expandedCards = getExpandedCards();
+        expandedCards[service] = isExpanded;
+        saveExpandedCards(expandedCards);
+      });
+    });
+    
+    // Problems toggle
+    const problemsToggle = document.getElementById('problems-toggle');
+    problemsToggle?.addEventListener('click', () => {
+      const section = document.getElementById('problems-section');
+      const isExpanded = section?.classList.toggle('expanded');
+      sessionStorage.setItem(PROBLEMS_EXPANDED_KEY, String(isExpanded));
+    });
+  }
+  
+  // Set status indicator color
+  function setStatus(elementId, status) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.className = 'w-3 h-3 rounded-full';
+    switch (status) {
+      case 'ok': el.classList.add('bg-green-500'); break;
+      case 'warning': el.classList.add('bg-yellow-500'); break;
+      case 'error': el.classList.add('bg-red-500'); break;
+      default: el.classList.add('bg-gray-300');
+    }
+  }
+  
+  // Set overall status indicator (larger)
+  function setOverallStatus(status) {
+    const el = document.getElementById('status-indicator');
+    if (!el) return;
+    el.className = 'w-5 h-5 rounded-full';
+    switch (status) {
+      case 'healthy': el.classList.add('bg-green-500'); break;
+      case 'degraded': el.classList.add('bg-yellow-500'); break;
+      case 'unhealthy': el.classList.add('bg-red-500'); break;
+      default: el.classList.add('bg-gray-300', 'animate-pulse');
+    }
+  }
+  
+  // Calculate bar width for queue
+  function calcBarWidth(count, maxCount = 100) {
+    if (!count || count === '-') return 0;
+    const num = parseInt(count, 10);
+    return Math.min(100, Math.max(5, (num / maxCount) * 100));
+  }
+  
+  // Update queue bars
+  function updateQueueBar(queueName, count) {
+    const numEl = document.getElementById(`queue-${queueName}-num`);
+    const barEl = document.getElementById(`queue-${queueName}-bar`);
+    
+    if (numEl) numEl.textContent = count ?? '-';
+    if (barEl) {
+      const width = calcBarWidth(count);
+      barEl.style.width = `${width}%`;
+    }
+  }
+  
+  // Main health check function
+  async function checkHealth() {
+    const refreshIcon = document.getElementById('refresh-icon');
+    refreshIcon?.classList.add('spinning');
+    
+    const issues = [];
+    let overallStatus = 'healthy';
+    let backendLatency = null;
+    let workerLatency = null;
+    
+    // Check Backend API
+    try {
+      const startTime = performance.now();
+      const backendRes = await fetch(`${API_URL}/api/health`);
+      backendLatency = Math.round(performance.now() - startTime);
+      const backendData = await backendRes.json();
       
-      if (statusIndicator) {
-        statusIndicator.className = 'w-4 h-4 rounded-full';
-        if (overallStatus === 'healthy') {
-          statusIndicator.classList.add('bg-green-500');
-          statusText.textContent = 'Alle Systeme operational';
-          statusText.className = 'text-lg font-semibold text-green-600';
-        } else if (overallStatus === 'degraded') {
-          statusIndicator.classList.add('bg-yellow-500');
-          statusText.textContent = 'System eingeschränkt';
-          statusText.className = 'text-lg font-semibold text-yellow-600';
-        } else {
-          statusIndicator.classList.add('bg-red-500');
-          statusText.textContent = 'System nicht verfügbar';
-          statusText.className = 'text-lg font-semibold text-red-600';
-        }
+      if (backendData.status === 'ok') {
+        setStatus('backend-status', 'ok');
+        document.getElementById('backend-short').textContent = 'Online';
+      } else {
+        setStatus('backend-status', 'warning');
+        document.getElementById('backend-short').textContent = 'Eingeschränkt';
+        overallStatus = 'degraded';
       }
-
-      const issuesSection = document.getElementById('status-issues');
-      const issuesList = document.getElementById('issues-list');
-      if (issues.length > 0 && issuesSection && issuesList) {
-        issuesSection.classList.remove('hidden');
-        issuesList.innerHTML = issues.map(i => `<li>${i}</li>`).join('');
-      } else if (issuesSection) {
-        issuesSection.classList.add('hidden');
+      
+      document.getElementById('backend-latency').textContent = `${backendLatency}ms`;
+      document.getElementById('backend-version').textContent = backendData.version || 'N/A';
+      document.getElementById('backend-uptime').textContent = backendData.uptime || 'N/A';
+      
+      // Database status from backend
+      if (backendData.services?.database?.status === 'ok') {
+        setStatus('db-status', 'ok');
+        document.getElementById('db-short').textContent = 'Verbunden';
+        document.getElementById('db-response').textContent = `${backendData.services?.database?.latency || '-'}ms`;
+        document.getElementById('db-connections').textContent = backendData.services?.database?.connections || 'N/A';
+      } else {
+        setStatus('db-status', 'error');
+        document.getElementById('db-short').textContent = 'Nicht erreichbar';
+        issues.push('Datenbank nicht erreichbar');
+        overallStatus = 'degraded';
       }
-
-      document.getElementById('status-time').textContent = new Date().toLocaleTimeString('de-DE');
+    } catch (e) {
+      setStatus('backend-status', 'error');
+      document.getElementById('backend-short').textContent = 'Nicht erreichbar';
+      document.getElementById('backend-latency').textContent = 'Timeout';
+      setStatus('db-status', 'error');
+      document.getElementById('db-short').textContent = 'Unbekannt';
+      issues.push('Backend API nicht erreichbar');
+      overallStatus = 'unhealthy';
     }
-
+    
+    // Check AI Worker
+    try {
+      const startTime = performance.now();
+      const workerRes = await fetch(`${workerUrl}/health/ready`);
+      workerLatency = Math.round(performance.now() - startTime);
+      const workerData = await workerRes.json();
+      
+      if (workerData.status === 'ok') {
+        setStatus('worker-status', 'ok');
+        document.getElementById('worker-short').textContent = 'Online';
+      } else {
+        setStatus('worker-status', 'warning');
+        document.getElementById('worker-short').textContent = 'Degradiert';
+        overallStatus = 'degraded';
+      }
+      
+      document.getElementById('worker-latency').textContent = `${workerLatency}ms`;
+      document.getElementById('worker-version').textContent = workerData.version || 'N/A';
+      document.getElementById('worker-python').textContent = workerData.python_version || 'N/A';
+      
+      // Redis status
+      if (workerData.checks?.redis?.status === 'ok') {
+        setStatus('redis-status', 'ok');
+        document.getElementById('redis-short').textContent = 'Verbunden';
+        document.getElementById('redis-conn').textContent = 'Connected';
+        document.getElementById('redis-memory').textContent = workerData.checks?.redis?.memory || 'N/A';
+        document.getElementById('redis-processed').textContent = workerData.checks?.redis?.processed || 'N/A';
+      } else {
+        setStatus('redis-status', 'warning');
+        document.getElementById('redis-short').textContent = 'Nicht verbunden';
+        document.getElementById('redis-conn').textContent = 'Disconnected';
+        issues.push('Redis Queue nicht verbunden');
+      }
+      
+      // OpenAI status
+      if (workerData.checks?.openai?.status === 'ok') {
+        setStatus('openai-status', 'ok');
+        document.getElementById('openai-short').textContent = 'Verbunden';
+        document.getElementById('openai-conn').textContent = 'Connected';
+        document.getElementById('openai-model').textContent = workerData.checks?.openai?.model || 'gpt-4o-mini';
+        document.getElementById('openai-rate').textContent = workerData.checks?.openai?.rate_limit || 'OK';
+      } else if (workerData.checks?.openai?.status === 'not_configured') {
+        setStatus('openai-status', 'warning');
+        document.getElementById('openai-short').textContent = 'Nicht konfiguriert';
+        document.getElementById('openai-conn').textContent = 'Not Configured';
+      } else {
+        setStatus('openai-status', 'error');
+        document.getElementById('openai-short').textContent = 'Fehler';
+        document.getElementById('openai-conn').textContent = 'Error';
+        issues.push('OpenAI API Fehler');
+      }
+    } catch (e) {
+      setStatus('worker-status', 'error');
+      document.getElementById('worker-short').textContent = 'Nicht erreichbar';
+      document.getElementById('worker-latency').textContent = 'Timeout';
+      setStatus('redis-status', 'error');
+      document.getElementById('redis-short').textContent = 'Unbekannt';
+      setStatus('openai-status', 'error');
+      document.getElementById('openai-short').textContent = 'Unbekannt';
+      issues.push('AI Worker nicht erreichbar');
+      overallStatus = 'unhealthy';
+    }
+    
+    // Check Metrics for queue depths and budget
+    try {
+      const metricsRes = await fetch(`${workerUrl}/metrics`);
+      const metrics = await metricsRes.json();
+      
+      // Queue depths
+      const crawlCount = metrics.queues?.depths?.crawl ?? 0;
+      const classifyCount = metrics.queues?.depths?.classify ?? 0;
+      const scoreCount = metrics.queues?.depths?.score ?? 0;
+      const geocodeCount = metrics.queues?.depths?.geocode ?? 0;
+      const dlqCount = metrics.dlq?.count ?? 0;
+      
+      updateQueueBar('crawl', crawlCount);
+      updateQueueBar('classify', classifyCount);
+      updateQueueBar('score', scoreCount);
+      updateQueueBar('geocode', geocodeCount);
+      updateQueueBar('dlq', dlqCount);
+      
+      // Highlight DLQ if items present
+      const dlqContainer = document.getElementById('dlq-container');
+      const dlqLink = document.getElementById('dlq-link');
+      if (dlqCount > 0) {
+        dlqContainer?.classList.add('bg-red-50', 'rounded-lg', 'p-3', '-m-3');
+        dlqLink?.classList.remove('hidden');
+        if (metrics.dlq?.alert) {
+          issues.push(`DLQ enthält ${dlqCount} fehlgeschlagene Jobs`);
+          overallStatus = 'degraded';
+        }
+      } else {
+        dlqContainer?.classList.remove('bg-red-50', 'rounded-lg', 'p-3', '-m-3');
+        dlqLink?.classList.add('hidden');
+      }
+      
+      // Budget
+      if (metrics.budget) {
+        const budgetStatus = metrics.budget.status;
+        const percentUsed = metrics.budget.daily?.percent_used || 0;
+        
+        if (budgetStatus === 'ok') {
+          setStatus('budget-status', 'ok');
+          document.getElementById('budget-short').textContent = `${percentUsed}% verbraucht`;
+        } else if (budgetStatus === 'exceeded') {
+          setStatus('budget-status', 'error');
+          document.getElementById('budget-short').textContent = 'Überschritten!';
+          issues.push('AI Budget überschritten');
+          overallStatus = 'degraded';
+        } else {
+          setStatus('budget-status', 'warning');
+          document.getElementById('budget-short').textContent = 'Kritisch';
+          issues.push('AI Budget fast aufgebraucht');
+        }
+        
+        document.getElementById('budget-daily').textContent = `$${metrics.budget.daily?.used?.toFixed(2) || '0.00'} / $${metrics.budget.daily?.limit?.toFixed(2) || '10.00'}`;
+        document.getElementById('budget-monthly').textContent = `$${metrics.budget.monthly?.used?.toFixed(2) || '0.00'} / $${metrics.budget.monthly?.limit?.toFixed(2) || '100.00'}`;
+        document.getElementById('budget-limit').textContent = metrics.budget.daily?.limit ? `$${metrics.budget.daily.limit}/Tag` : 'Nicht gesetzt';
+      }
+    } catch (e) {
+      // Metrics not available - keep defaults
+    }
+    
+    // Update overall status banner
+    setOverallStatus(overallStatus);
+    const statusText = document.getElementById('status-text');
+    if (statusText) {
+      if (overallStatus === 'healthy') {
+        statusText.textContent = 'Alle Systeme operational';
+        statusText.className = 'text-xl font-semibold text-green-600';
+      } else if (overallStatus === 'degraded') {
+        statusText.textContent = 'System eingeschränkt';
+        statusText.className = 'text-xl font-semibold text-yellow-600';
+      } else {
+        statusText.textContent = 'System nicht verfügbar';
+        statusText.className = 'text-xl font-semibold text-red-600';
+      }
+    }
+    
+    // Update timestamp
+    const statusTime = document.getElementById('status-time');
+    if (statusTime) {
+      statusTime.textContent = `Letzte Prüfung: ${new Date().toLocaleTimeString('de-DE')}`;
+    }
+    
+    // Update problems section
+    const problemsSection = document.getElementById('problems-section');
+    const problemsCount = document.getElementById('problems-count');
+    const problemsList = document.getElementById('problems-list');
+    
+    if (issues.length > 0) {
+      problemsSection?.classList.remove('hidden');
+      if (problemsCount) problemsCount.textContent = String(issues.length);
+      if (problemsList) {
+        problemsList.innerHTML = issues.map(issue => `
+          <li class="flex items-start gap-2 text-sm text-red-700">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            ${issue}
+          </li>
+        `).join('');
+      }
+    } else {
+      problemsSection?.classList.add('hidden');
+    }
+    
+    refreshIcon?.classList.remove('spinning');
+  }
+  
+  // Initialize
+  document.addEventListener('DOMContentLoaded', () => {
+    initCardStates();
+    setupCardToggles();
+    
+    // Refresh button
     document.getElementById('refresh-btn')?.addEventListener('click', checkHealth);
+    
+    // Initial check
     checkHealth();
+    
+    // Auto-refresh every 15 seconds
     setInterval(checkHealth, 15000);
-  </script>
-</BaseLayout>
+  });
+</script>
