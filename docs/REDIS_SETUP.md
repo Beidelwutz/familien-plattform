@@ -37,21 +37,27 @@ Danach nutzt der AI-Worker die Redis-Queue; Crawl/Classify-Jobs laufen asynchron
 
 Das Backend läuft auf **Vercel**, nicht auf Railway. Für den Live-Fortschritt der AI-Batch-Seite braucht das Backend eine **REDIS_URL** in seiner Laufzeitumgebung.
 
+**Wichtig:** In Vercel funktioniert **nicht** die Railway-Syntax `${{ redis-kiezling.REDIS_URL }}`. Diese Referenz gilt nur zwischen Services **innerhalb von Railway**. Vercel kennt sie nicht und würde den String wörtlich verwenden – die Verbindung schlägt fehl. Du musst in Vercel die **echte Redis-URL** (eine lange Zeichenkette) eintragen.
+
 ### Option A: Redis auf Railway + TCP Proxy (eine Redis-Instanz)
 
-Wenn du Redis nur auf Railway betreibst:
+Wenn du Redis auf Railway betreibst (z.B. Service „redis-kiezling“):
 
-1. **Redis-Service** auf Railway (wie oben) anlegen.
-2. **Öffentlichen Zugang** aktivieren:
-   - Redis-Service → **Settings** → **Networking** / **TCP Proxy**.
-   - TCP Proxy aktivieren; Railway vergibt eine öffentliche Domain (z.B. `viaduct.proxy.rlwy.net`) und Port.
-3. **Connection-URL** bauen (z.B. mit Passwort aus Redis-Variables):
-   - Format: `redis://default:PASSWORD@host:port`  
-   - Host/Port = die TCP-Proxy-Domain und der angezeigte Port.
-4. **Vercel (Backend-Projekt):**
-   - Project Settings → **Environment Variables**.
-   - Variable **REDIS_URL** anlegen (Value = die gebaute URL, z.B. `redis://default:...@...rlwy.net:12345`).
-   - Für Production (und ggf. Preview) setzen → Save → Redeploy.
+1. **Öffentlichen Zugang** für Redis aktivieren:
+   - Railway Dashboard → dein Projekt → Service **redis-kiezling** (oder dein Redis-Service).
+   - **Settings** → **Networking** → **Public Networking** / **TCP Proxy**.
+   - TCP Proxy aktivieren. Railway zeigt dann eine **öffentliche** Adresse (Host + Port), z.B. `viaduct.proxy.rlwy.net` und Port `12345`.
+2. **Echte Connection-URL** bauen:
+   - Beim Redis-Service unter **Variables** findest du `REDISPASSWORD` (und ggf. `REDISUSER`, Standard ist `default`).
+   - URL-Format: `redis://default:DEIN_REDISPASSWORD@ÖFFENTLICHER_HOST:ÖFFENTLICHER_PORT`
+   - Beispiel: `redis://default:abc123xyz@viaduct.proxy.rlwy.net:12345`
+   - Host und Port müssen die **TCP-Proxy**-Werte sein, nicht die internen (.railway.internal).
+3. **In Vercel eintragen (nur die echte URL):**
+   - Vercel → Backend-Projekt → **Settings** → **Environment Variables**.
+   - Variable **REDIS_URL** (Name exakt so).
+   - **Value:** die so gebaute URL **als eine lange Zeichenkette** einfügen – **kein** `${{ ... }}`.
+   - Environment: Production (und ggf. Preview) auswählen → Save.
+   - **Redeploy** des Backends auslösen, damit die neue Variable aktiv wird.
 
 Hinweis: Traffic von Vercel zu Railway Redis zählt als Egress (Kosten je nach Plan).
 
@@ -93,6 +99,6 @@ docker compose up -d redis
 | Umgebung      | Backend (Vercel)     | AI-Worker (Railway)   |
 |---------------|----------------------|------------------------|
 | Lokal         | `redis://localhost:6379` | `redis://localhost:6379` |
-| Produktion    | Vercel Env **REDIS_URL** (Railway TCP Proxy oder Upstash) | Railway Variable `REDIS_URL=${{ Redis.REDIS_URL }}` |
+| Produktion    | Vercel: **echte URL** (z.B. `redis://default:...@...rlwy.net:12345`) – kein ${{ }}! | Railway: `REDIS_URL=${{ redis-kiezling.REDIS_URL }}` (Referenz) |
 
 Nach dem Setzen von **REDIS_URL** jeweils Deployment neu anstoßen (Vercel Redeploy, Railway Redeploy).
