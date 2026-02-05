@@ -1374,16 +1374,190 @@ function determineStatusFromAIScores(familyFitScore: number, confidence: number)
 // AI JOB STATUS TYPES & HELPERS
 // ============================================
 
+// Compact snapshot of existing fields (known at start)
+interface EventSnapshot {
+  description_short: string | null;
+  start_datetime: string | null;
+  end_datetime: string | null;
+  location_address: string | null;
+  location_district: string | null;
+  price_min: number | null;
+  price_max: number | null;
+  age_min: number | null;
+  age_max: number | null;
+  is_indoor: boolean;
+  is_outdoor: boolean;
+  categories: string[];
+  completeness_score: number | null;
+}
+
+// AI proposal after processing
+interface AIProposal {
+  // Classification
+  categories: string[];
+  age_min: number | null;
+  age_max: number | null;
+  age_rating: string | null;
+  is_indoor: boolean;
+  is_outdoor: boolean;
+  ai_summary_short: string | null;
+  ai_summary_highlights: string[] | null;
+  ai_fit_blurb: string | null;
+  // Extracted fields
+  extracted_start_datetime: string | null;
+  extracted_end_datetime: string | null;
+  extracted_location_address: string | null;
+  extracted_location_district: string | null;
+  // Scores
+  family_fit_score: number | null;
+  relevance_score: number | null;
+  quality_score: number | null;
+  stressfree_score: number | null;
+  // Age-Fit Buckets
+  age_fit_0_2: number | null;
+  age_fit_3_5: number | null;
+  age_fit_6_9: number | null;
+  age_fit_10_12: number | null;
+  age_fit_13_15: number | null;
+}
+
+// Diff per field: what changed?
+type FieldDiffType = 'unchanged' | 'added' | 'changed';
+
+interface FieldDiffEntry {
+  type: FieldDiffType;
+  old_value?: any;
+  new_value?: any;
+}
+
+interface FieldDiff {
+  [fieldName: string]: FieldDiffEntry;
+}
+
+// Meta data per AI processing
+interface AIProcessingMeta {
+  model: string;
+  confidence: number;
+  cost_usd: number | null;
+  processing_time_ms: number;
+  prompt_version: string;
+}
+
+// Structured error
+interface AIProcessingError {
+  type: string;
+  message: string;
+  step: string;
+  retryable: boolean;
+}
+
+// Event detail in job status
+interface AIJobEventDetail {
+  id: string;
+  title: string;
+  source_url: string | null;
+  source_name: string | null;
+  existing: EventSnapshot;
+  proposed: AIProposal | null;
+  diff: FieldDiff | null;
+  meta: AIProcessingMeta | null;
+  processing_status: 'waiting' | 'processing' | 'done' | 'error';
+  result_status: string | null;
+  missing_fields: string[];
+  needs_review: boolean;
+  error: AIProcessingError | null;
+}
+
+// Main status (stored in Redis)
 interface AIJobStatus {
   id: string;
   status: 'running' | 'completed' | 'failed';
   total: number;
   processed: number;
-  currentEvent: { id: string; title: string } | null;
+  currentEventId: string | null;
   startedAt: string;
   estimatedSecondsRemaining: number | null;
-  results: Array<{ id: string; title: string; status?: string; familyFit?: number; error?: string }>;
-  summary: { published: number; pending_review: number; rejected: number; failed: number };
+  events: AIJobEventDetail[];
+  summary: { published: number; pending_review: number; rejected: number; failed: number; incomplete: number; archived: number };
+  total_cost_usd: number;
+  last_updated_at: string;
+}
+
+// Helper: Calculate missing required fields
+function calculateMissingFields(event: {
+  start_datetime?: Date | null;
+  end_datetime?: Date | null;
+  location_address?: string | null;
+  price_min?: any;
+  price_max?: any;
+  age_min?: number | null;
+  age_max?: number | null;
+  description_short?: string | null;
+}): string[] {
+  const missing: string[] = [];
+  if (!event.start_datetime) missing.push('start_datetime');
+  if (!event.location_address) missing.push('location_address');
+  if (event.price_min === null && event.price_max === null) missing.push('price');
+  if (event.age_min === null && event.age_max === null) missing.push('age_range');
+  if (!event.description_short) missing.push('description_short');
+  return missing;
+}
+
+// Helper: Calculate diff between existing and proposed values
+function calculateFieldDiff(
+  existing: EventSnapshot,
+  proposed: AIProposal,
+  appliedFields: Record<string, any>
+): FieldDiff {
+  const diff: FieldDiff = {};
+  
+  // Helper to add diff entry
+  const addDiff = (field: string, oldVal: any, newVal: any) => {
+    if (newVal === undefined || newVal === null) {
+      diff[field] = { type: 'unchanged', old_value: oldVal };
+    } else if (oldVal === null || oldVal === undefined || (Array.isArray(oldVal) && oldVal.length === 0)) {
+      diff[field] = { type: 'added', new_value: newVal };
+    } else if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      diff[field] = { type: 'changed', old_value: oldVal, new_value: newVal };
+    } else {
+      diff[field] = { type: 'unchanged', old_value: oldVal };
+    }
+  };
+  
+  // Compare classification fields
+  addDiff('categories', existing.categories, proposed.categories);
+  addDiff('age_min', existing.age_min, proposed.age_min);
+  addDiff('age_max', existing.age_max, proposed.age_max);
+  addDiff('age_rating', null, proposed.age_rating);
+  addDiff('is_indoor', existing.is_indoor, proposed.is_indoor);
+  addDiff('is_outdoor', existing.is_outdoor, proposed.is_outdoor);
+  
+  // AI-generated fields (always 'added' since they don't exist before)
+  if (proposed.ai_summary_short) addDiff('ai_summary_short', null, proposed.ai_summary_short);
+  if (proposed.ai_fit_blurb) addDiff('ai_fit_blurb', null, proposed.ai_fit_blurb);
+  if (proposed.ai_summary_highlights) addDiff('ai_summary_highlights', null, proposed.ai_summary_highlights);
+  
+  // Extracted fields
+  if (proposed.extracted_start_datetime && !existing.start_datetime) {
+    addDiff('start_datetime', existing.start_datetime, proposed.extracted_start_datetime);
+  }
+  if (proposed.extracted_end_datetime && !existing.end_datetime) {
+    addDiff('end_datetime', existing.end_datetime, proposed.extracted_end_datetime);
+  }
+  if (proposed.extracted_location_address && !existing.location_address) {
+    addDiff('location_address', existing.location_address, proposed.extracted_location_address);
+  }
+  if (proposed.extracted_location_district && !existing.location_district) {
+    addDiff('location_district', existing.location_district, proposed.extracted_location_district);
+  }
+  
+  // Scores (always added)
+  if (proposed.family_fit_score !== null) addDiff('family_fit_score', null, proposed.family_fit_score);
+  if (proposed.relevance_score !== null) addDiff('relevance_score', null, proposed.relevance_score);
+  if (proposed.quality_score !== null) addDiff('quality_score', null, proposed.quality_score);
+  if (proposed.stressfree_score !== null) addDiff('stressfree_score', null, proposed.stressfree_score);
+  
+  return diff;
 }
 
 const AI_JOB_PREFIX = 'ai-job:';
@@ -1395,9 +1569,31 @@ async function updateAIJobStatus(jobId: string, update: Partial<AIJobStatus>): P
   const key = `${AI_JOB_PREFIX}${jobId}`;
   const existing = await redis.get(key);
   const current: AIJobStatus = existing ? JSON.parse(existing) : {};
-  const updated = { ...current, ...update };
+  const updated = { ...current, ...update, last_updated_at: new Date().toISOString() };
   
   await redis.setex(key, AI_JOB_TTL, JSON.stringify(updated));
+}
+
+// Update single event in job status
+async function updateAIJobEventStatus(
+  jobId: string, 
+  eventId: string, 
+  eventUpdate: Partial<AIJobEventDetail>
+): Promise<void> {
+  if (!redis || !isRedisAvailable()) return;
+  
+  const key = `${AI_JOB_PREFIX}${jobId}`;
+  const existing = await redis.get(key);
+  if (!existing) return;
+  
+  const current: AIJobStatus = JSON.parse(existing);
+  const eventIndex = current.events.findIndex(e => e.id === eventId);
+  if (eventIndex === -1) return;
+  
+  current.events[eventIndex] = { ...current.events[eventIndex], ...eventUpdate };
+  current.last_updated_at = new Date().toISOString();
+  
+  await redis.setex(key, AI_JOB_TTL, JSON.stringify(current));
 }
 
 async function getAIJobStatus(jobId: string): Promise<AIJobStatus | null> {
@@ -1414,7 +1610,7 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
   try {
     const { limit = 50 } = req.query;
     
-    // Get events with pending_ai status
+    // Get events with pending_ai status - include more fields for the dashboard
     const pendingEvents = await prisma.canonicalEvent.findMany({
       where: { 
         status: 'pending_ai',
@@ -1432,8 +1628,33 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
         end_datetime: true,
         price_min: true,
         price_max: true,
+        price_type: true,
+        age_min: true,
+        age_max: true,
         is_indoor: true,
         is_outdoor: true,
+        completeness_score: true,
+        field_provenance: true,
+        categories: {
+          select: {
+            category: {
+              select: { slug: true }
+            }
+          }
+        },
+        event_sources: {
+          take: 1,
+          orderBy: { created_at: 'desc' },
+          select: {
+            source_url: true,
+            source: {
+              select: { name: true }
+            }
+          }
+        },
+        provider: {
+          select: { name: true }
+        }
       }
     });
     
@@ -1443,7 +1664,8 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
         message: 'No pending events to process', 
         processed: 0,
         jobId: null,
-        summary: { published: 0, pending_review: 0, rejected: 0, failed: 0 }
+        events: [],
+        summary: { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 }
       });
     }
     
@@ -1451,16 +1673,56 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
     const jobId = randomUUID();
     const startedAt = new Date().toISOString();
     
+    // Build event details with existing snapshot
+    const eventDetails: AIJobEventDetail[] = pendingEvents.map(event => {
+      const existingCategories = event.categories.map(c => c.category.slug);
+      const sourceInfo = event.event_sources[0];
+      
+      const existing: EventSnapshot = {
+        description_short: event.description_short,
+        start_datetime: event.start_datetime?.toISOString() || null,
+        end_datetime: event.end_datetime?.toISOString() || null,
+        location_address: event.location_address,
+        location_district: event.location_district,
+        price_min: event.price_min ? Number(event.price_min) : null,
+        price_max: event.price_max ? Number(event.price_max) : null,
+        age_min: event.age_min,
+        age_max: event.age_max,
+        is_indoor: event.is_indoor,
+        is_outdoor: event.is_outdoor,
+        categories: existingCategories,
+        completeness_score: event.completeness_score,
+      };
+      
+      return {
+        id: event.id,
+        title: event.title || 'Unbekannt',
+        source_url: sourceInfo?.source_url || null,
+        source_name: sourceInfo?.source?.name || event.provider?.name || null,
+        existing,
+        proposed: null,
+        diff: null,
+        meta: null,
+        processing_status: 'waiting' as const,
+        result_status: null,
+        missing_fields: calculateMissingFields(event),
+        needs_review: false,
+        error: null,
+      };
+    });
+    
     const initialStatus: AIJobStatus = {
       id: jobId,
       status: 'running',
       total: pendingEvents.length,
       processed: 0,
-      currentEvent: null,
+      currentEventId: null,
       startedAt,
-      estimatedSecondsRemaining: pendingEvents.length * 3, // ~3s per event estimate
-      results: [],
-      summary: { published: 0, pending_review: 0, rejected: 0, failed: 0 },
+      estimatedSecondsRemaining: pendingEvents.length * 3,
+      events: eventDetails,
+      summary: { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 },
+      total_cost_usd: 0,
+      last_updated_at: startedAt,
     };
     
     // Store initial status in Redis (if available)
@@ -1470,27 +1732,31 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
     
     logger.info(`Starting AI job ${jobId} for ${pendingEvents.length} pending_ai events`);
     
-    // Return immediately with job ID
+    // Return immediately with job ID and event snapshots
     res.json({
       success: true,
       jobId,
       total: pendingEvents.length,
+      events: eventDetails,
       message: 'Processing started',
     });
     
     // Process events in the background
     setImmediate(async () => {
-      const results: AIJobStatus['results'] = [];
-      const summary = { published: 0, pending_review: 0, rejected: 0, failed: 0 };
+      const summary = { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 };
       const startTime = Date.now();
+      let totalCostUsd = 0;
       
       for (let i = 0; i < pendingEvents.length; i++) {
         const event = pendingEvents[i];
+        const eventDetail = eventDetails[i];
+        const eventStartTime = Date.now();
         
-        // Update current event status
+        // Mark event as processing
+        await updateAIJobEventStatus(jobId, event.id, { processing_status: 'processing' });
         await updateAIJobStatus(jobId, {
           processed: i,
-          currentEvent: { id: event.id, title: event.title || 'Unbekannt' },
+          currentEventId: event.id,
           estimatedSecondsRemaining: i > 0 
             ? Math.round(((Date.now() - startTime) / i) * (pendingEvents.length - i) / 1000)
             : (pendingEvents.length - i) * 3,
@@ -1514,9 +1780,9 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
           
           if (!classifyRes.ok) {
             const errorText = await classifyRes.text();
-            throw new Error(`Classification failed: ${classifyRes.status} - ${errorText}`);
+            throw { step: 'classification', message: `Classification failed: ${classifyRes.status} - ${errorText}` };
           }
-          const classification = await classifyRes.json();
+          const classification = await classifyRes.json() as any;
           
           // Step 2: Scoring
           const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
@@ -1531,9 +1797,9 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
           
           if (!scoreRes.ok) {
             const errorText = await scoreRes.text();
-            throw new Error(`Scoring failed: ${scoreRes.status} - ${errorText}`);
+            throw { step: 'scoring', message: `Scoring failed: ${scoreRes.status} - ${errorText}` };
           }
-          const scores = await scoreRes.json();
+          const scores = await scoreRes.json() as any;
           
           // Step 3: Determine new status based on AI scores
           let newStatus = determineStatusFromAIScores(
@@ -1541,8 +1807,7 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
             classification.confidence
           );
           
-          // Step 3.5: Handle extracted datetime/location from AI
-          // Check if AI extracted datetime/location with high confidence
+          // Handle extracted datetime/location from AI
           const extractedStartDatetime = classification.extracted_start_datetime;
           const extractedEndDatetime = classification.extracted_end_datetime;
           const extractedLocationAddress = classification.extracted_location_address;
@@ -1550,7 +1815,6 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
           const datetimeConfidence = classification.datetime_confidence || 0;
           const locationConfidence = classification.location_confidence || 0;
           
-          // Use event's existing datetime or AI-extracted (if confidence >= 0.7)
           let effectiveStartDatetime = event.start_datetime;
           if (!effectiveStartDatetime && extractedStartDatetime && datetimeConfidence >= 0.7) {
             try {
@@ -1572,8 +1836,36 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
             }
           }
           
-          // Step 4: Update the event with AI-generated data
-          // Build update data with extracted fields (only if not already present and confidence >= 0.7)
+          // Build AI proposal
+          const proposed: AIProposal = {
+            categories: classification.categories || [],
+            age_min: classification.age_min ?? null,
+            age_max: classification.age_max ?? null,
+            age_rating: classification.age_rating ?? null,
+            is_indoor: classification.is_indoor ?? event.is_indoor,
+            is_outdoor: classification.is_outdoor ?? event.is_outdoor,
+            ai_summary_short: classification.ai_summary_short ?? null,
+            ai_summary_highlights: classification.ai_summary_highlights ?? null,
+            ai_fit_blurb: classification.ai_fit_blurb ?? null,
+            extracted_start_datetime: extractedStartDatetime || null,
+            extracted_end_datetime: extractedEndDatetime || null,
+            extracted_location_address: extractedLocationAddress || null,
+            extracted_location_district: extractedLocationDistrict || null,
+            family_fit_score: scores.family_fit_score ?? null,
+            relevance_score: scores.relevance_score ?? null,
+            quality_score: scores.quality_score ?? null,
+            stressfree_score: scores.stressfree_score ?? null,
+            age_fit_0_2: classification.age_fit_buckets?.["0_2"] ?? null,
+            age_fit_3_5: classification.age_fit_buckets?.["3_5"] ?? null,
+            age_fit_6_9: classification.age_fit_buckets?.["6_9"] ?? null,
+            age_fit_10_12: classification.age_fit_buckets?.["10_12"] ?? null,
+            age_fit_13_15: classification.age_fit_buckets?.["13_15"] ?? null,
+          };
+          
+          // Calculate diff
+          const diff = calculateFieldDiff(eventDetail.existing, proposed, {});
+          
+          // Build update data
           const updateData: Record<string, any> = {
             status: newStatus,
             age_min: classification.age_min ?? undefined,
@@ -1581,18 +1873,15 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
             age_rating: classification.age_rating ?? undefined,
             is_indoor: classification.is_indoor,
             is_outdoor: classification.is_outdoor,
-            // AI-generated summaries
             ai_summary_short: classification.ai_summary_short ?? undefined,
             ai_fit_blurb: classification.ai_fit_blurb ?? undefined,
             ai_summary_highlights: classification.ai_summary_highlights ?? undefined,
             ai_summary_confidence: classification.summary_confidence ?? undefined,
-            // Age fit buckets
             age_fit_0_2: classification.age_fit_buckets?.["0_2"] ?? undefined,
             age_fit_3_5: classification.age_fit_buckets?.["3_5"] ?? undefined,
             age_fit_6_9: classification.age_fit_buckets?.["6_9"] ?? undefined,
             age_fit_10_12: classification.age_fit_buckets?.["10_12"] ?? undefined,
             age_fit_13_15: classification.age_fit_buckets?.["13_15"] ?? undefined,
-            // AI flags
             ai_flags: classification.flags ?? undefined,
           };
           
@@ -1616,12 +1905,44 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
             updateData.location_district = extractedLocationDistrict;
           }
           
+          // Update field_provenance for AI-set fields
+          const existingProvenance = (event.field_provenance as Record<string, string>) || {};
+          const newProvenance = { ...existingProvenance };
+          for (const [field, d] of Object.entries(diff)) {
+            if (d.type === 'added' || d.type === 'changed') {
+              newProvenance[field] = 'ai_classify';
+            }
+          }
+          updateData.field_provenance = newProvenance;
+          
+          // Update the event
           await prisma.canonicalEvent.update({
             where: { id: event.id },
             data: updateData
           });
           
-          // Step 5: Create/update EventScore
+          // Create EventRevision for audit trail
+          const changedFields = Object.entries(diff)
+            .filter(([_, d]) => d.type !== 'unchanged')
+            .map(([field, d]) => ({ field, type: d.type, old_value: d.old_value, new_value: d.new_value }));
+          
+          if (changedFields.length > 0) {
+            await prisma.eventRevision.create({
+              data: {
+                event_id: event.id,
+                changeset: {
+                  source: 'ai_batch',
+                  job_id: jobId,
+                  model: classification.model || 'gpt-4o-mini',
+                  confidence: classification.confidence,
+                  changes: changedFields,
+                },
+                status: 'approved',
+              }
+            });
+          }
+          
+          // Create/update EventScore
           await prisma.eventScore.upsert({
             where: { event_id: event.id },
             create: {
@@ -1643,7 +1964,7 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
             }
           });
           
-          // Step 6: Add categories if provided
+          // Add categories if provided
           if (classification.categories && classification.categories.length > 0) {
             const categories = await prisma.category.findMany({
               where: { slug: { in: classification.categories } }
@@ -1662,36 +1983,67 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
             }
           }
           
+          // Calculate processing time and estimate cost
+          const processingTimeMs = Date.now() - eventStartTime;
+          const estimatedCostUsd = 0.003; // Rough estimate for gpt-4o-mini
+          totalCostUsd += estimatedCostUsd;
+          
+          // Build meta
+          const meta: AIProcessingMeta = {
+            model: classification.model || 'gpt-4o-mini',
+            confidence: classification.confidence || 0,
+            cost_usd: estimatedCostUsd,
+            processing_time_ms: processingTimeMs,
+            prompt_version: 'v1',
+          };
+          
           // Update summary
           if (newStatus === 'published') summary.published++;
           else if (newStatus === 'pending_review') summary.pending_review++;
           else if (newStatus === 'rejected') summary.rejected++;
+          else if (newStatus === 'incomplete') summary.incomplete++;
+          else if (newStatus === 'archived') summary.archived++;
           
-          results.push({ 
-            id: event.id, 
-            title: event.title || 'Unbekannt', 
-            status: newStatus, 
-            familyFit: scores.family_fit_score 
+          // Determine if needs review
+          const needsReview = newStatus === 'pending_review' || 
+            (classification.confidence < 0.7) ||
+            (scores.family_fit_score >= 40 && scores.family_fit_score < 60);
+          
+          // Update event status in Redis
+          await updateAIJobEventStatus(jobId, event.id, {
+            proposed,
+            diff,
+            meta,
+            processing_status: 'done',
+            result_status: newStatus,
+            needs_review: needsReview,
           });
           
           logger.info(`Processed event ${event.id}: ${newStatus} (family_fit: ${scores.family_fit_score}, confidence: ${classification.confidence})`);
           
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        } catch (err: any) {
+          const errorMessage = err?.message || (err instanceof Error ? err.message : 'Unknown error');
+          const errorStep = err?.step || 'unknown';
           summary.failed++;
-          results.push({ 
-            id: event.id, 
-            title: event.title || 'Unbekannt', 
-            error: errorMessage 
+          
+          await updateAIJobEventStatus(jobId, event.id, {
+            processing_status: 'error',
+            error: {
+              type: 'processing_error',
+              message: errorMessage,
+              step: errorStep,
+              retryable: true,
+            },
           });
+          
           logger.error(`Failed to process event ${event.id}: ${errorMessage}`);
         }
         
-        // Update progress after each event
+        // Update global progress after each event
         await updateAIJobStatus(jobId, {
           processed: i + 1,
-          results: [...results],
           summary: { ...summary },
+          total_cost_usd: totalCostUsd,
         });
       }
       
@@ -1699,10 +2051,10 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
       await updateAIJobStatus(jobId, {
         status: 'completed',
         processed: pendingEvents.length,
-        currentEvent: null,
+        currentEventId: null,
         estimatedSecondsRemaining: 0,
-        results,
         summary,
+        total_cost_usd: totalCostUsd,
       });
       
       logger.info(`AI job ${jobId} completed: ${JSON.stringify(summary)}`);
@@ -1714,9 +2066,11 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
 });
 
 // GET /api/admin/ai-job-status/:jobId - Get status of an AI processing job
+// Supports ?changed_since=<ISO-timestamp> for efficient polling (only returns changed events)
 router.get('/ai-job-status/:jobId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { jobId } = req.params;
+    const { changed_since } = req.query;
     
     if (!redis || !isRedisAvailable()) {
       return res.status(503).json({
@@ -1734,9 +2088,55 @@ router.get('/ai-job-status/:jobId', async (req: Request, res: Response, next: Ne
       });
     }
     
+    // If changed_since is provided, filter to only changed events
+    if (changed_since && typeof changed_since === 'string') {
+      const sinceDate = new Date(changed_since);
+      const lastUpdated = new Date(status.last_updated_at);
+      
+      // If nothing changed since the requested time, return minimal response
+      if (lastUpdated <= sinceDate) {
+        return res.json({
+          success: true,
+          data: {
+            id: status.id,
+            status: status.status,
+            total: status.total,
+            processed: status.processed,
+            currentEventId: status.currentEventId,
+            estimatedSecondsRemaining: status.estimatedSecondsRemaining,
+            summary: status.summary,
+            total_cost_usd: status.total_cost_usd,
+            last_updated_at: status.last_updated_at,
+            events: [], // No changed events
+            has_changes: false,
+          },
+        });
+      }
+      
+      // Filter events to only those that have been processed since changed_since
+      // We consider an event "changed" if it's no longer in 'waiting' status
+      const changedEvents = status.events.filter(e => 
+        e.processing_status !== 'waiting' || 
+        e.id === status.currentEventId
+      );
+      
+      return res.json({
+        success: true,
+        data: {
+          ...status,
+          events: changedEvents,
+          has_changes: true,
+        },
+      });
+    }
+    
+    // Return full status if no changed_since
     res.json({
       success: true,
-      data: status,
+      data: {
+        ...status,
+        has_changes: true,
+      },
     });
   } catch (error) {
     next(error);
@@ -1780,7 +2180,7 @@ router.get('/ai-worker/health', async (_req: Request, res: Response, next: NextF
       });
     }
     
-    const data = await response.json();
+    const data = await response.json() as any;
     
     res.json({
       success: true,
@@ -1824,9 +2224,9 @@ router.get('/ai-worker/diagnostics', async (_req: Request, res: Response, next: 
     ]);
 
     // Process responses
-    const basicHealth = healthResponse?.ok ? await healthResponse.json() : null;
-    const readiness = readyResponse?.ok ? await readyResponse.json() : null;
-    const metrics = metricsResponse?.ok ? await metricsResponse.json() : null;
+    const basicHealth = healthResponse?.ok ? await healthResponse.json() as any : null;
+    const readiness = readyResponse?.ok ? await readyResponse.json() as any : null;
+    const metrics = metricsResponse?.ok ? await metricsResponse.json() as any : null;
 
     // Build diagnostic response
     const diagnostics: any = {

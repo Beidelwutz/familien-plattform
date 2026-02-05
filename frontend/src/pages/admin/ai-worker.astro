@@ -4,16 +4,21 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 ---
 
 <AdminLayout title="AI Worker - kiezling Admin" currentPage="ai-worker">
-  <div class="max-w-5xl mx-auto">
+  <div class="max-w-7xl mx-auto">
     <!-- Header -->
     <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">AI Worker</h1>
         <p class="text-gray-500 text-sm mt-1">Pending-Events klassifizieren und Status setzen</p>
       </div>
-      <div id="health-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-sm font-medium">
-        <span id="health-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
-        <span id="health-text">Prüfe...</span>
+      <div class="flex items-center gap-3">
+        <div id="cost-badge" class="hidden px-3 py-1.5 rounded-full bg-purple-100 text-purple-700 text-sm font-medium">
+          <span id="total-cost">$0.00</span>
+        </div>
+        <div id="health-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-sm font-medium">
+          <span id="health-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+          <span id="health-text">Pruefe...</span>
+        </div>
       </div>
     </header>
 
@@ -26,270 +31,246 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     <!-- Content -->
     <div id="content" class="hidden space-y-6">
       <!-- Stats Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <!-- Large KPI: Pending AI Events -->
-        <div id="pending-card" class="lg:col-span-1 bg-white rounded-2xl shadow-card p-6 border-l-4 border-gray-300">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-gray-500 font-medium">Pending AI</p>
-              <p id="pending-ai-count" class="text-4xl font-bold text-gray-900 mt-1">--</p>
-              <p class="text-xs text-gray-400 mt-1">Events warten</p>
-            </div>
-            <div class="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">
-              🤖
-            </div>
-          </div>
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div id="pending-card" class="bg-white rounded-2xl shadow-card p-4 border-l-4 border-gray-300">
+          <p class="text-xs text-gray-500 font-medium">Pending AI</p>
+          <p id="pending-ai-count" class="text-2xl font-bold text-gray-900 mt-1">--</p>
         </div>
-
-        <!-- Mini Stats -->
-        <div class="lg:col-span-3 grid grid-cols-3 gap-4">
-          <div class="bg-white rounded-2xl shadow-card p-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center text-lg">
-                ✅
-              </div>
-              <div>
-                <p class="text-sm text-gray-500">Heute verarbeitet</p>
-                <p id="processed-today" class="text-xl font-bold text-gray-900">--</p>
-              </div>
-            </div>
-          </div>
-          <div class="bg-white rounded-2xl shadow-card p-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-lg">
-                📊
-              </div>
-              <div>
-                <p class="text-sm text-gray-500">Erfolgsrate</p>
-                <p id="success-rate" class="text-xl font-bold text-gray-900">--%</p>
-              </div>
-            </div>
-          </div>
-          <div class="bg-white rounded-2xl shadow-card p-4">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-lg">
-                ⏱️
-              </div>
-              <div>
-                <p class="text-sm text-gray-500">Ø Zeit/Event</p>
-                <p id="avg-time" class="text-xl font-bold text-gray-900">-- ms</p>
-              </div>
-            </div>
-          </div>
+        <div class="bg-white rounded-2xl shadow-card p-4">
+          <p class="text-xs text-gray-500">Heute verarbeitet</p>
+          <p id="processed-today" class="text-2xl font-bold text-gray-900 mt-1">--</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-card p-4">
+          <p class="text-xs text-gray-500">Erfolgsrate</p>
+          <p id="success-rate" class="text-2xl font-bold text-gray-900 mt-1">--%</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-card p-4">
+          <p class="text-xs text-gray-500">Ø Zeit/Event</p>
+          <p id="avg-time" class="text-2xl font-bold text-gray-900 mt-1">--</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-card p-4">
+          <p class="text-xs text-gray-500">Letzte Aktivitaet</p>
+          <p id="last-processed-at" class="text-lg font-bold text-gray-900 mt-1">--</p>
         </div>
       </div>
 
-      <!-- Last Activity Info -->
-      <div id="last-activity" class="bg-gray-50 rounded-xl p-3 hidden">
-        <div class="flex items-center gap-2 text-sm text-gray-500">
-          <span>🕒</span>
-          <span>Letzte Verarbeitung: <span id="last-processed-at" class="font-medium text-gray-700">--</span></span>
-        </div>
-      </div>
-
-      <!-- Batch Processing Section -->
+      <!-- Batch Processing Controls -->
       <div class="bg-white rounded-2xl shadow-card p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Batch-Verarbeitung</h2>
-        
-        <div class="space-y-4">
-          <!-- Batch Limit Slider -->
-          <div>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div class="flex-1">
             <div class="flex items-center justify-between mb-2">
-              <label for="batch-slider" class="text-sm font-medium text-gray-700">Batch-Größe</label>
+              <label for="batch-slider" class="text-sm font-medium text-gray-700">Batch-Groesse</label>
               <span id="slider-value" class="text-sm font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">25</span>
             </div>
-            <div class="relative">
-              <input 
-                type="range" 
-                id="batch-slider" 
-                min="10" 
-                max="100" 
-                value="25" 
-                step="5"
-                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
-              />
-              <div class="flex justify-between text-xs text-gray-400 mt-1">
-                <span>10</span>
-                <span>50</span>
-                <span>100</span>
-              </div>
-            </div>
+            <input 
+              type="range" 
+              id="batch-slider" 
+              min="10" 
+              max="100" 
+              value="25" 
+              step="5"
+              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
+            />
           </div>
-
-          <!-- Start Button -->
           <button 
             id="start-batch-btn" 
-            class="w-full sm:w-auto px-8 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-lg"
+            class="px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center gap-2"
           >
-            <span id="btn-icon">🚀</span>
+            <span id="btn-icon">&#x1F680;</span>
             <span id="btn-text">Start Batch</span>
           </button>
-          
-          <p id="btn-hint" class="text-sm text-gray-500 hidden"></p>
+        </div>
+        <p id="btn-hint" class="text-sm text-gray-500 mt-2 hidden"></p>
+      </div>
+
+      <!-- Progress Bar (shown during processing) -->
+      <div id="progress-section" class="hidden bg-white rounded-2xl shadow-card p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-4">
+            <span id="progress-text" class="text-sm text-gray-600">0 / 0</span>
+            <span id="progress-percent" class="text-sm font-bold text-primary-600">0%</span>
+            <span id="elapsed-time" class="text-sm text-gray-400">0:00</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <!-- Summary badges -->
+            <span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+              <span id="stat-published">0</span> published
+            </span>
+            <span class="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+              <span id="stat-review">0</span> review
+            </span>
+            <span class="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
+              <span id="stat-failed">0</span> failed
+            </span>
+            <button id="cancel-btn" class="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+              Abbrechen
+            </button>
+          </div>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+          <div id="progress-bar" class="bg-primary-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
         </div>
       </div>
 
-      <!-- Progress Section (hidden by default) -->
-      <div id="progress-section" class="hidden bg-white rounded-2xl shadow-card p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">Verarbeitung läuft...</h3>
-          <button id="cancel-btn" class="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium">
-            Abbrechen
-          </button>
-        </div>
-
-        <!-- Progress Bar -->
-        <div class="mb-6">
-          <div class="flex justify-between text-sm mb-2">
-            <span id="progress-text" class="text-gray-600">0 / 0</span>
-            <span id="progress-percent" class="font-bold text-primary-600">0%</span>
-          </div>
-          <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-            <div 
-              id="progress-bar" 
-              class="bg-gradient-to-r from-primary-500 to-primary-400 h-4 rounded-full transition-all duration-300 relative overflow-hidden"
-              style="width: 0%"
-            >
-              <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+      <!-- Event Pipeline (Split-View) -->
+      <div id="pipeline-section" class="hidden">
+        <div class="flex gap-4 h-[600px]">
+          <!-- Left: Event List -->
+          <div class="w-80 flex-shrink-0 bg-white rounded-2xl shadow-card flex flex-col">
+            <div class="p-4 border-b border-gray-100">
+              <h3 class="font-semibold text-gray-900">Event Pipeline</h3>
+              <p class="text-xs text-gray-500 mt-1"><span id="list-count">0</span> Events</p>
+            </div>
+            <div id="event-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+              <!-- Event items will be inserted here -->
             </div>
           </div>
-        </div>
 
-        <!-- Stats Breakdown -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <div class="bg-gray-50 rounded-xl p-3 text-center">
-            <span id="stat-processed" class="text-2xl font-bold text-gray-900">0</span>
-            <span class="block text-xs text-gray-500 mt-1">Verarbeitet</span>
-          </div>
-          <div class="bg-green-50 rounded-xl p-3 text-center">
-            <span id="stat-published" class="text-2xl font-bold text-green-600">0</span>
-            <span class="block text-xs text-green-600 mt-1">→ Published</span>
-          </div>
-          <div class="bg-amber-50 rounded-xl p-3 text-center">
-            <span id="stat-review" class="text-2xl font-bold text-amber-600">0</span>
-            <span class="block text-xs text-amber-600 mt-1">→ pending_review</span>
-          </div>
-          <div class="bg-red-50 rounded-xl p-3 text-center">
-            <span id="stat-failed" class="text-2xl font-bold text-red-600">0</span>
-            <span class="block text-xs text-red-600 mt-1">Fehler</span>
-          </div>
-        </div>
+          <!-- Right: Detail Panel -->
+          <div class="flex-1 bg-white rounded-2xl shadow-card flex flex-col overflow-hidden">
+            <div id="detail-panel" class="flex-1 overflow-y-auto">
+              <!-- Empty state -->
+              <div id="detail-empty" class="flex items-center justify-center h-full text-gray-400">
+                <div class="text-center">
+                  <div class="text-4xl mb-2">&#x1F50D;</div>
+                  <p>Waehle ein Event aus der Liste</p>
+                </div>
+              </div>
+              <!-- Detail content (hidden by default) -->
+              <div id="detail-content" class="hidden p-6">
+                <!-- Header -->
+                <div class="mb-6">
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                      <h2 id="detail-title" class="text-xl font-bold text-gray-900 truncate">Event Title</h2>
+                      <a id="detail-source-link" href="#" target="_blank" class="text-sm text-primary-600 hover:underline truncate block">
+                        <span id="detail-source-name">Quelle</span>
+                      </a>
+                    </div>
+                    <div id="detail-status-badge" class="flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium">
+                      waiting
+                    </div>
+                  </div>
+                  <!-- Missing fields warning -->
+                  <div id="detail-missing" class="hidden mt-3 p-3 bg-amber-50 rounded-lg">
+                    <p class="text-sm text-amber-700 font-medium">Fehlende Felder:</p>
+                    <p id="detail-missing-list" class="text-sm text-amber-600 mt-1"></p>
+                  </div>
+                </div>
 
-        <!-- Elapsed Time -->
-        <div class="flex items-center gap-2 text-sm text-gray-500">
-          <span>⏱️</span>
-          <span>Vergangene Zeit:</span>
-          <span id="elapsed-time" class="font-medium text-gray-700">0:00</span>
+                <!-- Fields Grid -->
+                <div class="space-y-6">
+                  <!-- Basic Info -->
+                  <div>
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <span>&#x1F4CB;</span> Basis-Informationen
+                    </h4>
+                    <div class="grid grid-cols-2 gap-3" id="fields-basic">
+                      <!-- Fields will be inserted here -->
+                    </div>
+                  </div>
+
+                  <!-- AI Classifications -->
+                  <div id="section-ai" class="hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <span>&#x1F916;</span> AI Klassifikation
+                    </h4>
+                    <div class="grid grid-cols-2 gap-3" id="fields-ai">
+                      <!-- AI fields will be inserted here -->
+                    </div>
+                  </div>
+
+                  <!-- AI Scores -->
+                  <div id="section-scores" class="hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <span>&#x1F4CA;</span> AI Scores
+                    </h4>
+                    <div class="grid grid-cols-2 gap-3" id="fields-scores">
+                      <!-- Score bars will be inserted here -->
+                    </div>
+                  </div>
+
+                  <!-- Meta Info -->
+                  <div id="section-meta" class="hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <span>&#x2699;</span> Verarbeitungs-Details
+                    </h4>
+                    <div class="grid grid-cols-4 gap-3 text-center" id="fields-meta">
+                      <!-- Meta info will be inserted here -->
+                    </div>
+                  </div>
+
+                  <!-- Error Info -->
+                  <div id="section-error" class="hidden">
+                    <div class="p-4 bg-red-50 rounded-lg">
+                      <p class="text-sm font-medium text-red-700">Fehler bei der Verarbeitung</p>
+                      <p id="error-message" class="text-sm text-red-600 mt-1"></p>
+                      <p id="error-step" class="text-xs text-red-500 mt-2"></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Results Section -->
-      <div id="results-section" class="hidden bg-white rounded-2xl shadow-card p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">Ergebnisse</h3>
-          <button id="clear-results-btn" class="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-            Leeren
-          </button>
-        </div>
-
-        <!-- Results List -->
-        <div id="results-list" class="max-h-96 overflow-y-auto space-y-2">
-          <p class="text-gray-400 text-center py-8">Keine Ergebnisse</p>
-        </div>
-      </div>
-
-      <!-- Diagnostics Section -->
-      <div id="diagnostics-section" class="bg-white rounded-2xl shadow-card p-6">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            🔍 Diagnose
-          </h3>
-          <button id="refresh-diagnostics-btn" class="px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors font-medium">
-            ↻ Aktualisieren
-          </button>
-        </div>
-
-        <!-- Loading State -->
-        <div id="diagnostics-loading" class="text-center py-8">
-          <div class="animate-spin inline-block w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full"></div>
-          <p class="text-gray-500 mt-2 text-sm">Prüfe AI-Worker...</p>
-        </div>
-
-        <!-- Diagnostics Content -->
-        <div id="diagnostics-content" class="hidden space-y-4">
-          <!-- Connection Status -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <!-- Worker Reachable -->
-            <div id="diag-worker" class="p-3 rounded-xl bg-gray-50">
-              <div class="flex items-center gap-2 mb-1">
-                <span id="diag-worker-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-                <span class="text-sm font-medium text-gray-700">AI-Worker</span>
-              </div>
-              <span id="diag-worker-status" class="text-xs text-gray-500">Prüfe...</span>
-            </div>
-
-            <!-- Redis Status -->
-            <div id="diag-redis" class="p-3 rounded-xl bg-gray-50">
-              <div class="flex items-center gap-2 mb-1">
-                <span id="diag-redis-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-                <span class="text-sm font-medium text-gray-700">Redis</span>
-              </div>
-              <span id="diag-redis-status" class="text-xs text-gray-500">Prüfe...</span>
-            </div>
-
-            <!-- OpenAI Status -->
-            <div id="diag-openai" class="p-3 rounded-xl bg-gray-50">
-              <div class="flex items-center gap-2 mb-1">
-                <span id="diag-openai-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-                <span class="text-sm font-medium text-gray-700">OpenAI API</span>
-              </div>
-              <span id="diag-openai-status" class="text-xs text-gray-500">Prüfe...</span>
-            </div>
+      <!-- Diagnostics Section (collapsed by default) -->
+      <details class="bg-white rounded-2xl shadow-card">
+        <summary class="p-4 cursor-pointer font-semibold text-gray-900 hover:bg-gray-50 rounded-2xl">
+          &#x1F50D; Diagnose
+        </summary>
+        <div class="px-6 pb-6">
+          <div id="diagnostics-loading" class="text-center py-4">
+            <div class="animate-spin inline-block w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full"></div>
           </div>
-
-          <!-- Issues/Warnings -->
-          <div id="diag-issues" class="hidden">
-            <h4 class="text-sm font-medium text-gray-700 mb-2">⚠️ Probleme</h4>
-            <ul id="diag-issues-list" class="space-y-1 text-sm text-red-600 bg-red-50 p-3 rounded-lg"></ul>
-          </div>
-
-          <!-- Config Info -->
-          <div class="text-xs text-gray-400 pt-2 border-t border-gray-100">
-            <div class="flex flex-wrap gap-4">
+          <div id="diagnostics-content" class="hidden">
+            <div class="grid grid-cols-3 gap-3 mb-4">
+              <div id="diag-worker" class="p-3 rounded-xl bg-gray-50">
+                <div class="flex items-center gap-2 mb-1">
+                  <span id="diag-worker-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                  <span class="text-sm font-medium text-gray-700">AI-Worker</span>
+                </div>
+                <span id="diag-worker-status" class="text-xs text-gray-500">Pruefe...</span>
+              </div>
+              <div id="diag-redis" class="p-3 rounded-xl bg-gray-50">
+                <div class="flex items-center gap-2 mb-1">
+                  <span id="diag-redis-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                  <span class="text-sm font-medium text-gray-700">Redis</span>
+                </div>
+                <span id="diag-redis-status" class="text-xs text-gray-500">Pruefe...</span>
+              </div>
+              <div id="diag-openai" class="p-3 rounded-xl bg-gray-50">
+                <div class="flex items-center gap-2 mb-1">
+                  <span id="diag-openai-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                  <span class="text-sm font-medium text-gray-700">OpenAI API</span>
+                </div>
+                <span id="diag-openai-status" class="text-xs text-gray-500">Pruefe...</span>
+              </div>
+            </div>
+            <div class="text-xs text-gray-400 flex flex-wrap gap-4">
               <span>Worker: <span id="diag-worker-url" class="font-mono">--</span></span>
               <span>Version: <span id="diag-version" class="font-mono">--</span></span>
               <span>Budget: <span id="diag-budget" class="font-mono">--</span></span>
             </div>
           </div>
+          <div id="diagnostics-error" class="hidden text-center py-4">
+            <p class="text-red-500 text-sm">AI-Worker nicht erreichbar</p>
+          </div>
         </div>
-
-        <!-- Error State -->
-        <div id="diagnostics-error" class="hidden text-center py-6">
-          <p class="text-red-500 mb-2">❌ AI-Worker nicht erreichbar</p>
-          <p id="diagnostics-error-msg" class="text-sm text-gray-500 mb-4">--</p>
-          <button onclick="loadDiagnostics()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">
-            Erneut versuchen
-          </button>
-        </div>
-      </div>
+      </details>
 
       <!-- Quick Links -->
-      <div class="bg-white rounded-2xl shadow-card p-6">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Schnellzugriff</h3>
-        <div class="flex flex-wrap gap-3">
-          <a href="/admin/review?status=pending_ai" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium">
-            📋 Pending-AI Events ansehen
-          </a>
-          <a href="/admin/review?status=pending_review" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
-            👁️ Review Queue
-          </a>
-          <a href="/admin/review?status=rejected" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium">
-            🚫 Abgelehnte Events
-          </a>
-          <a href="/admin/ai-usage" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
-            📊 AI Usage Monitor
-          </a>
-        </div>
+      <div class="flex flex-wrap gap-3">
+        <a href="/admin/review?status=pending_ai" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium">
+          Pending-AI Events
+        </a>
+        <a href="/admin/review?status=pending_review" class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium">
+          Review Queue
+        </a>
+        <a href="/admin/ai-usage" class="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium">
+          AI Usage Monitor
+        </a>
       </div>
     </div>
 
@@ -312,54 +293,137 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   
   .slider-thumb::-webkit-slider-thumb {
     -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #4f46e5;
     cursor: pointer;
-    border: 3px solid white;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    transition: transform 0.15s ease;
-  }
-  
-  .slider-thumb::-webkit-slider-thumb:hover {
-    transform: scale(1.1);
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
   
   .slider-thumb::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #4f46e5;
     cursor: pointer;
-    border: 3px solid white;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
-  
-  /* Result item styles */
-  .result-item {
+
+  /* Event list item styles */
+  .event-list-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    background: #f9fafb;
-    border-radius: 0.75rem;
-    transition: background-color 0.2s;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
   
-  .result-item:hover {
+  .event-list-item:hover {
     background: #f3f4f6;
   }
   
-  .result-item.new {
-    animation: highlight 1s ease-out;
+  .event-list-item--selected {
+    background: #e0e7ff !important;
+    border-left: 3px solid #4f46e5;
   }
   
-  @keyframes highlight {
-    0% { background-color: #e0e7ff; }
-    100% { background-color: #f9fafb; }
+  .event-list-item--waiting {
+    opacity: 0.7;
   }
+  
+  .event-list-item--processing {
+    background: #fef3c7;
+    border-left: 3px solid #f59e0b;
+  }
+  
+  .event-list-item--done {
+    border-left: 3px solid #10b981;
+  }
+  
+  .event-list-item--error {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+  }
+  
+  .event-list-item--history {
+    opacity: 0.5;
+  }
+
+  /* Status indicator */
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  
+  .status-dot--waiting { background: #9ca3af; }
+  .status-dot--processing { background: #f59e0b; animation: pulse 1s infinite; }
+  .status-dot--done { background: #10b981; }
+  .status-dot--error { background: #ef4444; }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Field styles */
+  .field-card {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    background: #f9fafb;
+  }
+  
+  .field-card--added {
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+  }
+  
+  .field-card--changed {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+  }
+  
+  .field-card--empty {
+    background: #f9fafb;
+    border: 1px dashed #d1d5db;
+  }
+
+  .ai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    color: #7c3aed;
+    background: #ede9fe;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    margin-left: 0.5rem;
+  }
+
+  /* Score bar */
+  .score-bar-container {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  
+  .score-bar-fill--high { background: #10b981; }
+  .score-bar-fill--medium { background: #f59e0b; }
+  .score-bar-fill--low { background: #ef4444; }
 </style>
 
 <script is:inline define:vars={{ API_URL }}>
@@ -368,27 +432,42 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     window.location.href = '/login?redirect=/admin/ai-worker';
   }
 
-  // State
+  // ========================================
+  // STATE
+  // ========================================
   let isProcessing = false;
+  let isHistoryMode = false;
   let currentJobId = null;
-  let pollInterval = null;
-  let elapsedInterval = null;
+  let events = [];
+  let selectedEventId = null;
   let startTime = null;
-  let results = [];
+  let elapsedInterval = null;
+  
+  // Polling with exponential backoff
+  const POLL_MIN_INTERVAL = 1000;
+  const POLL_MAX_INTERVAL = 5000;
+  let pollInterval = POLL_MIN_INTERVAL;
+  let pollTimeout = null;
+  let lastChangedAt = null;
 
-  // DOM Elements
-  const elements = {
+  // ========================================
+  // DOM ELEMENTS
+  // ========================================
+  const el = {
     loadingState: document.getElementById('loading-state'),
     content: document.getElementById('content'),
     errorState: document.getElementById('error-state'),
     healthBadge: document.getElementById('health-badge'),
     healthDot: document.getElementById('health-dot'),
     healthText: document.getElementById('health-text'),
+    costBadge: document.getElementById('cost-badge'),
+    totalCost: document.getElementById('total-cost'),
     pendingCard: document.getElementById('pending-card'),
     pendingAiCount: document.getElementById('pending-ai-count'),
     processedToday: document.getElementById('processed-today'),
     successRate: document.getElementById('success-rate'),
     avgTime: document.getElementById('avg-time'),
+    lastProcessedAt: document.getElementById('last-processed-at'),
     batchSlider: document.getElementById('batch-slider'),
     sliderValue: document.getElementById('slider-value'),
     startBatchBtn: document.getElementById('start-batch-btn'),
@@ -399,30 +478,38 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     progressText: document.getElementById('progress-text'),
     progressPercent: document.getElementById('progress-percent'),
     progressBar: document.getElementById('progress-bar'),
-    statProcessed: document.getElementById('stat-processed'),
+    elapsedTime: document.getElementById('elapsed-time'),
     statPublished: document.getElementById('stat-published'),
     statReview: document.getElementById('stat-review'),
     statFailed: document.getElementById('stat-failed'),
-    elapsedTime: document.getElementById('elapsed-time'),
     cancelBtn: document.getElementById('cancel-btn'),
-    resultsSection: document.getElementById('results-section'),
-    resultsList: document.getElementById('results-list'),
-    clearResultsBtn: document.getElementById('clear-results-btn'),
+    pipelineSection: document.getElementById('pipeline-section'),
+    eventList: document.getElementById('event-list'),
+    listCount: document.getElementById('list-count'),
+    detailPanel: document.getElementById('detail-panel'),
+    detailEmpty: document.getElementById('detail-empty'),
+    detailContent: document.getElementById('detail-content'),
   };
 
-  // Initialize slider
-  elements.batchSlider.addEventListener('input', (e) => {
-    elements.sliderValue.textContent = e.target.value;
+  // ========================================
+  // INITIALIZATION
+  // ========================================
+  el.batchSlider.addEventListener('input', (e) => {
+    el.sliderValue.textContent = e.target.value;
   });
+  
+  el.startBatchBtn.addEventListener('click', startBatch);
+  el.cancelBtn.addEventListener('click', cancelProcessing);
 
-  // Load initial data
+  // ========================================
+  // LOAD INITIAL DATA
+  // ========================================
   async function loadData() {
-    elements.loadingState.classList.remove('hidden');
-    elements.content.classList.add('hidden');
-    elements.errorState.classList.add('hidden');
+    el.loadingState.classList.remove('hidden');
+    el.content.classList.add('hidden');
+    el.errorState.classList.add('hidden');
 
     try {
-      // Fetch pending count and worker health in parallel
       const [pendingRes, healthRes, statsRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/pending-ai-count`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -439,114 +526,112 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       const pending = await pendingRes.json();
       const pendingCount = pending.data?.count || 0;
-      elements.pendingAiCount.textContent = pendingCount;
+      el.pendingAiCount.textContent = pendingCount;
 
-      // Update pending card color based on count
+      // Update pending card styling
       if (pendingCount > 0) {
-        elements.pendingCard.classList.remove('border-gray-300');
-        elements.pendingCard.classList.add('border-amber-400');
-        elements.pendingAiCount.classList.remove('text-gray-900');
-        elements.pendingAiCount.classList.add('text-amber-500');
+        el.pendingCard.classList.remove('border-gray-300');
+        el.pendingCard.classList.add('border-amber-400');
       } else {
-        elements.pendingCard.classList.remove('border-amber-400');
-        elements.pendingCard.classList.add('border-gray-300');
-        elements.pendingAiCount.classList.remove('text-amber-500');
-        elements.pendingAiCount.classList.add('text-gray-900');
+        el.pendingCard.classList.remove('border-amber-400');
+        el.pendingCard.classList.add('border-gray-300');
       }
 
       // Update worker health
       if (healthRes && healthRes.ok) {
         const healthData = await healthRes.json();
         if (healthData.success && healthData.data?.status === 'healthy') {
-          elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-sm font-medium';
-          elements.healthDot.className = 'w-2 h-2 rounded-full bg-green-500';
-          elements.healthText.textContent = 'OK';
+          setHealthStatus('ok');
         } else {
-          elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-medium';
-          elements.healthDot.className = 'w-2 h-2 rounded-full bg-amber-500';
-          elements.healthText.textContent = 'Eingeschränkt';
+          setHealthStatus('degraded');
         }
       } else {
-        elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-sm font-medium';
-        elements.healthDot.className = 'w-2 h-2 rounded-full bg-red-500';
-        elements.healthText.textContent = 'Offline';
+        setHealthStatus('error');
       }
 
       // Update stats
       if (statsRes && statsRes.ok) {
         const statsData = await statsRes.json();
         if (statsData.data) {
-          elements.processedToday.textContent = statsData.data.processedToday || 0;
-          elements.successRate.textContent = statsData.data.successRate ? `${statsData.data.successRate}%` : '--%';
-          elements.avgTime.textContent = statsData.data.avgProcessingTime ? `${statsData.data.avgProcessingTime} ms` : '-- ms';
+          el.processedToday.textContent = statsData.data.processedToday || 0;
+          el.successRate.textContent = statsData.data.successRate ? `${statsData.data.successRate}%` : '--%';
+          el.avgTime.textContent = statsData.data.avgProcessingTime ? `${statsData.data.avgProcessingTime}ms` : '--';
           
-          // Show last processed time
-          const lastActivityEl = document.getElementById('last-activity');
-          const lastProcessedAtEl = document.getElementById('last-processed-at');
           if (statsData.data.lastProcessedAt) {
-            const lastTime = new Date(statsData.data.lastProcessedAt);
-            const now = new Date();
-            const diffMs = now - lastTime;
-            const diffMins = Math.floor(diffMs / 60000);
-            const diffHours = Math.floor(diffMins / 60);
-            const diffDays = Math.floor(diffHours / 24);
-            
-            let timeAgo;
-            if (diffMins < 1) {
-              timeAgo = 'gerade eben';
-            } else if (diffMins < 60) {
-              timeAgo = `vor ${diffMins} Minute${diffMins !== 1 ? 'n' : ''}`;
-            } else if (diffHours < 24) {
-              timeAgo = `vor ${diffHours} Stunde${diffHours !== 1 ? 'n' : ''}`;
-            } else {
-              timeAgo = `vor ${diffDays} Tag${diffDays !== 1 ? 'en' : ''}`;
-            }
-            
-            lastProcessedAtEl.textContent = timeAgo;
-            lastActivityEl.classList.remove('hidden');
+            el.lastProcessedAt.textContent = formatTimeAgo(new Date(statsData.data.lastProcessedAt));
           }
         }
       }
 
-      // Update button state
       updateButtonState(pendingCount);
 
-      elements.loadingState.classList.add('hidden');
-      elements.content.classList.remove('hidden');
+      el.loadingState.classList.add('hidden');
+      el.content.classList.remove('hidden');
     } catch (e) {
       console.error('Load error:', e);
-      elements.loadingState.classList.add('hidden');
-      elements.errorState.classList.remove('hidden');
+      el.loadingState.classList.add('hidden');
+      el.errorState.classList.remove('hidden');
     }
+  }
+
+  function setHealthStatus(status) {
+    const classes = {
+      ok: ['bg-green-100', 'text-green-700'],
+      degraded: ['bg-amber-100', 'text-amber-700'],
+      error: ['bg-red-100', 'text-red-700'],
+    };
+    const dotClasses = {
+      ok: 'bg-green-500',
+      degraded: 'bg-amber-500',
+      error: 'bg-red-500',
+    };
+    const texts = { ok: 'OK', degraded: 'Eingeschraenkt', error: 'Offline' };
+    
+    el.healthBadge.className = `flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${classes[status].join(' ')}`;
+    el.healthDot.className = `w-2 h-2 rounded-full ${dotClasses[status]}`;
+    el.healthText.textContent = texts[status];
+  }
+
+  function formatTimeAgo(date) {
+    const diffMs = Date.now() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'gerade eben';
+    if (diffMins < 60) return `vor ${diffMins}m`;
+    if (diffHours < 24) return `vor ${diffHours}h`;
+    return `vor ${diffDays}d`;
   }
 
   function updateButtonState(pendingCount) {
     if (pendingCount === 0) {
-      elements.startBatchBtn.disabled = true;
-      elements.btnHint.textContent = 'Keine Events in der Queue';
-      elements.btnHint.classList.remove('hidden');
+      el.startBatchBtn.disabled = true;
+      el.btnHint.textContent = 'Keine Events in der Queue';
+      el.btnHint.classList.remove('hidden');
     } else if (isProcessing) {
-      elements.startBatchBtn.disabled = true;
-      elements.btnHint.textContent = 'Verarbeitung läuft...';
-      elements.btnHint.classList.remove('hidden');
+      el.startBatchBtn.disabled = true;
+      el.btnHint.textContent = 'Verarbeitung laeuft...';
+      el.btnHint.classList.remove('hidden');
     } else {
-      elements.startBatchBtn.disabled = false;
-      elements.btnHint.classList.add('hidden');
+      el.startBatchBtn.disabled = false;
+      el.btnHint.classList.add('hidden');
     }
   }
 
-  // Start batch processing
+  // ========================================
+  // BATCH PROCESSING
+  // ========================================
   async function startBatch() {
     if (isProcessing) return;
 
-    const limit = elements.batchSlider.value;
-    
+    const limit = el.batchSlider.value;
     isProcessing = true;
-    elements.startBatchBtn.disabled = true;
-    elements.btnIcon.textContent = '⏳';
-    elements.btnText.textContent = 'Startet...';
-    elements.btnHint.textContent = '';
-    elements.btnHint.classList.add('hidden');
+    isHistoryMode = false;
+    el.startBatchBtn.disabled = true;
+    el.btnIcon.innerHTML = '&#x23F3;';
+    el.btnText.textContent = 'Startet...';
+    el.btnHint.classList.add('hidden');
 
     try {
       const res = await fetch(`${API_URL}/api/admin/process-pending-ai?limit=${limit}`, {
@@ -563,14 +648,21 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         throw new Error(data.error || 'Processing failed');
       }
 
-      if (data.jobId) {
+      if (data.jobId && data.events && data.events.length > 0) {
         currentJobId = data.jobId;
+        events = data.events;
         startTime = Date.now();
-        showProgressSection(data.total || limit);
+        lastChangedAt = null;
+        pollInterval = POLL_MIN_INTERVAL;
+        
+        showPipeline();
+        renderEventList();
+        selectEvent(events[0].id);
         startPolling();
         startElapsedTimer();
+        
+        el.btnText.textContent = 'Verarbeite...';
       } else {
-        // No events to process
         alert('Keine Events zu verarbeiten');
         resetButton();
       }
@@ -582,34 +674,446 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
-  function showProgressSection(total) {
-    elements.progressSection.classList.remove('hidden');
-    elements.progressBar.style.width = '0%';
-    elements.progressText.textContent = `0 / ${total}`;
-    elements.progressPercent.textContent = '0%';
-    elements.statProcessed.textContent = '0';
-    elements.statPublished.textContent = '0';
-    elements.statReview.textContent = '0';
-    elements.statFailed.textContent = '0';
-    elements.elapsedTime.textContent = '0:00';
-    elements.btnText.textContent = 'Verarbeite...';
-    
-    elements.progressSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  function showPipeline() {
+    el.progressSection.classList.remove('hidden');
+    el.pipelineSection.classList.remove('hidden');
+    el.progressBar.style.width = '0%';
+    el.progressText.textContent = `0 / ${events.length}`;
+    el.progressPercent.textContent = '0%';
+    el.statPublished.textContent = '0';
+    el.statReview.textContent = '0';
+    el.statFailed.textContent = '0';
+    el.elapsedTime.textContent = '0:00';
+    el.listCount.textContent = events.length;
+    el.costBadge.classList.add('hidden');
   }
 
+  function renderEventList() {
+    el.eventList.innerHTML = '';
+    
+    events.forEach(event => {
+      const item = document.createElement('div');
+      item.id = `event-item-${event.id}`;
+      item.className = getEventItemClasses(event);
+      item.onclick = () => selectEvent(event.id);
+      
+      item.innerHTML = `
+        <span class="status-dot status-dot--${event.processing_status}"></span>
+        <span class="flex-1 truncate text-sm">${escapeHtml(event.title)}</span>
+        ${event.result_status ? `<span class="text-xs px-1.5 py-0.5 rounded ${getResultBadgeClass(event.result_status)}">${event.result_status}</span>` : ''}
+      `;
+      
+      el.eventList.appendChild(item);
+    });
+  }
+
+  function getEventItemClasses(event) {
+    let classes = 'event-list-item';
+    classes += ` event-list-item--${event.processing_status}`;
+    if (event.id === selectedEventId) classes += ' event-list-item--selected';
+    if (isHistoryMode) classes += ' event-list-item--history';
+    return classes;
+  }
+
+  function getResultBadgeClass(status) {
+    const map = {
+      published: 'bg-green-100 text-green-700',
+      pending_review: 'bg-amber-100 text-amber-700',
+      rejected: 'bg-red-100 text-red-700',
+      incomplete: 'bg-gray-100 text-gray-700',
+      archived: 'bg-gray-100 text-gray-500',
+    };
+    return map[status] || 'bg-gray-100 text-gray-700';
+  }
+
+  function selectEvent(eventId) {
+    selectedEventId = eventId;
+    
+    // Update list selection
+    document.querySelectorAll('.event-list-item').forEach(item => {
+      item.classList.remove('event-list-item--selected');
+    });
+    const selectedItem = document.getElementById(`event-item-${eventId}`);
+    if (selectedItem) {
+      selectedItem.classList.add('event-list-item--selected');
+    }
+    
+    // Render detail panel
+    renderDetailPanel();
+  }
+
+  function renderDetailPanel() {
+    const event = events.find(e => e.id === selectedEventId);
+    if (!event) {
+      el.detailEmpty.classList.remove('hidden');
+      el.detailContent.classList.add('hidden');
+      return;
+    }
+
+    el.detailEmpty.classList.add('hidden');
+    el.detailContent.classList.remove('hidden');
+
+    // Header
+    document.getElementById('detail-title').textContent = event.title;
+    const sourceLink = document.getElementById('detail-source-link');
+    const sourceName = document.getElementById('detail-source-name');
+    if (event.source_url) {
+      sourceLink.href = event.source_url;
+      sourceLink.classList.remove('hidden');
+      sourceName.textContent = event.source_name || event.source_url;
+    } else {
+      sourceLink.classList.add('hidden');
+    }
+
+    // Status badge
+    const statusBadge = document.getElementById('detail-status-badge');
+    statusBadge.textContent = event.processing_status;
+    statusBadge.className = `flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeClass(event.processing_status)}`;
+
+    // Missing fields
+    const missingSection = document.getElementById('detail-missing');
+    if (event.missing_fields && event.missing_fields.length > 0) {
+      missingSection.classList.remove('hidden');
+      document.getElementById('detail-missing-list').textContent = event.missing_fields.join(', ');
+    } else {
+      missingSection.classList.add('hidden');
+    }
+
+    // Basic fields
+    renderBasicFields(event);
+    
+    // AI fields
+    renderAIFields(event);
+    
+    // Scores
+    renderScores(event);
+    
+    // Meta
+    renderMeta(event);
+    
+    // Error
+    renderError(event);
+  }
+
+  function getStatusBadgeClass(status) {
+    const map = {
+      waiting: 'bg-gray-100 text-gray-600',
+      processing: 'bg-amber-100 text-amber-700',
+      done: 'bg-green-100 text-green-700',
+      error: 'bg-red-100 text-red-700',
+    };
+    return map[status] || 'bg-gray-100 text-gray-600';
+  }
+
+  function renderBasicFields(event) {
+    const container = document.getElementById('fields-basic');
+    const existing = event.existing || {};
+    const diff = event.diff || {};
+    
+    const fields = [
+      { key: 'start_datetime', label: 'Datum', format: v => v ? formatDateTime(v) : null },
+      { key: 'location_address', label: 'Ort' },
+      { key: 'price_min', label: 'Preis Min', format: v => v !== null ? `${v} EUR` : null },
+      { key: 'price_max', label: 'Preis Max', format: v => v !== null ? `${v} EUR` : null },
+      { key: 'age_min', label: 'Alter Min', format: v => v !== null ? `${v}+` : null },
+      { key: 'age_max', label: 'Alter Max', format: v => v !== null ? `bis ${v}` : null },
+      { key: 'is_indoor', label: 'Indoor', format: v => v ? 'Ja' : 'Nein' },
+      { key: 'is_outdoor', label: 'Outdoor', format: v => v ? 'Ja' : 'Nein' },
+    ];
+    
+    container.innerHTML = fields.map(f => {
+      const existingVal = existing[f.key];
+      const diffEntry = diff[f.key];
+      const displayVal = f.format ? f.format(existingVal) : existingVal;
+      
+      let cardClass = 'field-card';
+      let valueHtml = '';
+      let aiBadge = '';
+      
+      if (diffEntry) {
+        if (diffEntry.type === 'added') {
+          cardClass += ' field-card--added';
+          const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
+          valueHtml = `<span class="text-green-700">${escapeHtml(String(newVal || '--'))}</span>`;
+          aiBadge = '<span class="ai-badge">AI</span>';
+        } else if (diffEntry.type === 'changed') {
+          cardClass += ' field-card--changed';
+          const oldVal = f.format ? f.format(diffEntry.old_value) : diffEntry.old_value;
+          const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
+          valueHtml = `<span class="text-gray-400 line-through">${escapeHtml(String(oldVal || '--'))}</span> <span class="text-amber-700">${escapeHtml(String(newVal || '--'))}</span>`;
+          aiBadge = '<span class="ai-badge">AI</span>';
+        } else {
+          valueHtml = `<span class="text-gray-900">${escapeHtml(String(displayVal || '--'))}</span>`;
+        }
+      } else if (displayVal === null || displayVal === undefined || displayVal === '') {
+        cardClass += ' field-card--empty';
+        valueHtml = '<span class="text-gray-400">--leer--</span>';
+      } else {
+        valueHtml = `<span class="text-gray-900">${escapeHtml(String(displayVal))}</span>`;
+      }
+      
+      return `
+        <div class="${cardClass}">
+          <p class="text-xs text-gray-500 mb-1">${f.label}${aiBadge}</p>
+          <p class="text-sm font-medium">${valueHtml}</p>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAIFields(event) {
+    const container = document.getElementById('fields-ai');
+    const section = document.getElementById('section-ai');
+    const proposed = event.proposed;
+    
+    if (!proposed) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    
+    const fields = [
+      { key: 'categories', label: 'Kategorien', format: v => Array.isArray(v) ? v.join(', ') : v },
+      { key: 'age_rating', label: 'Altersfreigabe' },
+      { key: 'ai_summary_short', label: 'AI Zusammenfassung' },
+      { key: 'ai_fit_blurb', label: 'Familien-Fit' },
+    ];
+    
+    container.innerHTML = fields.map(f => {
+      const val = proposed[f.key];
+      const displayVal = f.format ? f.format(val) : val;
+      
+      if (!displayVal) return '';
+      
+      return `
+        <div class="field-card field-card--added col-span-2">
+          <p class="text-xs text-gray-500 mb-1">${f.label}<span class="ai-badge">AI</span></p>
+          <p class="text-sm text-green-700">${escapeHtml(String(displayVal))}</p>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderScores(event) {
+    const container = document.getElementById('fields-scores');
+    const section = document.getElementById('section-scores');
+    const proposed = event.proposed;
+    
+    if (!proposed || proposed.family_fit_score === null) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    
+    const scores = [
+      { key: 'family_fit_score', label: 'Family Fit' },
+      { key: 'relevance_score', label: 'Relevanz' },
+      { key: 'quality_score', label: 'Qualitaet' },
+      { key: 'stressfree_score', label: 'Stressfrei' },
+    ];
+    
+    container.innerHTML = scores.map(s => {
+      const val = proposed[s.key];
+      if (val === null || val === undefined) return '';
+      
+      const colorClass = val >= 70 ? 'high' : val >= 40 ? 'medium' : 'low';
+      
+      return `
+        <div class="field-card">
+          <div class="flex justify-between items-center mb-2">
+            <span class="text-xs text-gray-500">${s.label}</span>
+            <span class="text-sm font-bold">${val}</span>
+          </div>
+          <div class="score-bar-container">
+            <div class="score-bar-fill score-bar-fill--${colorClass}" style="width: ${val}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderMeta(event) {
+    const container = document.getElementById('fields-meta');
+    const section = document.getElementById('section-meta');
+    const meta = event.meta;
+    
+    if (!meta) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    
+    container.innerHTML = `
+      <div class="field-card">
+        <p class="text-xs text-gray-500">Model</p>
+        <p class="text-sm font-medium">${escapeHtml(meta.model || '--')}</p>
+      </div>
+      <div class="field-card">
+        <p class="text-xs text-gray-500">Konfidenz</p>
+        <p class="text-sm font-medium">${meta.confidence ? (meta.confidence * 100).toFixed(0) + '%' : '--'}</p>
+      </div>
+      <div class="field-card">
+        <p class="text-xs text-gray-500">Kosten</p>
+        <p class="text-sm font-medium">${meta.cost_usd ? '$' + meta.cost_usd.toFixed(4) : '--'}</p>
+      </div>
+      <div class="field-card">
+        <p class="text-xs text-gray-500">Zeit</p>
+        <p class="text-sm font-medium">${meta.processing_time_ms ? meta.processing_time_ms + 'ms' : '--'}</p>
+      </div>
+    `;
+  }
+
+  function renderError(event) {
+    const section = document.getElementById('section-error');
+    const error = event.error;
+    
+    if (!error) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    document.getElementById('error-message').textContent = error.message || 'Unbekannter Fehler';
+    document.getElementById('error-step').textContent = `Schritt: ${error.step || 'unbekannt'} | ${error.retryable ? 'Wiederholbar' : 'Nicht wiederholbar'}`;
+  }
+
+  function formatDateTime(isoString) {
+    if (!isoString) return null;
+    const d = new Date(isoString);
+    return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // ========================================
+  // POLLING
+  // ========================================
   function startPolling() {
-    if (pollInterval) clearInterval(pollInterval);
-    pollInterval = setInterval(pollJobStatus, 1500);
     pollJobStatus();
   }
 
   function stopPolling() {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
+    if (pollTimeout) {
+      clearTimeout(pollTimeout);
+      pollTimeout = null;
     }
   }
 
+  async function pollJobStatus() {
+    if (!currentJobId) return;
+
+    try {
+      const url = lastChangedAt 
+        ? `${API_URL}/api/admin/ai-job-status/${currentJobId}?changed_since=${encodeURIComponent(lastChangedAt)}`
+        : `${API_URL}/api/admin/ai-job-status/${currentJobId}`;
+      
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        console.error('Failed to poll job status');
+        schedulePoll();
+        return;
+      }
+
+      const { data } = await res.json();
+      if (!data) {
+        schedulePoll();
+        return;
+      }
+
+      // Check if there are changes
+      if (data.last_updated_at !== lastChangedAt) {
+        pollInterval = POLL_MIN_INTERVAL;
+        lastChangedAt = data.last_updated_at;
+        updateFromJobStatus(data);
+      } else {
+        pollInterval = Math.min(pollInterval * 1.5, POLL_MAX_INTERVAL);
+      }
+
+      if (data.status === 'completed' || data.status === 'failed') {
+        // Final fetch to get all data
+        const finalRes = await fetch(`${API_URL}/api/admin/ai-job-status/${currentJobId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (finalRes.ok) {
+          const { data: finalData } = await finalRes.json();
+          updateFromJobStatus(finalData);
+        }
+        onJobComplete(data);
+        return;
+      }
+
+      schedulePoll();
+
+    } catch (e) {
+      console.error('Polling error:', e);
+      schedulePoll();
+    }
+  }
+
+  function schedulePoll() {
+    pollTimeout = setTimeout(pollJobStatus, pollInterval);
+  }
+
+  function updateFromJobStatus(data) {
+    // Update progress
+    const percent = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
+    el.progressBar.style.width = `${percent}%`;
+    el.progressText.textContent = `${data.processed} / ${data.total}`;
+    el.progressPercent.textContent = `${percent}%`;
+
+    // Update summary
+    if (data.summary) {
+      el.statPublished.textContent = data.summary.published || 0;
+      el.statReview.textContent = data.summary.pending_review || 0;
+      el.statFailed.textContent = data.summary.failed || 0;
+    }
+
+    // Update cost
+    if (data.total_cost_usd > 0) {
+      el.costBadge.classList.remove('hidden');
+      el.totalCost.textContent = '$' + data.total_cost_usd.toFixed(3);
+    }
+
+    // Merge event updates
+    if (data.events && data.events.length > 0) {
+      data.events.forEach(updatedEvent => {
+        const idx = events.findIndex(e => e.id === updatedEvent.id);
+        if (idx !== -1) {
+          events[idx] = { ...events[idx], ...updatedEvent };
+        }
+      });
+      
+      renderEventList();
+      
+      // Auto-select current processing event
+      if (data.currentEventId && data.currentEventId !== selectedEventId) {
+        selectEvent(data.currentEventId);
+        scrollEventIntoView(data.currentEventId);
+      } else if (selectedEventId) {
+        renderDetailPanel();
+      }
+    }
+  }
+
+  function scrollEventIntoView(eventId) {
+    const item = document.getElementById(`event-item-${eventId}`);
+    if (item) {
+      item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // ========================================
+  // ELAPSED TIMER
+  // ========================================
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
     elapsedInterval = setInterval(updateElapsedTime, 1000);
@@ -627,155 +1131,63 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
-    elements.elapsedTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    el.elapsedTime.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  async function pollJobStatus() {
-    if (!currentJobId) return;
-
-    try {
-      const res = await fetch(`${API_URL}/api/admin/ai-job-status/${currentJobId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (!res.ok) {
-        console.error('Failed to poll job status');
-        return;
-      }
-
-      const { data } = await res.json();
-      if (!data) return;
-
-      updateProgressUI(data);
-
-      if (data.status === 'completed' || data.status === 'failed') {
-        stopPolling();
-        stopElapsedTimer();
-        onJobComplete(data);
-      }
-
-    } catch (e) {
-      console.error('Polling error:', e);
-    }
-  }
-
-  function updateProgressUI(data) {
-    const percent = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
-    
-    elements.progressBar.style.width = `${percent}%`;
-    elements.progressText.textContent = `${data.processed} / ${data.total}`;
-    elements.progressPercent.textContent = `${percent}%`;
-    
-    elements.statProcessed.textContent = data.processed || 0;
-    
-    if (data.summary) {
-      elements.statPublished.textContent = data.summary.published || 0;
-      elements.statReview.textContent = data.summary.pending_review || 0;
-      elements.statFailed.textContent = data.summary.failed || 0;
-    }
-
-    // Update results list in real-time
-    if (data.results && data.results.length > results.length) {
-      const newResults = data.results.slice(results.length);
-      results = data.results;
-      addResultsToList(newResults);
-    }
-  }
-
-  function addResultsToList(newResults) {
-    if (!elements.resultsSection.classList.contains('hidden') === false) {
-      elements.resultsSection.classList.remove('hidden');
-    }
-    
-    // Clear "no results" message if present
-    if (elements.resultsList.querySelector('p.text-gray-400')) {
-      elements.resultsList.innerHTML = '';
-    }
-    
-    elements.resultsSection.classList.remove('hidden');
-    
-    newResults.forEach(r => {
-      const item = createResultItem(r, true);
-      elements.resultsList.insertBefore(item, elements.resultsList.firstChild);
-    });
-  }
-
-  function createResultItem(r, isNew = false) {
-    const div = document.createElement('div');
-    div.className = `result-item ${isNew ? 'new' : ''}`;
-    
-    let statusBadge = '';
-    let statusClass = '';
-    
-    if (r.status === 'published') {
-      statusBadge = '→ Published';
-      statusClass = 'bg-green-100 text-green-700';
-    } else if (r.status === 'pending_review') {
-      statusBadge = '→ Review';
-      statusClass = 'bg-amber-100 text-amber-700';
-    } else if (r.error) {
-      statusBadge = 'Fehler';
-      statusClass = 'bg-red-100 text-red-700';
-    } else {
-      statusBadge = r.status || 'Unbekannt';
-      statusClass = 'bg-gray-100 text-gray-700';
-    }
-
-    div.innerHTML = `
-      <div class="flex items-center gap-3 min-w-0 flex-1">
-        <a href="/event/${r.slug || r.id}" target="_blank" class="font-medium text-gray-900 hover:text-primary-600 truncate" title="${r.title || r.id}">
-          ${r.title || r.id}
-        </a>
-      </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
-        <span class="text-xs px-2 py-1 rounded-full ${statusClass}">${statusBadge}</span>
-        ${r.familyFit ? `<span class="text-xs text-gray-500">${r.familyFit}%</span>` : ''}
-        ${r.processingTime ? `<span class="text-xs text-gray-400">${r.processingTime}ms</span>` : ''}
-      </div>
-    `;
-    
-    return div;
-  }
-
+  // ========================================
+  // JOB COMPLETION
+  // ========================================
   function onJobComplete(data) {
-    elements.progressSection.classList.add('hidden');
+    stopPolling();
+    stopElapsedTimer();
+    isHistoryMode = true;
+    
+    // Update UI to history mode
+    renderEventList();
+    
+    // Hide progress after a moment
+    setTimeout(() => {
+      el.progressSection.classList.add('hidden');
+    }, 2000);
+    
     resetButton();
     reloadPendingCount();
-    
-    // Show final results
-    if (results.length === 0 && data.results) {
-      results = data.results;
-      elements.resultsSection.classList.remove('hidden');
-      elements.resultsList.innerHTML = '';
-      data.results.slice().reverse().forEach(r => {
-        const item = createResultItem(r);
-        elements.resultsList.appendChild(item);
-      });
-    }
+  }
+
+  function cancelProcessing() {
+    stopPolling();
+    stopElapsedTimer();
+    el.progressSection.classList.add('hidden');
+    el.pipelineSection.classList.add('hidden');
+    resetButton();
+    reloadPendingCount();
+  }
+
+  function resetButton() {
+    isProcessing = false;
+    currentJobId = null;
+    el.startBatchBtn.disabled = false;
+    el.btnIcon.innerHTML = '&#x1F680;';
+    el.btnText.textContent = 'Start Batch';
   }
 
   async function reloadPendingCount() {
     try {
-      const pendingRes = await fetch(`${API_URL}/api/admin/pending-ai-count`, {
+      const res = await fetch(`${API_URL}/api/admin/pending-ai-count`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (pendingRes.ok) {
-        const pending = await pendingRes.json();
-        const pendingCount = pending.data?.count || 0;
-        elements.pendingAiCount.textContent = pendingCount;
-        updateButtonState(pendingCount);
+      if (res.ok) {
+        const pending = await res.json();
+        const count = pending.data?.count || 0;
+        el.pendingAiCount.textContent = count;
+        updateButtonState(count);
         
-        // Update card color
-        if (pendingCount > 0) {
-          elements.pendingCard.classList.remove('border-gray-300');
-          elements.pendingCard.classList.add('border-amber-400');
-          elements.pendingAiCount.classList.remove('text-gray-900');
-          elements.pendingAiCount.classList.add('text-amber-500');
+        if (count > 0) {
+          el.pendingCard.classList.remove('border-gray-300');
+          el.pendingCard.classList.add('border-amber-400');
         } else {
-          elements.pendingCard.classList.remove('border-amber-400');
-          elements.pendingCard.classList.add('border-gray-300');
-          elements.pendingAiCount.classList.remove('text-amber-500');
-          elements.pendingAiCount.classList.add('text-gray-900');
+          el.pendingCard.classList.remove('border-amber-400');
+          el.pendingCard.classList.add('border-gray-300');
         }
       }
     } catch (e) {
@@ -783,34 +1195,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
-  function resetButton() {
-    isProcessing = false;
-    currentJobId = null;
-    elements.startBatchBtn.disabled = false;
-    elements.btnIcon.textContent = '🚀';
-    elements.btnText.textContent = 'Start Batch';
-  }
-
-  function cancelProcessing() {
-    stopPolling();
-    stopElapsedTimer();
-    elements.progressSection.classList.add('hidden');
-    resetButton();
-    reloadPendingCount();
-  }
-
-  function clearResults() {
-    results = [];
-    elements.resultsList.innerHTML = '<p class="text-gray-400 text-center py-8">Keine Ergebnisse</p>';
-    elements.resultsSection.classList.add('hidden');
-  }
-
-  // Diagnostics functions
+  // ========================================
+  // DIAGNOSTICS
+  // ========================================
   async function loadDiagnostics() {
     const diagLoading = document.getElementById('diagnostics-loading');
     const diagContent = document.getElementById('diagnostics-content');
     const diagError = document.getElementById('diagnostics-error');
-    const diagErrorMsg = document.getElementById('diagnostics-error-msg');
     
     diagLoading.classList.remove('hidden');
     diagContent.classList.add('hidden');
@@ -823,14 +1214,52 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       if (!res.ok) throw new Error('Failed to fetch diagnostics');
       
-      const { data, success, error } = await res.json();
+      const { data, success } = await res.json();
       
       if (!success || !data.reachable) {
-        throw new Error(error || 'AI-Worker nicht erreichbar');
+        throw new Error('AI-Worker nicht erreichbar');
       }
 
-      // Update UI elements
-      updateDiagnosticsUI(data);
+      // Update worker status
+      const workerDot = document.getElementById('diag-worker-dot');
+      const workerStatus = document.getElementById('diag-worker-status');
+      if (data.reachable) {
+        workerDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+        workerStatus.textContent = 'Verbunden';
+        document.getElementById('diag-worker').className = 'p-3 rounded-xl bg-green-50';
+      }
+
+      // Update Redis status
+      const redisDot = document.getElementById('diag-redis-dot');
+      const redisStatus = document.getElementById('diag-redis-status');
+      const redisCheck = data.checks?.redis;
+      if (redisCheck?.status === 'ok') {
+        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+        redisStatus.textContent = 'Verbunden';
+        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-green-50';
+      } else {
+        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+        redisStatus.textContent = 'Nicht verfuegbar';
+        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-amber-50';
+      }
+
+      // Update OpenAI status
+      const openaiDot = document.getElementById('diag-openai-dot');
+      const openaiStatus = document.getElementById('diag-openai-status');
+      const openaiCheck = data.checks?.openai;
+      if (openaiCheck?.status === 'ok') {
+        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+        openaiStatus.textContent = 'Erreichbar';
+        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-green-50';
+      } else {
+        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+        openaiStatus.textContent = 'Nicht konfiguriert';
+      }
+
+      // Config info
+      document.getElementById('diag-worker-url').textContent = data.worker_url || '--';
+      document.getElementById('diag-version').textContent = data.basic?.version || '--';
+      document.getElementById('diag-budget').textContent = data.metrics?.budget_status || '--';
       
       diagLoading.classList.add('hidden');
       diagContent.classList.remove('hidden');
@@ -839,114 +1268,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       console.error('Diagnostics error:', e);
       diagLoading.classList.add('hidden');
       diagError.classList.remove('hidden');
-      diagErrorMsg.textContent = e.message || 'Unbekannter Fehler';
     }
   }
 
-  function updateDiagnosticsUI(data) {
-    // Worker status
-    const workerDot = document.getElementById('diag-worker-dot');
-    const workerStatus = document.getElementById('diag-worker-status');
-    
-    if (data.reachable) {
-      workerDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
-      workerStatus.textContent = data.status === 'ok' ? 'Verbunden & OK' : `Status: ${data.status}`;
-      document.getElementById('diag-worker').className = 'p-3 rounded-xl bg-green-50';
-    } else {
-      workerDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
-      workerStatus.textContent = 'Nicht erreichbar';
-      document.getElementById('diag-worker').className = 'p-3 rounded-xl bg-red-50';
-    }
-
-    // Redis status
-    const redisDot = document.getElementById('diag-redis-dot');
-    const redisStatus = document.getElementById('diag-redis-status');
-    const redisCheck = data.checks?.redis;
-    
-    if (redisCheck) {
-      if (redisCheck.status === 'ok') {
-        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
-        redisStatus.textContent = 'Verbunden';
-        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-green-50';
-      } else if (redisCheck.status === 'error' && redisCheck.error?.includes('Connect call failed')) {
-        // Redis not configured - show as info, not error
-        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
-        redisStatus.textContent = 'Nicht konfiguriert';
-        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-amber-50';
-      } else {
-        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
-        redisStatus.textContent = redisCheck.error || redisCheck.status;
-        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-red-50';
-      }
-    } else {
-      redisDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-      redisStatus.textContent = 'Status unbekannt';
-    }
-
-    // OpenAI status
-    const openaiDot = document.getElementById('diag-openai-dot');
-    const openaiStatus = document.getElementById('diag-openai-status');
-    const openaiCheck = data.checks?.openai;
-    
-    if (openaiCheck) {
-      if (openaiCheck.status === 'ok') {
-        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
-        openaiStatus.textContent = 'API erreichbar';
-        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-green-50';
-      } else if (openaiCheck.status === 'not_configured') {
-        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-        openaiStatus.textContent = 'Nicht konfiguriert';
-        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-gray-50';
-      } else {
-        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
-        openaiStatus.textContent = openaiCheck.error || openaiCheck.status;
-        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-red-50';
-      }
-    } else {
-      openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-      openaiStatus.textContent = 'Status unbekannt';
-    }
-
-    // Issues
-    const issuesSection = document.getElementById('diag-issues');
-    const issuesList = document.getElementById('diag-issues-list');
-    const issues = data.metrics?.issues || [];
-    
-    if (issues.length > 0) {
-      issuesSection.classList.remove('hidden');
-      issuesList.innerHTML = issues.map(issue => `<li>• ${issue}</li>`).join('');
-    } else {
-      issuesSection.classList.add('hidden');
-    }
-
-    // Config info
-    document.getElementById('diag-worker-url').textContent = data.worker_url || '--';
-    document.getElementById('diag-version').textContent = data.basic?.version || '--';
-    document.getElementById('diag-budget').textContent = data.metrics?.budget_status || '--';
-
-    // Update main health badge based on detailed status
-    if (data.status === 'ok') {
-      elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-sm font-medium';
-      elements.healthDot.className = 'w-2 h-2 rounded-full bg-green-500';
-      elements.healthText.textContent = 'OK';
-    } else if (data.status === 'degraded') {
-      elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-medium';
-      elements.healthDot.className = 'w-2 h-2 rounded-full bg-amber-500';
-      elements.healthText.textContent = 'Eingeschränkt';
-    } else {
-      elements.healthBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-sm font-medium';
-      elements.healthDot.className = 'w-2 h-2 rounded-full bg-red-500';
-      elements.healthText.textContent = 'Fehler';
-    }
-  }
-
-  // Event listeners
-  elements.startBatchBtn.addEventListener('click', startBatch);
-  elements.cancelBtn.addEventListener('click', cancelProcessing);
-  elements.clearResultsBtn.addEventListener('click', clearResults);
-  document.getElementById('refresh-diagnostics-btn').addEventListener('click', loadDiagnostics);
-
-  // Initial load
+  // ========================================
+  // INIT
+  // ========================================
   loadData();
   loadDiagnostics();
 </script>
