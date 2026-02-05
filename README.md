@@ -205,6 +205,7 @@ Für automatische Trending-Berechnung, `vercel.json` erweitern:
 - [CRON_SETUP.md](CRON_SETUP.md) - Cron-Job Konfiguration
 - [docs/API.md](docs/API.md) - API Dokumentation
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - Architektur-Übersicht
+- [docs/REDIS_SETUP.md](docs/REDIS_SETUP.md) - Redis einrichten (lokal, Railway, Vercel)
 - [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - Fehlerbehebung
 
 ## Lizenz

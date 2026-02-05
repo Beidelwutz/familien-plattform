@@ -13,6 +13,7 @@ Häufige Probleme und deren Lösungen.
   - [403 Forbidden (Admin)](#403-forbidden-admin-endpoints)
   - [Rate Limit (429)](#rate-limit-erreicht-429)
 - [API-Fehler](#api-fehler)
+- [Redis / AI-Batch](#redis--ai-batch)
 - [Frontend-Probleme](#frontend-probleme)
 - [Entwicklungsumgebung](#entwicklungsumgebung)
 
@@ -424,6 +425,18 @@ has been blocked by CORS policy
    ```bash
    npx prisma db pull
    ```
+
+---
+
+## Redis / AI-Batch
+
+### 503 beim AI-Batch oder „Live-Fortschritt nicht verfügbar“
+
+**Symptom:** Beim Klick auf „Start Batch“ auf der Admin-Seite erscheint ein Hinweis, dass der Live-Fortschritt nicht verfügbar ist (Redis nicht konfiguriert). Der Batch läuft im Hintergrund weiter.
+
+**Ursache:** Das Backend (api.kiezling.com) hat keine Verbindung zu Redis. Redis wird nur für den Live-Job-Status genutzt; ohne Redis gibt es keine Echtzeit-Updates.
+
+**Lösung:** Redis einrichten und `REDIS_URL` setzen. Ausführliche Anleitung in **[docs/REDIS_SETUP.md](REDIS_SETUP.md)** – inkl. Railway (AI-Worker) und Vercel (Backend).
 
 ---
 
