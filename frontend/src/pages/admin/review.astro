@@ -323,6 +323,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Quelle</h3>
           <div id="detail-source" class="bg-gray-50 rounded-lg p-4"></div>
         </div>
+        <div>
+          <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">RAW-Daten / Import</h3>
+          <p class="text-xs text-gray-500 mb-2">Rohdaten von der Quelle und vom AI-Worker (womit am Anfang gearbeitet wurde)</p>
+          <div id="detail-raw-loading" class="hidden py-4 text-center text-gray-500 text-sm">Lade Rohdaten…</div>
+          <div id="detail-raw-content" class="space-y-4"></div>
+        </div>
       </div>
       <div class="p-6 border-t border-gray-200 flex flex-wrap gap-3 justify-end bg-gray-50 rounded-b-2xl">
         <button id="detail-approve" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition-colors flex items-center gap-2">
@@ -342,6 +348,50 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
           Ablehnen
+        </button>
+        <button id="detail-delete" class="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition-colors flex items-center gap-2" title="Event dauerhaft löschen">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Löschen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" id="delete-modal">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-red-600">Event dauerhaft löschen</h3>
+        <button class="modal-close p-1 hover:bg-gray-100 rounded-lg">
+          <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-6 h-6 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <p class="text-sm text-red-700 font-medium">Diese Aktion kann nicht rückgängig gemacht werden!</p>
+            <p class="text-sm text-red-600 mt-1">Das Event und alle zugehörigen Daten (Scores, Kategorien, Quellen-Verknüpfungen) werden permanent gelöscht.</p>
+          </div>
+        </div>
+      </div>
+      <div class="mb-4">
+        <p class="text-sm text-gray-600 mb-2">Event das gelöscht wird:</p>
+        <p id="delete-event-title" class="font-medium text-gray-900 bg-gray-50 p-3 rounded-lg"></p>
+      </div>
+      <div class="flex gap-3">
+        <button id="delete-cancel" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors">Abbrechen</button>
+        <button id="delete-confirm" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Endgültig löschen
         </button>
       </div>
     </div>
@@ -723,13 +773,23 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+                <button class="action-btn w-10 h-10 rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors flex items-center justify-center" data-action="delete" data-id="${event.id}" title="Dauerhaft löschen">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
               </div>
             ` : `
-              <div class="flex-shrink-0">
+              <div class="flex flex-col sm:flex-row gap-2 flex-shrink-0">
                 <button class="action-btn w-10 h-10 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors flex items-center justify-center" data-action="view" data-id="${event.id}" title="Details anzeigen">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
+                <button class="action-btn w-10 h-10 rounded-lg bg-gray-800 text-white hover:bg-gray-900 transition-colors flex items-center justify-center" data-action="delete" data-id="${event.id}" title="Dauerhaft löschen">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
               </div>
@@ -757,8 +817,125 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         else if (action === 'edit') openEditModal(id);
         else if (action === 'reject') openRejectModal(id);
         else if (action === 'view') openDetailModal(id);
+        else if (action === 'delete') openDeleteModal(id);
       });
     });
+  }
+
+  // Load raw/import data for event and render in detail modal
+  async function loadAndShowRawData(eventId) {
+    const loadingEl = document.getElementById('detail-raw-loading');
+    const contentEl = document.getElementById('detail-raw-content');
+    loadingEl.classList.remove('hidden');
+    contentEl.innerHTML = '';
+    try {
+      const res = await apiFetch(`/api/admin/events/${eventId}/raw-data`);
+      if (!res.success || !res.data) {
+        contentEl.innerHTML = '<p class="text-sm text-gray-500">Keine Rohdaten verfügbar</p>';
+        return;
+      }
+      contentEl.innerHTML = renderRawDataSection(res.data);
+    } catch (e) {
+      contentEl.innerHTML = '<p class="text-sm text-red-500">Rohdaten konnten nicht geladen werden: ' + (e.message || 'Unbekannter Fehler') + '</p>';
+    } finally {
+      loadingEl.classList.add('hidden');
+    }
+  }
+
+  function renderRawDataSection(data) {
+    const items = data.raw_event_items || [];
+    const sources = data.event_sources || [];
+    if (items.length === 0 && sources.length === 0) {
+      return '<p class="text-sm text-gray-500">Keine Rohdaten für dieses Event gespeichert.</p>';
+    }
+    let html = '';
+    if (items.length > 0) {
+      html += '<div class="space-y-3">';
+      html += '<p class="text-xs font-semibold text-gray-600 uppercase">Import-Batch (RawEventItem)</p>';
+      items.forEach((item, i) => {
+        const sourceName = item.source?.name || 'Unbekannt';
+        const fetchedAt = item.fetched_at ? new Date(item.fetched_at).toLocaleString('de-DE') : '-';
+        html += '<div class="border border-gray-200 rounded-lg overflow-hidden">';
+        const isFirst = i === 0;
+        html += '<button type="button" class="raw-toggle w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-left text-sm font-medium text-gray-700 flex items-center justify-between" data-target="raw-item-' + i + '">';
+        html += '<span>' + sourceName + ' · ' + fetchedAt + (item.ingest_status ? ' · ' + item.ingest_status : '') + '</span>';
+        html += '<svg class="raw-chevron w-4 h-4 text-gray-500 transition-transform" data-target="raw-item-' + i + '" style="' + (isFirst ? 'transform: rotate(180deg)' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        html += '</button>';
+        html += '<div id="raw-item-' + i + '" class="raw-panel px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs overflow-x-auto' + (isFirst ? '' : ' hidden') + '">';
+        if (item.extracted_fields && Object.keys(item.extracted_fields).length) {
+          html += '<p class="font-semibold text-gray-600 mb-1">Extrahierte Felder (vom Parser)</p>';
+          html += '<pre class="whitespace-pre-wrap break-words text-gray-700">' + escapeHtml(JSON.stringify(item.extracted_fields, null, 2)) + '</pre>';
+        }
+        if (item.raw_payload && Object.keys(item.raw_payload).length) {
+          html += '<p class="font-semibold text-gray-600 mb-1 mt-2">Raw Payload</p>';
+          html += '<pre class="whitespace-pre-wrap break-words text-gray-700">' + escapeHtml(JSON.stringify(item.raw_payload, null, 2)) + '</pre>';
+        }
+        if (item.ai_suggestions && Object.keys(item.ai_suggestions).length) {
+          html += '<p class="font-semibold text-gray-600 mb-1 mt-2">AI-Vorschläge</p>';
+          html += '<pre class="whitespace-pre-wrap break-words text-gray-700">' + escapeHtml(JSON.stringify(item.ai_suggestions, null, 2)) + '</pre>';
+        }
+        const hasExtracted = item.extracted_fields && Object.keys(item.extracted_fields).length > 0;
+        const hasPayload = item.raw_payload && Object.keys(item.raw_payload).length > 0;
+        const hasAi = item.ai_suggestions && Object.keys(item.ai_suggestions).length > 0;
+        if (!hasExtracted && !hasPayload && !hasAi) {
+          html += '<p class="text-gray-500">Keine weiteren Daten</p>';
+        }
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
+    if (sources.length > 0) {
+      html += '<div class="space-y-3 mt-4">';
+      html += '<p class="text-xs font-semibold text-gray-600 uppercase">Event-Quellen (EventSource)</p>';
+      sources.forEach((es, i) => {
+        const sourceName = es.source?.name || 'Unbekannt';
+        const fetchedAt = es.fetched_at ? new Date(es.fetched_at).toLocaleString('de-DE') : '-';
+        html += '<div class="border border-gray-200 rounded-lg overflow-hidden">';
+        const isFirstSrc = items.length === 0 && i === 0;
+        html += '<button type="button" class="raw-toggle w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-left text-sm font-medium text-gray-700 flex items-center justify-between" data-target="raw-src-' + i + '">';
+        html += '<span>' + sourceName + ' · ' + fetchedAt + '</span>';
+        html += '<svg class="raw-chevron w-4 h-4 text-gray-500 transition-transform" data-target="raw-src-' + i + '" style="' + (isFirstSrc ? 'transform: rotate(180deg)' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+        html += '</button>';
+        html += '<div id="raw-src-' + i + '" class="raw-panel px-4 py-3 bg-gray-50 border-t border-gray-200 text-xs overflow-x-auto' + (isFirstSrc ? '' : ' hidden') + '">';
+        if (es.raw_data && Object.keys(es.raw_data).length) {
+          html += '<p class="font-semibold text-gray-600 mb-1">Raw Data</p>';
+          html += '<pre class="whitespace-pre-wrap break-words text-gray-700">' + escapeHtml(JSON.stringify(es.raw_data, null, 2)) + '</pre>';
+        }
+        if (es.normalized_data && Object.keys(es.normalized_data).length) {
+          html += '<p class="font-semibold text-gray-600 mb-1 mt-2">Normalized Data</p>';
+          html += '<pre class="whitespace-pre-wrap break-words text-gray-700">' + escapeHtml(JSON.stringify(es.normalized_data, null, 2)) + '</pre>';
+        }
+        if (!es.raw_data && !es.normalized_data) {
+          html += '<p class="text-gray-500">Keine Rohdaten in dieser Quelle</p>';
+        }
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
+    setTimeout(() => {
+      document.querySelectorAll('.raw-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.dataset.target;
+          const panel = document.getElementById(targetId);
+          const chevron = document.querySelector('.raw-chevron[data-target="' + targetId + '"]');
+          if (panel && panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+          } else if (panel) {
+            panel.classList.add('hidden');
+            if (chevron) chevron.style.transform = '';
+          }
+        });
+      });
+    }, 0);
+    return html;
+  }
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
 
   // Detail Modal
@@ -859,6 +1036,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       </div>
     ` : '<p class="text-sm text-gray-500">Keine Quellinformation</p>';
 
+    // Load and show raw/import data
+    loadAndShowRawData(id);
+
     // Show/hide action buttons based on status
     const showActions = ['pending_review', 'pending_ai', 'incomplete'].includes(event.status);
     document.getElementById('detail-approve').style.display = showActions ? 'flex' : 'none';
@@ -922,6 +1102,47 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   function closeRejectModal() {
     document.getElementById('reject-modal').classList.add('hidden');
     document.getElementById('reject-modal').classList.remove('flex');
+  }
+
+  // Delete Modal
+  function openDeleteModal(id) {
+    currentEventId = id;
+    const event = events.find(e => e.id === id) || allEvents.find(e => e.id === id);
+    if (!event) return;
+
+    document.getElementById('delete-event-title').textContent = event.title || 'Unbekanntes Event';
+    closeDetailModal();
+    document.getElementById('delete-modal').classList.remove('hidden');
+    document.getElementById('delete-modal').classList.add('flex');
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+    document.getElementById('delete-modal').classList.remove('flex');
+  }
+
+  async function handleDelete() {
+    const btn = document.getElementById('delete-confirm');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Wird gelöscht...';
+
+    try {
+      const res = await apiFetch(`/api/admin/events/${currentEventId}`, { method: 'DELETE' });
+      if (res.success) {
+        allEvents = allEvents.filter(e => e.id !== currentEventId);
+        filterAndRenderEvents();
+        closeDeleteModal();
+        loadStatusCounts();
+      } else {
+        throw new Error(res.message || 'Löschen fehlgeschlagen');
+      }
+    } catch (e) {
+      alert('Fehler beim Löschen: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
   }
 
   // Action handlers
@@ -1190,6 +1411,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('detail-approve').addEventListener('click', () => handleApprove(currentEventId));
   document.getElementById('detail-edit').addEventListener('click', () => openEditModal(currentEventId));
   document.getElementById('detail-reject').addEventListener('click', () => openRejectModal(currentEventId));
+  document.getElementById('detail-delete').addEventListener('click', () => openDeleteModal(currentEventId));
 
   document.getElementById('reject-cancel').addEventListener('click', closeRejectModal);
   document.getElementById('reject-confirm').addEventListener('click', handleReject);
@@ -1197,8 +1419,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('edit-cancel').addEventListener('click', closeEditModal);
   document.getElementById('edit-confirm').addEventListener('click', handleQuickEdit);
 
+  document.getElementById('delete-cancel').addEventListener('click', closeDeleteModal);
+  document.getElementById('delete-confirm').addEventListener('click', handleDelete);
+
   // Close modals on backdrop click
-  ['detail-modal', 'reject-modal', 'edit-modal'].forEach(id => {
+  ['detail-modal', 'reject-modal', 'edit-modal', 'delete-modal'].forEach(id => {
     document.getElementById(id).addEventListener('click', (e) => {
       if (e.target.id === id) {
         document.getElementById(id).classList.add('hidden');
@@ -1221,6 +1446,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       closeDetailModal();
       closeEditModal();
       closeRejectModal();
+      closeDeleteModal();
       closeMobileFilter();
     }
   });

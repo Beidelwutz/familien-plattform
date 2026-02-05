@@ -330,6 +330,70 @@ router.get('/review-queue', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// GET /api/admin/events/:id/raw-data - Raw/import data for an event (for review panel)
+router.get('/events/:id/raw-data', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const event = await prisma.canonicalEvent.findUnique({
+      where: { id },
+      select: { id: true }
+    });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const [rawItems, eventSources] = await Promise.all([
+      prisma.rawEventItem.findMany({
+        where: { canonical_event_id: id },
+        orderBy: { fetched_at: 'desc' },
+        include: {
+          source: { select: { id: true, name: true, type: true, url: true } },
+          run: { select: { id: true, started_at: true, status: true } }
+        }
+      }),
+      prisma.eventSource.findMany({
+        where: { canonical_event_id: id },
+        include: {
+          source: { select: { id: true, name: true, type: true, url: true } }
+        }
+      })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        raw_event_items: rawItems.map(item => ({
+          id: item.id,
+          source: item.source,
+          run: item.run,
+          source_url: item.source_url,
+          external_id: item.external_id,
+          fingerprint: item.fingerprint,
+          fetched_at: item.fetched_at,
+          ingest_status: item.ingest_status,
+          raw_payload: item.raw_payload,
+          extracted_fields: item.extracted_fields,
+          ai_suggestions: item.ai_suggestions,
+          ingest_result: item.ingest_result
+        })),
+        event_sources: eventSources.map(es => ({
+          id: es.id,
+          source: es.source,
+          source_url: es.source_url,
+          external_id: es.external_id,
+          fingerprint: es.fingerprint,
+          fetched_at: es.fetched_at,
+          raw_data: es.raw_data,
+          normalized_data: es.normalized_data
+        }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/admin/review/:id/approve - Approve an event
 router.post('/review/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -1994,6 +2058,162 @@ router.post('/fix-null-date-events', async (req: Request, res: Response, next: N
       dry_run: dry_run === 'true',
       message: 'Events ohne Startdatum auf "incomplete" gesetzt',
       events: nullDateEvents.slice(0, 20) // Limit response size
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// EVENT DELETE ENDPOINT
+// ============================================
+
+// DELETE /api/admin/events/:id - Permanently delete an event
+router.delete('/events/:id', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.sub;
+
+    // First fetch the event to verify it exists
+    const existingEvent = await prisma.canonicalEvent.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        provider_id: true,
+      }
+    });
+
+    if (!existingEvent) {
+      throw createError('Event not found', 404, 'NOT_FOUND');
+    }
+
+    logger.info(`Admin ${userId} deleting event ${id}: "${existingEvent.title}" (status: ${existingEvent.status})`);
+
+    // Delete related records in correct order (respecting foreign keys)
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete event categories
+      await tx.eventCategory.deleteMany({
+        where: { event_id: id }
+      });
+
+      // 2. Delete event amenities
+      await tx.eventAmenity.deleteMany({
+        where: { event_id: id }
+      });
+
+      // 3. Delete event scores
+      await tx.eventScore.deleteMany({
+        where: { event_id: id }
+      });
+
+      // 4. Delete saved events (user bookmarks)
+      await tx.savedEvent.deleteMany({
+        where: { event_id: id }
+      });
+
+      // 5. Delete event revisions
+      await tx.eventRevision.deleteMany({
+        where: { event_id: id }
+      });
+
+      // 6. Delete event sources (link table)
+      await tx.eventSource.deleteMany({
+        where: { canonical_event_id: id }
+      });
+
+      // 7. Delete duplicate candidates referencing this event
+      await tx.dupCandidate.deleteMany({
+        where: {
+          OR: [
+            { event_a_id: id },
+            { event_b_id: id }
+          ]
+        }
+      });
+
+      // 8. Delete raw event items linked to this event
+      await tx.rawEventItem.deleteMany({
+        where: { canonical_event_id: id }
+      });
+
+      // 9. Finally delete the event itself
+      await tx.canonicalEvent.delete({
+        where: { id }
+      });
+    });
+
+    logger.info(`Event ${id} permanently deleted by admin ${userId}`);
+
+    res.json({
+      success: true,
+      message: 'Event permanently deleted',
+      data: {
+        deleted_id: id,
+        title: existingEvent.title,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/admin/events/bulk - Delete multiple events at once
+router.delete('/events/bulk', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { ids } = req.body;
+    const userId = req.user?.sub;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      throw createError('Event IDs required', 400, 'VALIDATION_ERROR');
+    }
+
+    if (ids.length > 100) {
+      throw createError('Maximum 100 events per bulk delete', 400, 'VALIDATION_ERROR');
+    }
+
+    logger.info(`Admin ${userId} bulk deleting ${ids.length} events`);
+
+    // Fetch events to verify they exist
+    const existingEvents = await prisma.canonicalEvent.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, title: true }
+    });
+
+    const existingIds = existingEvents.map(e => e.id);
+    const notFoundIds = ids.filter(id => !existingIds.includes(id));
+
+    // Delete related records for all events
+    await prisma.$transaction(async (tx) => {
+      await tx.eventCategory.deleteMany({ where: { event_id: { in: existingIds } } });
+      await tx.eventAmenity.deleteMany({ where: { event_id: { in: existingIds } } });
+      await tx.eventScore.deleteMany({ where: { event_id: { in: existingIds } } });
+      await tx.savedEvent.deleteMany({ where: { event_id: { in: existingIds } } });
+      await tx.eventRevision.deleteMany({ where: { event_id: { in: existingIds } } });
+      await tx.eventSource.deleteMany({ where: { canonical_event_id: { in: existingIds } } });
+      await tx.dupCandidate.deleteMany({
+        where: {
+          OR: [
+            { event_a_id: { in: existingIds } },
+            { event_b_id: { in: existingIds } }
+          ]
+        }
+      });
+      await tx.rawEventItem.deleteMany({ where: { canonical_event_id: { in: existingIds } } });
+      await tx.canonicalEvent.deleteMany({ where: { id: { in: existingIds } } });
+    });
+
+    logger.info(`Bulk deleted ${existingIds.length} events by admin ${userId}`);
+
+    res.json({
+      success: true,
+      message: `${existingIds.length} events permanently deleted`,
+      data: {
+        deleted_count: existingIds.length,
+        deleted_ids: existingIds,
+        not_found_ids: notFoundIds,
+      }
     });
   } catch (error) {
     next(error);
