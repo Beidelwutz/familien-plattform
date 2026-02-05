@@ -1644,7 +1644,7 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
         },
         event_sources: {
           take: 1,
-          orderBy: { created_at: 'desc' },
+          orderBy: { updated_at: 'desc' },
           select: {
             source_url: true,
             source: {
