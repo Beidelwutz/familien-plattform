@@ -32,6 +32,16 @@ class ParsedEvent:
     source_url: Optional[str]
     raw_data: dict
     fingerprint: str
+    # Extended fields (populated by deep-fetch from event page)
+    image_url: Optional[str] = None
+    location_name: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    organizer_name: Optional[str] = None
+    price: Optional[float] = None
+    currency: Optional[str] = None
+    # Flag to track if deep-fetch was attempted/successful
+    deep_fetched: bool = False
 
 
 @dataclass

@@ -20,6 +20,7 @@ class CrawlRequest(BaseModel):
     source_type: str = "rss"
     force: bool = False
     enable_ai: bool = False  # Enable AI classification/scoring
+    fetch_event_pages: bool = False  # Selective Deep-Fetch for RSS events
     ingest_run_id: Optional[str] = None  # Backend IngestRun ID for status updates
 
 
@@ -79,6 +80,7 @@ async def trigger_crawl(
         "source_type": request.source_type,
         "force": request.force,
         "enable_ai": request.enable_ai,
+        "fetch_event_pages": request.fetch_event_pages,  # Selective Deep-Fetch
         "ingest_run_id": request.ingest_run_id,
     }
     

@@ -145,6 +145,9 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
     // Trigger AI-Worker crawl job
     const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
     try {
+      // Enable fetch_event_pages for RSS sources (selective deep-fetch for better data)
+      const fetchEventPages = source.type === 'rss';
+      
       const workerResponse = await fetch(workerUrl, {
         method: 'POST',
         headers: {
@@ -156,6 +159,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
           source_type: source.type,
           ingest_run_id: ingestRun.id,
           enable_ai: true,
+          fetch_event_pages: fetchEventPages,  // Selective Deep-Fetch for RSS
         }),
         signal: AbortSignal.timeout(15000), // 15s timeout
       });
@@ -539,6 +543,9 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
 
   const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
   try {
+    // Enable fetch_event_pages for RSS sources (selective deep-fetch for better data)
+    const fetchEventPages = source.type === 'rss';
+    
     const workerResponse = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -548,6 +555,7 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
         source_type: source.type,
         ingest_run_id: ingestRun.id,
         enable_ai: true,
+        fetch_event_pages: fetchEventPages,  // Selective Deep-Fetch for RSS
       }),
       signal: AbortSignal.timeout(15000),
     });

@@ -15,6 +15,7 @@ import httpx
 
 from .job_queue import job_queue, QUEUE_CRAWL, QUEUE_CLASSIFY, QUEUE_SCORE
 from src.crawlers.feed_parser import FeedParser, ParsedEvent
+from src.crawlers.rss_deep_fetch import selective_deep_fetch, DeepFetchConfig
 from src.classifiers.event_classifier import EventClassifier
 from src.scorers.event_scorer import EventScorer
 from src.ingestion.in_run_dedupe import create_parsed_event_deduplicator
@@ -71,24 +72,29 @@ def parsed_event_to_candidate(
 ) -> CanonicalCandidate:
     """Convert ParsedEvent to CanonicalCandidate."""
     
-    # Build CandidateData
+    # Build images list from deep-fetched image_url
+    images = None
+    if event.image_url:
+        images = [event.image_url]
+    
+    # Build CandidateData with enriched fields from deep-fetch
     data = CandidateData(
         title=event.title,
         description=event.description,
         start_at=event.start_datetime.isoformat() if event.start_datetime else None,
         end_at=event.end_datetime.isoformat() if event.end_datetime else None,
         address=event.location_address,
-        # These would be filled by normalizer
-        venue_name=None,
+        # Enriched from deep-fetch
+        venue_name=event.location_name,
         city="Karlsruhe",  # Default for this region
-        lat=None,
-        lng=None,
-        price_min=None,
-        price_max=None,
+        lat=event.lat,
+        lng=event.lng,
+        price_min=event.price,  # From deep-fetch
+        price_max=event.price,  # Same as min for now
         age_min=None,
         age_max=None,
         categories=None,
-        images=None,
+        images=images,
         booking_url=event.source_url,
     )
     
@@ -354,6 +360,7 @@ async def process_crawl_job(payload: dict) -> dict:
     source_type = payload.get("source_type", "rss")
     ingest_run_id = payload.get("ingest_run_id")
     enable_ai = payload.get("enable_ai", False)
+    fetch_event_pages = payload.get("fetch_event_pages", False)  # Selective Deep-Fetch
     
     logger.info(f"Processing crawl job for source {source_id} ({source_type})")
     
@@ -409,6 +416,31 @@ async def process_crawl_job(payload: dict) -> dict:
     unique_events = deduplicator.dedupe(parsed_events)
     
     logger.info(f"After in-run dedupe: {len(unique_events)} unique events (removed {deduplicator.stats.duplicates_removed})")
+    
+    # Step 2.5: Selective Deep-Fetch (enrich events by fetching their detail pages)
+    # Only for RSS feeds (ICS usually has all data) and only if enabled
+    if fetch_event_pages and source_type == "rss" and unique_events:
+        logger.info("Running selective deep-fetch for RSS events...")
+        try:
+            # Configure deep-fetch (can be customized per source later)
+            deep_fetch_config = DeepFetchConfig(
+                require_location=True,
+                require_end_datetime=True,
+                require_image=True,
+                require_price=False,  # Not all sources have price
+                min_delay_per_domain_ms=1000,
+                max_concurrent_requests=3,
+            )
+            unique_events = await selective_deep_fetch(
+                unique_events,
+                config=deep_fetch_config,
+                max_fetches=50,  # Safety limit per run
+            )
+            # Count how many were enriched
+            enriched_count = sum(1 for e in unique_events if e.deep_fetched)
+            logger.info(f"Deep-fetch complete: {enriched_count}/{len(unique_events)} events enriched")
+        except Exception as e:
+            logger.warning(f"Deep-fetch failed (continuing with RSS data): {e}")
     
     # Step 3: Convert to Candidates
     candidates = [
