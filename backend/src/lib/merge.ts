@@ -255,6 +255,10 @@ export async function processSingleCandidate(
     // Apply AI suggestions if available
     if (candidate.ai?.classification) {
       const ai = candidate.ai.classification;
+      const datetimeConfidence = ai.datetime_confidence || 0;
+      const locationConfidence = ai.location_confidence || 0;
+      
+      // Basic AI fields
       if (ai.age_min !== undefined) {
         fieldMappings.push({ candidateField: 'ai_age_min', dbField: 'age_min', value: ai.age_min });
       }
@@ -266,6 +270,52 @@ export async function processSingleCandidate(
       }
       if (ai.is_outdoor !== undefined) {
         fieldMappings.push({ candidateField: 'ai_is_outdoor', dbField: 'is_outdoor', value: ai.is_outdoor });
+      }
+      
+      // Extended AI fields
+      if (ai.age_recommendation_text) {
+        fieldMappings.push({ candidateField: 'ai_age_recommendation_text', dbField: 'age_recommendation_text', value: ai.age_recommendation_text });
+      }
+      if (ai.sibling_friendly !== undefined) {
+        fieldMappings.push({ candidateField: 'ai_sibling_friendly', dbField: 'sibling_friendly', value: ai.sibling_friendly });
+      }
+      if (ai.language) {
+        fieldMappings.push({ candidateField: 'ai_language', dbField: 'language', value: ai.language });
+      }
+      if (ai.complexity_level) {
+        fieldMappings.push({ candidateField: 'ai_complexity_level', dbField: 'complexity_level', value: ai.complexity_level });
+      }
+      if (ai.noise_level) {
+        fieldMappings.push({ candidateField: 'ai_noise_level', dbField: 'noise_level', value: ai.noise_level });
+      }
+      if (ai.has_seating !== undefined) {
+        fieldMappings.push({ candidateField: 'ai_has_seating', dbField: 'has_seating', value: ai.has_seating });
+      }
+      if (ai.typical_wait_minutes !== undefined) {
+        fieldMappings.push({ candidateField: 'ai_typical_wait_minutes', dbField: 'typical_wait_minutes', value: ai.typical_wait_minutes });
+      }
+      if (ai.food_drink_allowed !== undefined) {
+        fieldMappings.push({ candidateField: 'ai_food_drink_allowed', dbField: 'food_drink_allowed', value: ai.food_drink_allowed });
+      }
+      
+      // AI-extracted datetime (only if confidence >= 0.7 and no existing value)
+      if (ai.extracted_start_datetime && datetimeConfidence >= 0.7 && !existingEvent.start_datetime) {
+        try {
+          fieldMappings.push({ candidateField: 'ai_start_datetime', dbField: 'start_datetime', value: new Date(ai.extracted_start_datetime) });
+        } catch { /* ignore parse errors */ }
+      }
+      if (ai.extracted_end_datetime && datetimeConfidence >= 0.7 && !existingEvent.end_datetime) {
+        try {
+          fieldMappings.push({ candidateField: 'ai_end_datetime', dbField: 'end_datetime', value: new Date(ai.extracted_end_datetime) });
+        } catch { /* ignore parse errors */ }
+      }
+      
+      // AI-extracted location (only if confidence >= 0.7 and no existing value)
+      if (ai.extracted_location_address && locationConfidence >= 0.7 && !existingEvent.location_address) {
+        fieldMappings.push({ candidateField: 'ai_location_address', dbField: 'location_address', value: ai.extracted_location_address });
+      }
+      if (ai.extracted_location_district && locationConfidence >= 0.7 && !existingEvent.location_district) {
+        fieldMappings.push({ candidateField: 'ai_location_district', dbField: 'location_district', value: ai.extracted_location_district });
       }
     }
     
@@ -361,27 +411,66 @@ export async function processSingleCandidate(
   }
   
   // Create new event
+  // Get AI classification for easier access
+  const aiClassification = candidate.ai?.classification;
+  const datetimeConfidence = aiClassification?.datetime_confidence || 0;
+  const locationConfidence = aiClassification?.location_confidence || 0;
+  
+  // Determine start_datetime: use candidate data first, then AI-extracted (if confidence >= 0.7)
+  let startDatetime = candidate.data.start_at ? new Date(candidate.data.start_at) : null;
+  if (!startDatetime && aiClassification?.extracted_start_datetime && datetimeConfidence >= 0.7) {
+    try {
+      startDatetime = new Date(aiClassification.extracted_start_datetime);
+    } catch { /* ignore parse errors */ }
+  }
+  
+  // Determine end_datetime: use candidate data first, then AI-extracted (if confidence >= 0.7)
+  let endDatetime = candidate.data.end_at ? new Date(candidate.data.end_at) : null;
+  if (!endDatetime && aiClassification?.extracted_end_datetime && datetimeConfidence >= 0.7) {
+    try {
+      endDatetime = new Date(aiClassification.extracted_end_datetime);
+    } catch { /* ignore parse errors */ }
+  }
+  
+  // Determine location: use candidate data first, then AI-extracted (if confidence >= 0.7)
+  let locationAddress = candidate.data.address || null;
+  let locationDistrict: string | null = null;
+  if (!locationAddress && aiClassification?.extracted_location_address && locationConfidence >= 0.7) {
+    locationAddress = aiClassification.extracted_location_address;
+    locationDistrict = aiClassification.extracted_location_district || null;
+  }
+  
   const eventData = {
     title: candidate.data.title,
     description_short: candidate.data.description?.substring(0, 500) || null,
     description_long: candidate.data.description || null,
-    start_datetime: candidate.data.start_at ? new Date(candidate.data.start_at) : null,
-    end_datetime: candidate.data.end_at ? new Date(candidate.data.end_at) : null,
+    start_datetime: startDatetime,
+    end_datetime: endDatetime,
     timezone_original: candidate.data.timezone_original || null,
-    location_address: candidate.data.address || null,
+    location_address: locationAddress,
+    location_district: locationDistrict,
     location_lat: candidate.data.lat || candidate.ai?.geocode?.lat || null,
     location_lng: candidate.data.lng || candidate.ai?.geocode?.lng || null,
     price_min: candidate.data.price_min || null,
     price_max: candidate.data.price_max || null,
     price_type: candidate.data.price_min ? (candidate.data.price_min === 0 ? 'free' : 'paid') : 'unknown' as any,
-    age_min: candidate.data.age_min || candidate.ai?.classification?.age_min || null,
-    age_max: candidate.data.age_max || candidate.ai?.classification?.age_max || null,
-    is_indoor: candidate.data.is_indoor || candidate.ai?.classification?.is_indoor || false,
-    is_outdoor: candidate.data.is_outdoor || candidate.ai?.classification?.is_outdoor || false,
+    age_min: candidate.data.age_min || aiClassification?.age_min || null,
+    age_max: candidate.data.age_max || aiClassification?.age_max || null,
+    is_indoor: candidate.data.is_indoor || aiClassification?.is_indoor || false,
+    is_outdoor: candidate.data.is_outdoor || aiClassification?.is_outdoor || false,
     booking_url: candidate.data.booking_url || null,
     contact_email: candidate.data.contact_email || null,
     contact_phone: candidate.data.contact_phone || null,
     image_urls: candidate.data.images || [],
+    // Extended AI fields
+    age_recommendation_text: candidate.data.age_recommendation_text || aiClassification?.age_recommendation_text || null,
+    sibling_friendly: candidate.data.sibling_friendly ?? aiClassification?.sibling_friendly ?? null,
+    language: candidate.data.language || aiClassification?.language || null,
+    complexity_level: candidate.data.complexity_level || aiClassification?.complexity_level || null,
+    noise_level: candidate.data.noise_level || aiClassification?.noise_level || null,
+    has_seating: candidate.data.has_seating ?? aiClassification?.has_seating ?? null,
+    typical_wait_minutes: candidate.data.typical_wait_minutes || aiClassification?.typical_wait_minutes || null,
+    food_drink_allowed: candidate.data.food_drink_allowed ?? aiClassification?.food_drink_allowed ?? null,
   };
   
   const completeness = calculateCompleteness(eventData);

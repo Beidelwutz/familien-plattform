@@ -155,6 +155,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
           source_url: source.url,
           source_type: source.type,
           ingest_run_id: ingestRun.id,
+          enable_ai: true,
         }),
         signal: AbortSignal.timeout(15000), // 15s timeout
       });
@@ -546,6 +547,7 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
         source_url: source.url,
         source_type: source.type,
         ingest_run_id: ingestRun.id,
+        enable_ai: true,
       }),
       signal: AbortSignal.timeout(15000),
     });
