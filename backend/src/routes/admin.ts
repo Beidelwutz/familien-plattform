@@ -2308,25 +2308,19 @@ router.get('/ai-worker/stats', async (_req: Request, res: Response, next: NextFu
       select: {
         family_fit_score: true,
         confidence: true,
-        processing_time_ms: true,
       }
     });
 
     // Calculate success rate (events with confidence >= 0.5 that got a family_fit_score)
     const successfulProcessing = recentScores.filter(s => 
-      s.confidence !== null && s.confidence >= 0.5 && s.family_fit_score !== null
+      s.confidence !== null && Number(s.confidence) >= 0.5 && s.family_fit_score !== null
     ).length;
     const successRate = recentScores.length > 0 
       ? Math.round((successfulProcessing / recentScores.length) * 100)
       : 0;
 
-    // Calculate average processing time
-    const timesWithValues = recentScores
-      .map(s => s.processing_time_ms)
-      .filter((t): t is number => t !== null && t > 0);
-    const avgProcessingTime = timesWithValues.length > 0
-      ? Math.round(timesWithValues.reduce((a, b) => a + b, 0) / timesWithValues.length)
-      : null;
+    // Average processing time not available (EventScore has no processing_time_ms)
+    const avgProcessingTime = null;
 
     // Get last processing time for display
     const lastProcessed = await prisma.eventScore.findFirst({
