@@ -112,7 +112,9 @@
       if (lowerMessage.includes('pkce') || lowerMessage.includes('code verifier')) {
         return 'pkce_error';
       }
-      
+      if (lowerMessage.includes('invalid') && (lowerMessage.includes('expired') || lowerMessage.includes('token'))) {
+        return 'invalid_token';
+      }
       return 'unknown';
     }
 
@@ -128,6 +130,7 @@
         'invalid_client': 'Ungültige Client-ID',
         'no_session': 'Keine Session erhalten',
         'pkce_error': 'Authentifizierungs-Fehler (PKCE)',
+        'invalid_token': 'Ungültiger oder abgelaufener Token',
         'ACCOUNT_SYNC_FAILED': 'Konto konnte nicht angelegt werden',
         'EMAIL_MISSING': 'Keine E-Mail-Adresse',
         'AUTH_INVALID': 'Authentifizierung ungültig',
@@ -156,6 +159,8 @@
           'Nach der Anmeldung wurde keine Session erstellt. Prüfe die Supabase-Konfiguration (Providers → Google).',
         'pkce_error': 
           'Fehler beim Code-Austausch. Bitte versuche es erneut oder lösche die Browser-Cookies für diese Seite.',
+        'invalid_token': 
+          'Der Anmeldelink ist abgelaufen oder wurde bereits verwendet. Bitte starte die Anmeldung erneut von der Login-Seite.',
         'ACCOUNT_SYNC_FAILED': 
           'Dein Konto konnte nicht in der Datenbank angelegt werden. Bitte versuche es erneut.',
         'EMAIL_MISSING': 
@@ -214,9 +219,20 @@
           if (exchangeError) {
             throw exchangeError;
           }
+        } else {
+          // Implicit flow: token in URL hash. Set session explicitly so getSession() finds it.
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          if (accessToken) {
+            const { error: setErr } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || ''
+            });
+            if (setErr) throw setErr;
+          }
         }
 
-        // Now get the session (should exist after exchange or from hash)
+        // Now get the session (after code exchange or setSession from hash)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           throw sessionError;
