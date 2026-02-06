@@ -1610,7 +1610,16 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
   try {
     const { limit = 50 } = req.query;
     const userId = req.user?.sub;
-    
+
+    // Stale-Jobs aufräumen: ältesten "running" Job prüfen und ggf. als stale markieren
+    const anyRunning = await prisma.aiJob.findFirst({
+      where: { status: 'running' },
+      orderBy: { started_at: 'desc' },
+    });
+    if (anyRunning) {
+      await checkAndMarkStale(anyRunning);
+    }
+
     // Check if there's already a running job (not stale)
     const existingJob = await prisma.aiJob.findFirst({
       where: {
@@ -1618,8 +1627,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
         last_heartbeat: { gte: new Date(Date.now() - STALE_THRESHOLD_MS) }
       }
     });
-    
+
     if (existingJob) {
+      logger.info(`process-pending-ai: blockiert durch laufenden Job ${existingJob.id}`);
       return res.status(409).json({
         success: false,
         error: 'Ein AI-Batch läuft bereits',
@@ -1627,7 +1637,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
         message: `Job ${existingJob.id} ist aktiv (${existingJob.processed}/${existingJob.total} verarbeitet)`
       });
     }
-    
+
     // Get events with pending_ai status - include more fields for the dashboard
     const pendingEvents = await prisma.canonicalEvent.findMany({
       where: { 
@@ -1677,12 +1687,16 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
     });
     
     if (pendingEvents.length === 0) {
-      return res.json({ 
-        success: true, 
-        message: 'No pending events to process', 
+      const pendingAiCount = await prisma.canonicalEvent.count({ where: { status: 'pending_ai' } });
+      logger.info(`process-pending-ai: keine Events (pending_ai count=${pendingAiCount})`);
+      return res.json({
+        success: true,
+        message: 'No pending events to process',
         processed: 0,
         jobId: null,
         events: [],
+        pending_ai_count: pendingAiCount,
+        hint: 'Events mit Status "pending_ai" entstehen durch Crawl/Ingest (Quellen crawlen).',
         summary: { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 }
       });
     }
@@ -1758,7 +1772,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
       await redis.setex(`${AI_JOB_PREFIX}${jobId}`, AI_JOB_TTL, JSON.stringify(initialStatus));
     }
     
-    logger.info(`Starting AI job ${jobId} for ${pendingEvents.length} pending_ai events`);
+    logger.info(`process-pending-ai: Batch gestartet jobId=${jobId} count=${pendingEvents.length}`);
     
     // Return immediately with job ID and event snapshots
     res.json({

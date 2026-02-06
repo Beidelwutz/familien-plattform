@@ -81,6 +81,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </button>
         </div>
         <p id="btn-hint" class="text-sm text-gray-500 mt-2 hidden"></p>
+        <div id="no-pending-hint" class="hidden mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          <strong>Warum keine Batches?</strong> Es gibt aktuell keine Events mit Status &quot;Pending AI&quot;. Neue solche Events entstehen durch <strong>Crawl/Ingest</strong> (Quellen crawlen). Sobald neue Rohdaten reinkommen, erscheinen sie hier und koennen verarbeitet werden.
+        </div>
       </div>
 
       <!-- Progress Bar (shown during processing) -->
@@ -494,6 +497,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     btnIcon: document.getElementById('btn-icon'),
     btnText: document.getElementById('btn-text'),
     btnHint: document.getElementById('btn-hint'),
+    noPendingHint: document.getElementById('no-pending-hint'),
     progressSection: document.getElementById('progress-section'),
     progressText: document.getElementById('progress-text'),
     progressPercent: document.getElementById('progress-percent'),
@@ -548,13 +552,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const pendingCount = pending.data?.count || 0;
       el.pendingAiCount.textContent = pendingCount;
 
-      // Update pending card styling
+      // Update pending card styling und Hinweis bei 0
       if (pendingCount > 0) {
         el.pendingCard.classList.remove('border-gray-300');
         el.pendingCard.classList.add('border-amber-400');
+        el.noPendingHint?.classList.add('hidden');
       } else {
         el.pendingCard.classList.remove('border-amber-400');
         el.pendingCard.classList.add('border-gray-300');
+        el.noPendingHint?.classList.remove('hidden');
       }
 
       // Update worker health
@@ -850,7 +856,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         
         el.btnText.textContent = 'Verarbeite...';
       } else {
-        alert('Keine Events zu verarbeiten');
+        const count = data.pending_ai_count ?? 0;
+        const hint = data.hint || 'Neue Events entstehen durch Crawl/Ingest (Quellen crawlen).';
+        alert(`Keine Events zu verarbeiten.\n\nAktuell ${count} Event(s) mit Status "Pending AI".\n\n${hint}`);
         resetButton();
       }
 
@@ -1401,9 +1409,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         if (count > 0) {
           el.pendingCard.classList.remove('border-gray-300');
           el.pendingCard.classList.add('border-amber-400');
+          el.noPendingHint?.classList.add('hidden');
         } else {
           el.pendingCard.classList.remove('border-amber-400');
           el.pendingCard.classList.add('border-gray-300');
+          el.noPendingHint?.classList.remove('hidden');
         }
       }
     } catch (e) {
