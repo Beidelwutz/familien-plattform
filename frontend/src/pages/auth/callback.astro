@@ -204,6 +204,11 @@
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const queryParams = new URLSearchParams(window.location.search);
         
+        // Debug: log what we received in the URL
+        console.log('[Callback] URL:', window.location.href);
+        console.log('[Callback] Query params:', Object.fromEntries(queryParams.entries()));
+        console.log('[Callback] Hash params:', Object.fromEntries(hashParams.entries()));
+        
         // Check for error in URL
         const error = hashParams.get('error') || queryParams.get('error');
         const errorDescription = hashParams.get('error_description') || queryParams.get('error_description');
@@ -214,32 +219,51 @@
 
         // PKCE Flow: Exchange code for session first
         const code = queryParams.get('code');
+        let session = null;
+        
         if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          console.log('[Callback] PKCE flow: exchanging code for session');
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
+            console.error('[Callback] Code exchange failed:', exchangeError);
             throw exchangeError;
           }
+          session = data.session;
+          console.log('[Callback] Code exchange successful, session:', !!session);
         } else {
-          // Implicit flow: token in URL hash. Set session explicitly so getSession() finds it.
+          // Implicit flow: token in URL hash
           const accessToken = hashParams.get('access_token');
           const refreshToken = hashParams.get('refresh_token');
           if (accessToken) {
-            const { error: setErr } = await supabase.auth.setSession({
+            console.log('[Callback] Implicit flow: setting session from hash');
+            const { data, error: setErr } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken || ''
             });
-            if (setErr) throw setErr;
+            if (setErr) {
+              console.error('[Callback] setSession failed:', setErr);
+              throw setErr;
+            }
+            session = data.session;
+            console.log('[Callback] setSession successful, session:', !!session);
+          } else {
+            // No code and no access_token - check if Supabase already has a session
+            // (e.g. from detectSessionInUrl or a previous login)
+            console.log('[Callback] No code or token in URL, checking existing session');
+            const { data: existingData, error: existingError } = await supabase.auth.getSession();
+            if (existingError) {
+              console.error('[Callback] getSession error:', existingError);
+              throw existingError;
+            }
+            session = existingData.session;
+            console.log('[Callback] Existing session:', !!session);
           }
         }
 
-        // Now get the session (after code exchange or setSession from hash)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) {
-          throw sessionError;
-        }
-
         if (!session) {
-          throw new Error('Keine Session nach OAuth-Callback erhalten');
+          // Log detailed info for debugging
+          console.error('[Callback] No session obtained. URL was:', window.location.href);
+          throw new Error('Auth session missing! Keine Authentifizierungsdaten in der URL gefunden. Bitte versuche es erneut von der Login-Seite.');
         }
 
         // Check if "remember me" was selected (stored before OAuth redirect)
