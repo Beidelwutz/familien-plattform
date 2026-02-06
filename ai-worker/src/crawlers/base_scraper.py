@@ -38,6 +38,10 @@ class ScraperConfig:
     url: str
     page_type: str = "list"  # list, calendar, single
     
+    # Sitemap-based discovery: if True, fetch event-like URLs from sitemap then scrape each
+    use_sitemap: bool = False
+    max_sitemap_urls: int = 50  # Max URLs to scrape when use_sitemap=True
+    
     # Extraction strategy (in order of priority)
     strategies: list[str] = field(default_factory=lambda: ["jsonld", "microdata", "css"])
     
@@ -195,7 +199,7 @@ class PoliteScraper:
     
     async def scrape(self) -> list[ParsedEvent]:
         """
-        Scrape events from configured URL.
+        Scrape events from configured URL (or from sitemap-derived URLs if use_sitemap=True).
         
         Uses extraction strategies in order:
         1. JSON-LD / Microdata
@@ -205,6 +209,9 @@ class PoliteScraper:
             List of ParsedEvent objects
         """
         await self.init()
+        
+        if self.config.use_sitemap:
+            return await self._scrape_via_sitemap()
         
         html = await self.fetch(self.config.url)
         if not html:
@@ -229,6 +236,42 @@ class PoliteScraper:
         
         logger.warning(f"No events found on {self.config.url}")
         return []
+    
+    async def _scrape_via_sitemap(self) -> list[ParsedEvent]:
+        """Discover URLs from sitemap, then fetch each page and extract events (structured data only)."""
+        from .sitemap_parser import fetch_sitemap_urls
+        
+        urls = await fetch_sitemap_urls(
+            self.config.url,
+            sitemap_url=None,
+            filter_event_like=True,
+            max_urls=self.config.max_sitemap_urls,
+            timeout=self.config.timeout_seconds,
+        )
+        if not urls:
+            logger.warning("No event-like URLs found in sitemap")
+            return []
+        
+        logger.info(f"Scraping {len(urls)} URLs from sitemap")
+        all_events: list[ParsedEvent] = []
+        seen_fingerprints: set[str] = set()
+        
+        for page_url in urls:
+            await self._throttle()
+            html = await self.fetch(page_url)
+            if not html:
+                continue
+            if "jsonld" not in self.config.strategies and "microdata" not in self.config.strategies:
+                continue
+            extracted = self.structured_extractor.extract(html)
+            for e in extracted:
+                pe = self._to_parsed_event(e)
+                if pe.fingerprint not in seen_fingerprints:
+                    seen_fingerprints.add(pe.fingerprint)
+                    all_events.append(pe)
+        
+        logger.info(f"Sitemap scrape: {len(all_events)} unique events from {len(urls)} pages")
+        return all_events
     
     async def _extract_with_css(self, html: str) -> list[ParsedEvent]:
         """Extract events using CSS selectors."""
@@ -302,7 +345,7 @@ class PoliteScraper:
         return events
     
     def _to_parsed_event(self, extracted: ExtractedEvent) -> ParsedEvent:
-        """Convert ExtractedEvent to ParsedEvent."""
+        """Convert ExtractedEvent to ParsedEvent (full compatibility with feed_parser.ParsedEvent)."""
         fingerprint = self._compute_fingerprint(
             extracted.title,
             extracted.start_datetime,
@@ -310,7 +353,7 @@ class PoliteScraper:
         )
         
         return ParsedEvent(
-            external_id=extracted.url or fingerprint,
+            external_id=(extracted.url or fingerprint)[:255],
             title=extracted.title[:200],
             description=extracted.description[:5000] if extracted.description else None,
             start_datetime=extracted.start_datetime,
@@ -332,6 +375,13 @@ class PoliteScraper:
                 'currency': extracted.currency,
             },
             fingerprint=fingerprint,
+            image_url=extracted.image_url,
+            location_name=extracted.location_name,
+            lat=extracted.lat,
+            lng=extracted.lng,
+            organizer_name=extracted.organizer_name,
+            price=extracted.price,
+            currency=extracted.currency,
         )
     
     def _compute_fingerprint(
@@ -377,7 +427,7 @@ async def scrape_with_config(config: dict) -> list[ParsedEvent]:
     Convenience function to scrape with a config dict.
     
     Args:
-        config: Configuration dict (from database or JSON)
+        config: Configuration dict (from database or JSON). Must contain 'url'.
         
     Returns:
         List of ParsedEvent objects
@@ -385,6 +435,8 @@ async def scrape_with_config(config: dict) -> list[ParsedEvent]:
     scraper_config = ScraperConfig(
         url=config['url'],
         page_type=config.get('page_type', 'list'),
+        use_sitemap=config.get('use_sitemap', False),
+        max_sitemap_urls=config.get('max_sitemap_urls', 50),
         strategies=config.get('strategies', ['jsonld', 'microdata', 'css']),
         selectors=config.get('selectors', {}),
         date_format=config.get('date_format'),

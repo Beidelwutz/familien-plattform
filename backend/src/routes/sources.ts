@@ -76,6 +76,33 @@ router.get('/health', async (_req: Request, res: Response, next: NextFunction) =
   }
 });
 
+// POST /api/sources/detect - Auto-detect source type from URL (proxies to AI Worker)
+router.post('/detect', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { url } = req.body || {};
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      throw createError('Valid URL required', 400, 'VALIDATION_ERROR');
+    }
+    const workerRes = await fetch(`${AI_WORKER_URL}/crawl/detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: url.trim() }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = await workerRes.json().catch(() => ({}));
+    if (!workerRes.ok) {
+      throw createError(data.detail || `AI-Worker error: ${workerRes.status}`, workerRes.status, 'WORKER_ERROR');
+    }
+    res.json({ success: true, data });
+  } catch (error: any) {
+    if (error.code === 'WORKER_ERROR') return next(error);
+    if (error.name === 'AbortError') {
+      return next(createError('AI-Worker timeout (detect)', 504, 'WORKER_ERROR'));
+    }
+    next(error);
+  }
+});
+
 // GET /api/sources/:id - Get single source with recent fetches
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -110,10 +137,11 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
-// POST /api/sources/:id/trigger - Manually trigger a source fetch
+// POST /api/sources/:id/trigger - Manually trigger a source fetch (optional dry_run: true for test without ingest)
 router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const dryRun = !!(req.body && (req.body as { dry_run?: boolean }).dry_run);
 
     const source = await prisma.source.findUnique({
       where: { id }
@@ -127,7 +155,43 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       throw createError('Source has no URL configured', 400, 'VALIDATION_ERROR');
     }
 
-    // Create an ingest run entry
+    const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
+    const fetchEventPages = source.type === 'rss';
+    const body: Record<string, unknown> = {
+      source_id: id,
+      source_url: source.url,
+      source_type: source.type,
+      dry_run: dryRun,
+      enable_ai: true,
+      fetch_event_pages: fetchEventPages,
+    };
+    if (source.type === 'scraper' && source.scraper_config) {
+      body.scraper_config = source.scraper_config as object;
+    }
+
+    if (dryRun) {
+      // Dry-run: run synchronously, no ingest run, return worker result (candidates, events_found, etc.)
+      body.ingest_run_id = undefined;
+      try {
+        const workerResponse = await fetch(workerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(120000), // 2 min for dry-run (runs sync)
+        });
+        const workerData = await workerResponse.json().catch(() => ({}));
+        if (!workerResponse.ok) {
+          throw createError(workerData.detail || `AI-Worker error: ${workerResponse.status}`, workerResponse.status, 'WORKER_ERROR');
+        }
+        return res.json({ success: true, data: workerData, dry_run: true });
+      } catch (fetchError: any) {
+        if (fetchError.code === 'WORKER_ERROR') throw fetchError;
+        const hint = `AI-Worker unter ${AI_WORKER_URL} starten.`;
+        throw createError(`Dry-Run fehlgeschlagen: ${fetchError.message || 'Worker nicht erreichbar'}. ${hint}`, 503, 'WORKER_UNAVAILABLE');
+      }
+    }
+
+    // Normal trigger: create ingest run and queue job
     const ingestRun = await prisma.ingestRun.create({
       data: {
         correlation_id: `manual-${Date.now()}`,
@@ -135,40 +199,24 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
         status: 'running',
       }
     });
+    body.ingest_run_id = ingestRun.id;
 
-    // Update source last_fetch_at
     await prisma.source.update({
       where: { id },
       data: { last_fetch_at: new Date() }
     });
 
-    // Trigger AI-Worker crawl job
-    const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
     try {
-      // Enable fetch_event_pages for RSS sources (selective deep-fetch for better data)
-      const fetchEventPages = source.type === 'rss';
-      
       const workerResponse = await fetch(workerUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          source_id: id,
-          source_url: source.url,
-          source_type: source.type,
-          ingest_run_id: ingestRun.id,
-          enable_ai: true,
-          fetch_event_pages: fetchEventPages,  // Selective Deep-Fetch for RSS
-        }),
-        signal: AbortSignal.timeout(15000), // 15s timeout
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!workerResponse.ok) {
         const errorText = await workerResponse.text();
         logger.error(`AI-Worker crawl trigger failed: ${errorText}`);
-        
-        // Update ingest run with error
         await prisma.ingestRun.update({
           where: { id: ingestRun.id },
           data: {
@@ -178,7 +226,6 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
             needs_attention: true,
           }
         });
-        
         throw createError(`AI-Worker error: ${workerResponse.status}`, 502, 'WORKER_ERROR');
       }
 
@@ -188,16 +235,12 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       if (fetchError.code === 'WORKER_ERROR') {
         throw fetchError;
       }
-      
       const isTimeout = fetchError.name === 'AbortError' || fetchError.message?.includes('timeout');
       const hint = `AI-Worker unter ${AI_WORKER_URL} starten: im Ordner ai-worker "start.bat" ausführen oder "python -m src.main" (Port 5000).`;
       const errorDetail = isTimeout
         ? 'Timeout – Worker antwortet nicht innerhalb von 15 Sekunden.'
         : fetchError.message || 'Verbindung fehlgeschlagen';
-      
       logger.error(`Failed to reach AI-Worker at ${workerUrl}: ${errorDetail}`);
-      
-      // Update ingest run - worker unreachable
       await prisma.ingestRun.update({
         where: { id: ingestRun.id },
         data: {
@@ -207,14 +250,13 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
           needs_attention: true,
         }
       });
-      
       throw createError(
         `AI-Worker nicht erreichbar (${AI_WORKER_URL}). Bitte AI-Worker starten.`,
         503,
         'WORKER_UNAVAILABLE'
       );
     }
-    
+
     res.json({
       success: true,
       message: 'Fetch job queued',
@@ -528,7 +570,7 @@ router.put('/:id/compliance', requireAuth, requireAdmin, async (req: Request, re
 /**
  * Helper function to trigger a source fetch (used by cron and manual trigger)
  */
-async function triggerSourceFetchInternal(sourceId: string, source: { url: string | null; type: string }): Promise<{ ingestRunId: string; success: boolean; error?: string }> {
+async function triggerSourceFetchInternal(sourceId: string, source: { url: string | null; type: string; scraper_config?: object | null }): Promise<{ ingestRunId: string; success: boolean; error?: string }> {
   if (!source.url) {
     return { ingestRunId: '', success: false, error: 'No URL configured' };
   }
@@ -543,20 +585,22 @@ async function triggerSourceFetchInternal(sourceId: string, source: { url: strin
 
   const workerUrl = `${AI_WORKER_URL}/crawl/trigger`;
   try {
-    // Enable fetch_event_pages for RSS sources (selective deep-fetch for better data)
     const fetchEventPages = source.type === 'rss';
-    
+    const body: Record<string, unknown> = {
+      source_id: sourceId,
+      source_url: source.url,
+      source_type: source.type,
+      ingest_run_id: ingestRun.id,
+      enable_ai: true,
+      fetch_event_pages: fetchEventPages,
+    };
+    if (source.type === 'scraper' && source.scraper_config) {
+      body.scraper_config = source.scraper_config;
+    }
     const workerResponse = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source_id: sourceId,
-        source_url: source.url,
-        source_type: source.type,
-        ingest_run_id: ingestRun.id,
-        enable_ai: true,
-        fetch_event_pages: fetchEventPages,  // Selective Deep-Fetch for RSS
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(15000),
     });
 

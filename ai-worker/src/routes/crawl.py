@@ -2,10 +2,15 @@
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
+from urllib.parse import urljoin, urlparse
 import asyncio
 import logging
+import re
+
+import httpx
+from bs4 import BeautifulSoup
 
 from src.queue import job_queue, get_queue, JobQueue, JobStatus, QUEUE_CRAWL
 
@@ -17,8 +22,10 @@ class CrawlRequest(BaseModel):
     """Request to trigger a crawl."""
     source_id: str
     source_url: Optional[str] = None
-    source_type: str = "rss"
+    source_type: str = "rss"  # rss | ics | scraper
+    scraper_config: Optional[dict] = None  # For source_type=scraper (selectors, strategies, rate_limit_ms, etc.)
     force: bool = False
+    dry_run: bool = False  # If True: crawl and extract but do not ingest; return candidates in response
     enable_ai: bool = False  # Enable AI classification/scoring
     fetch_event_pages: bool = False  # Selective Deep-Fetch for RSS events
     ingest_run_id: Optional[str] = None  # Backend IngestRun ID for status updates
@@ -78,11 +85,23 @@ async def trigger_crawl(
         "source_id": request.source_id,
         "source_url": request.source_url,
         "source_type": request.source_type,
+        "scraper_config": request.scraper_config,
         "force": request.force,
+        "dry_run": request.dry_run,
         "enable_ai": request.enable_ai,
         "fetch_event_pages": request.fetch_event_pages,  # Selective Deep-Fetch
         "ingest_run_id": request.ingest_run_id,
     }
+    
+    # Dry-run: run pipeline synchronously and return candidates (no ingest, no queue)
+    if request.dry_run:
+        from src.queue.worker import process_crawl_job
+        try:
+            result = await process_crawl_job(payload)
+            return result
+        except Exception as e:
+            logger.exception("Dry-run crawl failed")
+            raise HTTPException(status_code=500, detail=f"Dry-run failed: {str(e)}")
     
     try:
         job = await queue.enqueue(
@@ -180,6 +199,145 @@ async def get_queue_stats(queue: JobQueue = Depends(get_queue)):
             "status": "error",
             "error": str(e)
         }
+
+
+class DetectRequest(BaseModel):
+    """Request for URL detection."""
+    url: str
+
+
+class DetectResponse(BaseModel):
+    """Response from URL detection."""
+    detected_type: Literal["rss", "ics", "json_ld", "microdata", "unknown"]
+    rss_url: Optional[str] = None
+    ics_url: Optional[str] = None
+    has_json_ld_events: bool = False
+    has_microdata_events: bool = False
+    sample_events: list = []  # 3-5 preview events
+    recommendation: Literal["rss", "ics", "scraper", "unknown"] = "unknown"
+    sitemap_url: Optional[str] = None
+
+
+async def _detect_source_type(url: str) -> dict:
+    """
+    Detect how to get events from a URL: RSS, ICS, JSON-LD, Microdata, or unknown.
+    Returns a dict suitable for DetectResponse.
+    """
+    result = {
+        "detected_type": "unknown",
+        "rss_url": None,
+        "ics_url": None,
+        "has_json_ld_events": False,
+        "has_microdata_events": False,
+        "sample_events": [],
+        "recommendation": "unknown",
+        "sitemap_url": None,
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Kiezling-Bot/1.0 (+https://kiezling.com/bot)",
+                    "Accept": "text/html,application/xhtml+xml,application/xml",
+                },
+            )
+            if response.status_code >= 400:
+                return result
+            
+            content_type = (response.headers.get("content-type") or "").lower()
+            html = response.text
+            parsed = urlparse(url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # 1. Check for RSS/Atom link
+            if "html" in content_type or not content_type:
+                soup = BeautifulSoup(html, "lxml")
+                for link in soup.find_all("link", rel="alternate"):
+                    type_attr = (link.get("type") or "").lower()
+                    href = link.get("href")
+                    if not href:
+                        continue
+                    abs_url = urljoin(url, href)
+                    if "rss" in type_attr or "atom" in type_attr or "xml" in type_attr:
+                        result["rss_url"] = abs_url
+                        result["detected_type"] = "rss"
+                        result["recommendation"] = "rss"
+                        break
+                
+                # 2. Check for ICS link
+                for link in soup.find_all("link", rel="alternate"):
+                    type_attr = (link.get("type") or "").lower()
+                    href = link.get("href")
+                    if not href:
+                        continue
+                    if "calendar" in type_attr or "ics" in type_attr:
+                        result["ics_url"] = urljoin(url, href)
+                        if not result["rss_url"]:
+                            result["detected_type"] = "ics"
+                            result["recommendation"] = "ics"
+                        break
+                
+                # 3. Check for JSON-LD and Microdata events on page
+                from src.crawlers.structured_data import StructuredDataExtractor
+                extractor = StructuredDataExtractor()
+                extracted = extractor.extract(html)
+                if extracted:
+                    result["has_json_ld_events"] = True  # extractor uses jsonld first
+                    result["sample_events"] = [
+                        {
+                            "title": e.title,
+                            "description": (e.description[:200] + "…") if e.description and len(e.description) > 200 else e.description,
+                            "start_datetime": e.start_datetime.isoformat() if e.start_datetime else None,
+                            "end_datetime": e.end_datetime.isoformat() if e.end_datetime else None,
+                            "location_address": e.location_address,
+                            "url": e.url,
+                        }
+                        for e in extracted[:5]
+                    ]
+                    if not result["rss_url"] and not result["ics_url"]:
+                        result["detected_type"] = "json_ld"
+                        result["recommendation"] = "scraper"
+                    # If we have both RSS and JSON-LD, keep RSS as recommendation
+                
+                # 4. Sitemap: check robots.txt or common path
+                try:
+                    robots_resp = await client.get(f"{base_url}/robots.txt", timeout=5.0)
+                    if robots_resp.status_code == 200 and "sitemap:" in robots_resp.text.lower():
+                        for line in robots_resp.text.splitlines():
+                            if line.lower().strip().startswith("sitemap:"):
+                                result["sitemap_url"] = line.split(":", 1)[1].strip()
+                                break
+                except Exception:
+                    pass
+                if not result["sitemap_url"]:
+                    sitemap_resp = await client.get(f"{base_url}/sitemap.xml", timeout=5.0)
+                    if sitemap_resp.status_code == 200:
+                        result["sitemap_url"] = f"{base_url}/sitemap.xml"
+                        
+    except Exception as e:
+        logger.warning(f"Detection failed for {url}: {e}")
+    
+    return result
+
+
+@router.post("/detect", response_model=DetectResponse)
+async def detect_source(request: DetectRequest):
+    """
+    Auto-detect how to get events from a URL.
+    
+    Checks for RSS/Atom, ICS, JSON-LD/Microdata events, and sitemap.
+    Returns recommendation (rss | ics | scraper | unknown) and sample events if any.
+    """
+    if not request.url or not request.url.strip().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Valid URL required")
+    try:
+        data = await _detect_source_type(request.url.strip())
+        return DetectResponse(**data)
+    except Exception as e:
+        logger.exception("Detect failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/process-feed")

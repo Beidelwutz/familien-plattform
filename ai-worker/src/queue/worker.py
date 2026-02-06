@@ -361,6 +361,7 @@ async def process_crawl_job(payload: dict) -> dict:
     ingest_run_id = payload.get("ingest_run_id")
     enable_ai = payload.get("enable_ai", False)
     fetch_event_pages = payload.get("fetch_event_pages", False)  # Selective Deep-Fetch
+    dry_run = payload.get("dry_run", False)
     
     logger.info(f"Processing crawl job for source {source_id} ({source_type})")
     
@@ -370,12 +371,16 @@ async def process_crawl_job(payload: dict) -> dict:
             await update_ingest_run(ingest_run_id, "failed", error_message=error_msg)
         raise ValueError(error_msg)
     
-    # Step 1: Crawl/Parse the feed (parse_rss/parse_ics return (events, etag, last_modified, was_modified))
+    # Step 1: Crawl/Parse (RSS/ICS return (events, etag, last_modified, was_modified); scraper returns list)
     try:
         if source_type == "rss":
             parsed_events, _, _, _ = await feed_parser.parse_rss(source_url)
         elif source_type == "ics":
             parsed_events, _, _, _ = await feed_parser.parse_ics(source_url)
+        elif source_type == "scraper":
+            from src.crawlers.base_scraper import scrape_with_config
+            scraper_config = {**payload.get("scraper_config", {}), "url": source_url}
+            parsed_events = await scrape_with_config(scraper_config)
         else:
             error_msg = f"Unknown source type: {source_type}"
             if ingest_run_id:
@@ -392,9 +397,9 @@ async def process_crawl_job(payload: dict) -> dict:
     
     if len(parsed_events) == 0:
         logger.warning(f"No events found in {source_url}")
-        if ingest_run_id:
+        if ingest_run_id and not dry_run:
             await update_ingest_run(ingest_run_id, "success", events_found=0)
-        return {
+        result = {
             "source_id": source_id,
             "events_found": 0,
             "events_created": 0,
@@ -402,6 +407,10 @@ async def process_crawl_job(payload: dict) -> dict:
             "events_unchanged": 0,
             "events_ignored": 0,
         }
+        if dry_run:
+            result["dry_run"] = True
+            result["candidates"] = []
+        return result
     
     # Progress: tell backend how many events we found (so UI can show "X Events gefunden")
     if ingest_run_id:
@@ -453,7 +462,19 @@ async def process_crawl_job(payload: dict) -> dict:
         logger.info("Running AI enrichment...")
         candidates = await enrich_with_ai(candidates)
     
-    # Step 5: Batch Ingest to Backend
+    # Step 5: Dry-run → return candidates without ingesting
+    if dry_run:
+        logger.info("Dry-run: skipping batch ingest, returning candidates")
+        return {
+            "source_id": source_id,
+            "dry_run": True,
+            "events_found": len(parsed_events),
+            "events_unique": len(unique_events),
+            "duplicates_in_run": deduplicator.stats.duplicates_removed,
+            "candidates": [c.to_dict() for c in candidates],
+        }
+    
+    # Step 5 (normal): Batch Ingest to Backend
     result = await send_batch_to_backend(source_id, candidates, ingest_run_id)
     summary = result.get("summary", {})
 
