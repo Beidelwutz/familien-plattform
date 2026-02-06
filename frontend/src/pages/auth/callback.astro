@@ -220,7 +220,7 @@
 
         // Now get the session (should exist after exchange or from hash)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
+        
         if (sessionError) {
           throw sessionError;
         }

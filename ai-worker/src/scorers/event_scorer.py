@@ -137,7 +137,7 @@ class EventScorer:
     
     # Maximum input lengths
     MAX_TITLE_LENGTH = 200
-    MAX_DESCRIPTION_LENGTH = 2000
+    MAX_DESCRIPTION_LENGTH = 5000
     MAX_LOCATION_LENGTH = 300
     
     def __init__(self):

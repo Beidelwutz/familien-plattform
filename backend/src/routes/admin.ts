@@ -12,6 +12,23 @@ import { redis, isRedisAvailable } from '../lib/redis.js';
 
 const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 
+// #region agent log
+const _debugLog = (data: Record<string, unknown>) => {
+  const payload = { ...data, timestamp: Date.now(), sessionId: 'debug-session' };
+  logger.info('[BATCH-DEBUG] ' + JSON.stringify(payload));
+  (async () => {
+    try {
+      const { appendFileSync, mkdirSync } = await import('fs');
+      const { dirname, join } = await import('path');
+      const logPath = join(process.cwd(), '..', '.cursor', 'debug.log');
+      mkdirSync(dirname(logPath), { recursive: true });
+      appendFileSync(logPath, JSON.stringify(payload) + '\n');
+    } catch (_) { /* ignore */ }
+  })();
+  fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+};
+// #endregion
+
 const router = Router();
 
 // PATCH /api/admin/ingest-runs/:id - Update ingest run (called by AI-Worker with SERVICE_TOKEN)
@@ -1638,6 +1655,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
       });
     }
 
+    // #region agent log
+    _debugLog({ location: 'admin.ts:process-pending-ai:before-find', message: 'before findMany pending_ai', hypothesisId: 'H4', data: { limit: Number(req.query.limit || 50) } });
+    // #endregion
     // Get events with pending_ai status - include more fields for the dashboard
     const pendingEvents = await prisma.canonicalEvent.findMany({
       where: { 
@@ -1685,7 +1705,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
         }
       }
     });
-    
+    // #region agent log
+    _debugLog({ location: 'admin.ts:process-pending-ai:after-find', message: 'after findMany pending_ai', hypothesisId: 'H4', data: { pendingCount: pendingEvents.length, aiWorkerUrlSet: !!process.env.AI_WORKER_URL } });
+    // #endregion
     if (pendingEvents.length === 0) {
       const pendingAiCount = await prisma.canonicalEvent.count({ where: { status: 'pending_ai' } });
       logger.info(`process-pending-ai: keine Events (pending_ai count=${pendingAiCount})`);
@@ -1714,7 +1736,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
     
     const jobId = dbJob.id;
     const startedAt = dbJob.started_at.toISOString();
-    
+    // #region agent log
+    _debugLog({ location: 'admin.ts:process-pending-ai:job-created', message: 'AiJob created', hypothesisId: 'H2', data: { jobId, total: pendingEvents.length } });
+    // #endregion
     // Build event details with existing snapshot
     const eventDetails: AIJobEventDetail[] = pendingEvents.map(event => {
       const existingCategories = event.categories.map(c => c.category.slug);
@@ -1785,6 +1809,10 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
     
     // Process events in the background
     setImmediate(async () => {
+      // #region agent log
+      _debugLog({ location: 'admin.ts:setImmediate:entry', message: 'background loop started', hypothesisId: 'H2', data: { jobId, total: pendingEvents.length } });
+      // #endregion
+      try {
       const summary = { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 };
       const startTime = Date.now();
       let totalCostUsd = 0;
@@ -1812,7 +1840,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             ? Math.round(((Date.now() - startTime) / i) * (pendingEvents.length - i) / 1000)
             : (pendingEvents.length - i) * 3,
         });
-        
+        // #region agent log
+        if (i === 0) _debugLog({ location: 'admin.ts:before-classify', message: 'before first classify fetch', hypothesisId: 'H1,H3', data: { jobId, eventIndex: i, eventId: event.id } });
+        // #endregion
         const AI_REQUEST_TIMEOUT_MS = 90_000; // 90s per request so batch does not hang
         try {
           // Step 1: Classification (with timeout so stuck AI Worker does not block forever)
@@ -1821,7 +1851,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               title: event.title,
-              description: event.description_short || event.description_long || '',
+              description: (event.description_long || event.description_short || ''),
               location_address: event.location_address || '',
               price_min: event.price_min ? Number(event.price_min) : null,
               price_max: event.price_max ? Number(event.price_max) : null,
@@ -1830,7 +1860,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             }),
             signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
           });
-          
+          // #region agent log
+          if (i === 0) _debugLog({ location: 'admin.ts:after-classify', message: 'after classify fetch', hypothesisId: 'H1,H5', data: { jobId, eventIndex: i, status: classifyRes.status, ok: classifyRes.ok } });
+          // #endregion
           if (!classifyRes.ok) {
             const errorText = await classifyRes.text();
             throw { step: 'classification', message: `Classification failed: ${classifyRes.status} - ${errorText}` };
@@ -1843,7 +1875,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               title: event.title,
-              description: event.description_short || event.description_long || '',
+              description: (event.description_long || event.description_short || ''),
               location_address: event.location_address || '',
             }),
             signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
@@ -2076,6 +2108,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           logger.info(`Processed event ${event.id}: ${newStatus} (family_fit: ${scores.family_fit_score}, confidence: ${classification.confidence})`);
           
         } catch (err: any) {
+          // #region agent log
+          _debugLog({ location: 'admin.ts:catch', message: 'event processing error', hypothesisId: 'H1,H3,H5', data: { jobId, eventIndex: i, eventId: event.id, errName: err?.name, errCode: err?.code, errStep: err?.step, errMessage: (err?.message || '').slice(0, 200) } });
+          // #endregion
           const isAbort = err?.name === 'AbortError' || err?.code === 'ABORT_ERR';
           const errorMessage = isAbort
             ? 'AI Worker Timeout (90s) – Worker nicht erreichbar oder zu langsam'
@@ -2106,7 +2141,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             total_cost_usd: totalCostUsd,
           }
         });
-        
+        // #region agent log
+        _debugLog({ location: 'admin.ts:after-event-update', message: 'processed count updated', hypothesisId: 'H2', data: { jobId, processed: i + 1, total: pendingEvents.length, failed: summary.failed } });
+        // #endregion
         await updateAIJobStatus(jobId, {
           processed: i + 1,
           summary: { ...summary },
@@ -2137,6 +2174,14 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
       });
       
       logger.info(`AI job ${jobId} completed: ${JSON.stringify(summary)}`);
+      } catch (loopErr: any) {
+        // #region agent log
+        _debugLog({ location: 'admin.ts:setImmediate:catch', message: 'background loop threw', hypothesisId: 'H2,H3', data: { jobId, errName: loopErr?.name, errMessage: (loopErr?.message || '').slice(0, 300) } });
+        // #endregion
+        try {
+          await prisma.aiJob.update({ where: { id: jobId }, data: { status: 'failed', completed_at: new Date() } });
+        } catch (_) { /* ignore */ }
+      }
     });
     
   } catch (error) {

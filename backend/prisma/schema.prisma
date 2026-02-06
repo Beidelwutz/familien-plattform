@@ -58,6 +58,7 @@ model CanonicalEvent {
   published_by            PublishMethod?
   decision_reason         String?                   @db.VarChar(255)
   ai_flags                Json?                     @default("{}")
+  field_fill_status       Json?                     @default("{}")
   ai_summary_short        String?                   @db.VarChar(300)
   ai_summary_highlights   Json?                     @default("[]")
   ai_fit_blurb            String?                   @db.VarChar(150)

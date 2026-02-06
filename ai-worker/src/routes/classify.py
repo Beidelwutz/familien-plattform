@@ -83,61 +83,48 @@ async def classify_event(event: EventInput):
     """
     Classify an event for family suitability.
     
-    Uses rule-based pre-filtering first, then AI if needed.
+    Always runs AI to get summary and extraction; rule filter only overrides
+    is_relevant / rule_matched when it has a clear decision.
     """
-    # Step 1: Rule-based pre-filter
-    rule_result = rule_filter.check(event.dict())
-    
-    if rule_result.is_relevant is not None:
-        # Rule made a decision
-        return ClassificationResult(
-            is_relevant=rule_result.is_relevant,
-            rule_matched=rule_result.reason,
-            categories=rule_result.suggested_categories or [],
-            age_min=None,
-            age_max=None,
-            is_indoor=event.is_indoor or False,
-            is_outdoor=event.is_outdoor or False,
-            confidence=0.9 if rule_result.is_relevant else 0.95,
-            used_ai=False
-        )
-    
-    # Step 2: AI classification needed
+    # Always run AI for summary, extraction, categories, etc.
     try:
         ai_result = await classifier.classify(event.dict())
-        
-        return ClassificationResult(
-            is_relevant=True,  # If AI classified it, assume relevant
-            rule_matched=None,
-            categories=ai_result.categories,
-            age_min=ai_result.age_min,
-            age_max=ai_result.age_max,
-            is_indoor=ai_result.is_indoor,
-            is_outdoor=ai_result.is_outdoor,
-            confidence=ai_result.confidence,
-            used_ai=True,
-            # Legacy fields
-            description_short=ai_result.description_short,
-            family_reason=ai_result.family_reason,
-            # New AI fields
-            age_rating=ai_result.age_rating,
-            age_fit_buckets=ai_result.age_fit_buckets,
-            ai_summary_short=ai_result.ai_summary_short,
-            ai_summary_highlights=ai_result.ai_summary_highlights,
-            ai_fit_blurb=ai_result.ai_fit_blurb,
-            summary_confidence=ai_result.summary_confidence,
-            # Extracted datetime/location
-            extracted_start_datetime=ai_result.extracted_start_datetime,
-            extracted_end_datetime=ai_result.extracted_end_datetime,
-            extracted_location_address=ai_result.extracted_location_address,
-            extracted_location_district=ai_result.extracted_location_district,
-            datetime_confidence=ai_result.datetime_confidence,
-            location_confidence=ai_result.location_confidence,
-            # Flags
-            flags=ai_result.flags,
-        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
+
+    rule_result = rule_filter.check(event.dict())
+    # Override only is_relevant and rule_matched when rule made a decision
+    is_relevant = rule_result.is_relevant if rule_result.is_relevant is not None else True
+    rule_matched = rule_result.reason if rule_result.is_relevant is not None else None
+    categories = (rule_result.suggested_categories or ai_result.categories) if rule_result.is_relevant is not None else ai_result.categories
+    confidence = (0.9 if rule_result.is_relevant else 0.95) if rule_result.is_relevant is not None else ai_result.confidence
+
+    return ClassificationResult(
+        is_relevant=is_relevant,
+        rule_matched=rule_matched,
+        categories=categories,
+        age_min=ai_result.age_min,
+        age_max=ai_result.age_max,
+        is_indoor=ai_result.is_indoor,
+        is_outdoor=ai_result.is_outdoor,
+        confidence=confidence,
+        used_ai=True,
+        description_short=ai_result.description_short,
+        family_reason=ai_result.family_reason,
+        age_rating=ai_result.age_rating,
+        age_fit_buckets=ai_result.age_fit_buckets,
+        ai_summary_short=ai_result.ai_summary_short,
+        ai_summary_highlights=ai_result.ai_summary_highlights,
+        ai_fit_blurb=ai_result.ai_fit_blurb,
+        summary_confidence=ai_result.summary_confidence,
+        extracted_start_datetime=ai_result.extracted_start_datetime,
+        extracted_end_datetime=ai_result.extracted_end_datetime,
+        extracted_location_address=ai_result.extracted_location_address,
+        extracted_location_district=ai_result.extracted_location_district,
+        datetime_confidence=ai_result.datetime_confidence,
+        location_confidence=ai_result.location_confidence,
+        flags=ai_result.flags,
+    )
 
 
 @router.post("/score", response_model=ScoringResult)

@@ -266,7 +266,7 @@ class EventClassifier:
     
     # Maximum input lengths to prevent token overflow
     MAX_TITLE_LENGTH = 200
-    MAX_DESCRIPTION_LENGTH = 2000
+    MAX_DESCRIPTION_LENGTH = 5000
     MAX_LOCATION_LENGTH = 300
     
     # Confidence thresholds for model escalation
