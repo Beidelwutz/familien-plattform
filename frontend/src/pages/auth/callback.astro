@@ -82,15 +82,13 @@
     <div class="error" id="error"></div>
   </div>
 
-  <script>
-    import { supabase } from '../../lib/supabase';
+  <!-- Inline script + CDN: no bundled chunk = no 404 after deploy/cache. Supabase loaded from esm.sh at runtime. -->
+  <script type="module" is:inline define:vars={{ supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL || '', supabaseAnonKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY || '', apiBase: import.meta.env.PUBLIC_API_URL || '' }}>
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } });
+    const API_BASE = apiBase || window.location.origin;
 
-    const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
-
-    /**
-     * Extract error code from error message
-     */
-    function getErrorCode(message: string): string {
+    function getErrorCode(message) {
       const lowerMessage = message.toLowerCase();
       
       if (lowerMessage.includes('redirect_uri_mismatch') || lowerMessage.includes('redirect uri')) {
@@ -121,8 +119,8 @@
     /**
      * Get user-friendly error title
      */
-    function getErrorTitle(code: string): string {
-      const titles: Record<string, string> = {
+    function getErrorTitle(code) {
+      const titles = {
         'redirect_uri_mismatch': 'Konfigurationsfehler: Redirect-URI',
         'invalid_grant': 'Ungültiger oder abgelaufener Code',
         'access_denied': 'Zugriff verweigert',
@@ -141,8 +139,8 @@
     /**
      * Get helpful hint for common errors
      */
-    function getErrorHint(code: string): string | null {
-      const hints: Record<string, string> = {
+    function getErrorHint(code) {
+      const hints = {
         'redirect_uri_mismatch': 
           'Die Redirect-URI in der Google Cloud Console stimmt nicht mit der Supabase-Callback-URL überein. ' +
           'Prüfe: Google Cloud → Credentials → OAuth Client → Authorized redirect URIs muss die Supabase-Callback-URL enthalten.',
@@ -169,7 +167,7 @@
     /**
      * Check if error is a configuration error (needs longer display time)
      */
-    function isConfigError(err: unknown): boolean {
+    function isConfigError(err) {
       if (!(err instanceof Error)) return false;
       const code = getErrorCode(err.message);
       return ['redirect_uri_mismatch', 'unauthorized_client', 'invalid_client', 'no_session'].includes(code);
@@ -189,10 +187,10 @@
     }
 
     async function handleCallback() {
-      const titleEl = document.getElementById('title') as HTMLElement | null;
-      const messageEl = document.getElementById('message') as HTMLElement | null;
-      const spinnerEl = document.getElementById('spinner') as HTMLElement | null;
-      const errorEl = document.getElementById('error') as HTMLElement | null;
+      const titleEl = document.getElementById('title');
+      const messageEl = document.getElementById('message');
+      const spinnerEl = document.getElementById('spinner');
+      const errorEl = document.getElementById('error');
 
       // For redirect after error
       let errorCode = 'auth_failed';
@@ -200,10 +198,6 @@
       try {
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const queryParams = new URLSearchParams(window.location.search);
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:handleCallback:entry',message:'Callback started',data:{hash:window.location.hash,search:window.location.search,hasCode:!!queryParams.get('code')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
-        // #endregion
         
         // Check for error in URL
         const error = hashParams.get('error') || queryParams.get('error');
@@ -216,13 +210,7 @@
         // PKCE Flow: Exchange code for session first
         const code = queryParams.get('code');
         if (code) {
-          // #region agent log
-          fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:exchangeCode:before',message:'Exchanging code for session',data:{codeLength:code.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          // #region agent log
-          fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:exchangeCode:after',message:'Exchange result',data:{success:!exchangeError,error:exchangeError?.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
           if (exchangeError) {
             throw exchangeError;
           }
@@ -230,11 +218,6 @@
 
         // Now get the session (should exist after exchange or from hash)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:getSession',message:'Session retrieved',data:{hasSession:!!session,hasToken:!!session?.access_token,sessionError:sessionError?.message},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
-        // #endregion
-        
         if (sessionError) {
           throw sessionError;
         }
@@ -253,29 +236,15 @@
         } else {
           sessionStorage.setItem('auth_token', session.access_token);
         }
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:tokenStored',message:'Token stored in storage',data:{remember,tokenInLocalStorage:!!localStorage.getItem('auth_token'),tokenInSessionStorage:!!sessionStorage.getItem('auth_token')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
 
         // Update UI - syncing
         if (messageEl) messageEl.textContent = 'Konto wird synchronisiert...';
 
-        // ============================================
-        // CRITICAL: Sync user to backend database
-        // This ensures the Prisma user exists before we consider the login successful
-        // ============================================
-        // #region agent log
-        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:sync:before',message:'Calling backend sync',data:{apiBase:API_BASE},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        const syncResponse = await fetch(`${API_BASE}/api/auth/sync`, {
+        // Sync user to backend database (Prisma user must exist before login is complete)
+        const syncResponse = await fetch(`${API_BASE || window.location.origin}/api/auth/sync`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${session.access_token}` }
         });
-
-        // #region agent log
-        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:sync:after',message:'Backend sync response',data:{status:syncResponse.status,ok:syncResponse.ok},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
 
         if (!syncResponse.ok) {
           const syncData = await syncResponse.json().catch(() => ({}));
@@ -287,12 +256,6 @@
           throw new Error(syncData.error?.message || 'Konto konnte nicht synchronisiert werden');
         }
 
-        // Debug logging in dev mode
-        if (import.meta.env.DEV) {
-          const syncData = await syncResponse.clone().json();
-          console.log('[Auth Callback] Sync successful:', syncData);
-        }
-
         // Update UI - success
         if (titleEl) titleEl.textContent = 'Anmeldung erfolgreich!';
         if (messageEl) messageEl.textContent = 'Du wirst weitergeleitet...';
@@ -301,11 +264,6 @@
         // Redirect
         const redirectTo = localStorage.getItem('auth_redirect') || '/';
         localStorage.removeItem('auth_redirect');
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'callback.astro:success',message:'Login successful, redirecting',data:{redirectTo,tokenStillInLocalStorage:!!localStorage.getItem('auth_token')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-
         setTimeout(() => {
           window.location.href = redirectTo;
         }, 1000);
