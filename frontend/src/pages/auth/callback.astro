@@ -134,6 +134,10 @@
         'ACCOUNT_SYNC_FAILED': 'Konto konnte nicht angelegt werden',
         'EMAIL_MISSING': 'Keine E-Mail-Adresse',
         'AUTH_INVALID': 'Authentifizierung ungültig',
+        'DB_CONNECTION_ERROR': 'Datenbankverbindung fehlgeschlagen',
+        'DB_UNAVAILABLE': 'Datenbank nicht erreichbar',
+        'EMAIL_EXISTS': 'E-Mail bereits registriert',
+        'SERVICE_UNAVAILABLE': 'Dienst nicht verfügbar',
         'unknown': 'Authentifizierung fehlgeschlagen',
       };
       return titles[code] || titles['unknown'];
@@ -165,6 +169,16 @@
           'Dein Konto konnte nicht in der Datenbank angelegt werden. Bitte versuche es erneut.',
         'EMAIL_MISSING': 
           'Google hat keine E-Mail-Adresse übermittelt. Bitte nutze den E-Mail-Login oder prüfe deine Google-Kontoeinstellungen.',
+        'DB_CONNECTION_ERROR': 
+          'Die Anmeldung bei Google war erfolgreich, aber die Datenbank antwortet nicht rechtzeitig. ' +
+          'Bitte versuche es in ein paar Sekunden erneut. Falls das Problem anhält, prüfe die DATABASE_URL und ob die Datenbank erreichbar ist.',
+        'DB_UNAVAILABLE': 
+          'Die Anmeldung bei Google war erfolgreich, aber die Datenbank ist derzeit nicht erreichbar. ' +
+          'Bitte versuche es später erneut oder prüfe die Datenbankverbindung (DATABASE_URL).',
+        'EMAIL_EXISTS': 
+          'Ein Konto mit dieser E-Mail-Adresse existiert bereits. Versuche dich mit E-Mail und Passwort anzumelden.',
+        'SERVICE_UNAVAILABLE': 
+          'Der Authentifizierungsdienst (Supabase) ist nicht konfiguriert. Bitte prüfe SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY im Backend.',
       };
       return hints[code] || null;
     }
@@ -281,19 +295,36 @@
         if (messageEl) messageEl.textContent = 'Konto wird synchronisiert...';
 
         // Sync user to backend database (Prisma user must exist before login is complete)
-        const syncResponse = await fetch(`${API_BASE || window.location.origin}/api/auth/sync`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${session.access_token}` }
-        });
+        // Retry logic for transient database errors (P2024 connection timeout, P1001/P1002 unreachable)
+        const RETRYABLE_CODES = ['DB_CONNECTION_ERROR', 'DB_UNAVAILABLE'];
+        const MAX_RETRIES = 2;
+        let syncResponse = null;
+        let lastSyncData = null;
 
-        if (!syncResponse.ok) {
-          const syncData = await syncResponse.json().catch(() => ({}));
-          errorCode = syncData.error?.code || 'ACCOUNT_SYNC_FAILED';
-          
-          // Clean up - user is in Supabase but not synced to our DB
-          await cleanupAuthState();
-          
-          throw new Error(syncData.error?.message || 'Konto konnte nicht synchronisiert werden');
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          if (attempt > 0) {
+            console.log(`[Callback] Sync retry ${attempt}/${MAX_RETRIES}...`);
+            if (messageEl) messageEl.textContent = `Erneuter Verbindungsversuch (${attempt}/${MAX_RETRIES})...`;
+            // Exponential backoff: 1s, 2s
+            await new Promise(r => setTimeout(r, attempt * 1000));
+          }
+
+          syncResponse = await fetch(`${API_BASE || window.location.origin}/api/auth/sync`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${session.access_token}` }
+          });
+
+          if (syncResponse.ok) break;
+
+          lastSyncData = await syncResponse.json().catch(() => ({}));
+          const syncErrorCode = lastSyncData.error?.code || 'ACCOUNT_SYNC_FAILED';
+
+          // Only retry on transient database errors
+          if (!RETRYABLE_CODES.includes(syncErrorCode) || attempt === MAX_RETRIES) {
+            errorCode = syncErrorCode;
+            await cleanupAuthState();
+            throw new Error(lastSyncData.error?.message || 'Konto konnte nicht synchronisiert werden');
+          }
         }
 
         // Update UI - success

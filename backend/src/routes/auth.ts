@@ -282,69 +282,23 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
       });
     }
 
-    // First, check if user exists by Supabase ID
-    let user = await prisma.user.findUnique({
-      where: { id: supabaseUser.id },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        email_verified: true,
-        created_at: true
-      }
-    });
+    // Database operations with retry for transient connection errors
+    const DB_RETRY_CODES = ['P2024', 'P1001', 'P1002'];
+    const MAX_DB_RETRIES = 2;
+    let user: any = null;
+    let lastDbError: any = null;
 
-    if (user) {
-      // User exists with this Supabase ID - update email if changed
-      if (user.email !== supabaseUser.email) {
-        user = await prisma.user.update({
-          where: { id: supabaseUser.id },
-          data: { 
-            email: supabaseUser.email, 
-            updated_at: new Date() 
-          },
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            email_verified: true,
-            created_at: true
-          }
-        });
-      }
-    } else {
-      // User doesn't exist with this Supabase ID
-      // Check if a user with this email already exists (from email/password registration)
-      const existingUserByEmail = await prisma.user.findUnique({
-        where: { email: supabaseUser.email },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          email_verified: true,
-          created_at: true
+    for (let attempt = 0; attempt <= MAX_DB_RETRIES; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`[Sync] DB retry ${attempt}/${MAX_DB_RETRIES} for user ${supabaseUser.email}`);
+          // Exponential backoff: 500ms, 1000ms
+          await new Promise(r => setTimeout(r, attempt * 500));
         }
-      });
 
-      if (existingUserByEmail) {
-        // User registered with email/password before
-        // Return the existing user - the auth middleware will use the Prisma ID
-        // This allows users to log in with both email/password AND OAuth
-        user = existingUserByEmail;
-        
-        // Update last activity timestamp
-        await prisma.user.update({
-          where: { id: existingUserByEmail.id },
-          data: { updated_at: new Date() }
-        });
-      } else {
-        // Completely new user - create them with the Supabase ID
-        user = await prisma.user.create({
-          data: { 
-            id: supabaseUser.id, 
-            email: supabaseUser.email, 
-            role: 'parent' 
-          },
+        // First, check if user exists by Supabase ID
+        user = await prisma.user.findUnique({
+          where: { id: supabaseUser.id },
           select: {
             id: true,
             email: true,
@@ -353,7 +307,84 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
             created_at: true
           }
         });
+
+        if (user) {
+          // User exists with this Supabase ID - update email if changed
+          if (user.email !== supabaseUser.email) {
+            user = await prisma.user.update({
+              where: { id: supabaseUser.id },
+              data: { 
+                email: supabaseUser.email, 
+                updated_at: new Date() 
+              },
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                email_verified: true,
+                created_at: true
+              }
+            });
+          }
+        } else {
+          // User doesn't exist with this Supabase ID
+          // Check if a user with this email already exists (from email/password registration)
+          const existingUserByEmail = await prisma.user.findUnique({
+            where: { email: supabaseUser.email },
+            select: {
+              id: true,
+              email: true,
+              role: true,
+              email_verified: true,
+              created_at: true
+            }
+          });
+
+          if (existingUserByEmail) {
+            // User registered with email/password before
+            // Return the existing user - the auth middleware will use the Prisma ID
+            // This allows users to log in with both email/password AND OAuth
+            user = existingUserByEmail;
+            
+            // Update last activity timestamp
+            await prisma.user.update({
+              where: { id: existingUserByEmail.id },
+              data: { updated_at: new Date() }
+            });
+          } else {
+            // Completely new user - create them with the Supabase ID
+            user = await prisma.user.create({
+              data: { 
+                id: supabaseUser.id, 
+                email: supabaseUser.email, 
+                role: 'parent' 
+              },
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                email_verified: true,
+                created_at: true
+              }
+            });
+          }
+        }
+
+        // DB operations succeeded - break out of retry loop
+        lastDbError = null;
+        break;
+      } catch (dbErr: any) {
+        lastDbError = dbErr;
+        // Only retry on transient connection errors
+        if (!DB_RETRY_CODES.includes(dbErr.code) || attempt === MAX_DB_RETRIES) {
+          throw dbErr;
+        }
+        console.warn(`[Sync] Transient DB error (${dbErr.code}), will retry...`);
       }
+    }
+
+    if (!user) {
+      throw lastDbError || new Error('User sync failed after retries');
     }
 
     // Upsert FamilyProfile (ensure it exists)
