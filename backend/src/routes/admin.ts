@@ -1561,7 +1561,7 @@ function calculateFieldDiff(
 }
 
 const AI_JOB_PREFIX = 'ai-job:';
-const AI_JOB_TTL = 3600; // 1 hour
+const AI_JOB_TTL = 86400; // 24 hours (for job history)
 
 async function updateAIJobStatus(jobId: string, update: Partial<AIJobStatus>): Promise<void> {
   if (!redis || !isRedisAvailable()) return;
@@ -1606,9 +1606,27 @@ async function getAIJobStatus(jobId: string): Promise<AIJobStatus | null> {
 }
 
 // POST /api/admin/process-pending-ai - Process events with pending_ai status through AI Worker
-router.post('/process-pending-ai', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { limit = 50 } = req.query;
+    const userId = req.user?.sub;
+    
+    // Check if there's already a running job (not stale)
+    const existingJob = await prisma.aiJob.findFirst({
+      where: {
+        status: 'running',
+        last_heartbeat: { gte: new Date(Date.now() - STALE_THRESHOLD_MS) }
+      }
+    });
+    
+    if (existingJob) {
+      return res.status(409).json({
+        success: false,
+        error: 'Ein AI-Batch läuft bereits',
+        activeJobId: existingJob.id,
+        message: `Job ${existingJob.id} ist aktiv (${existingJob.processed}/${existingJob.total} verarbeitet)`
+      });
+    }
     
     // Get events with pending_ai status - include more fields for the dashboard
     const pendingEvents = await prisma.canonicalEvent.findMany({
@@ -1669,9 +1687,19 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
       });
     }
     
-    // Generate job ID and initialize status
-    const jobId = randomUUID();
-    const startedAt = new Date().toISOString();
+    // Create job in database for persistent tracking
+    const dbJob = await prisma.aiJob.create({
+      data: {
+        total: pendingEvents.length,
+        processed: 0,
+        status: 'running',
+        created_by: userId,
+        summary: { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 },
+      }
+    });
+    
+    const jobId = dbJob.id;
+    const startedAt = dbJob.started_at.toISOString();
     
     // Build event details with existing snapshot
     const eventDetails: AIJobEventDetail[] = pendingEvents.map(event => {
@@ -1752,7 +1780,16 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
         const eventDetail = eventDetails[i];
         const eventStartTime = Date.now();
         
-        // Mark event as processing
+        // Mark event as processing - update both DB (heartbeat) and Redis (details)
+        await prisma.aiJob.update({
+          where: { id: jobId },
+          data: {
+            current_event_id: event.id,
+            processed: i,
+            last_heartbeat: new Date(),
+          }
+        });
+        
         await updateAIJobEventStatus(jobId, event.id, { processing_status: 'processing' });
         await updateAIJobStatus(jobId, {
           processed: i,
@@ -2039,7 +2076,17 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
           logger.error(`Failed to process event ${event.id}: ${errorMessage}`);
         }
         
-        // Update global progress after each event
+        // Update global progress after each event (both DB and Redis)
+        await prisma.aiJob.update({
+          where: { id: jobId },
+          data: {
+            processed: i + 1,
+            last_heartbeat: new Date(),
+            summary: { ...summary },
+            total_cost_usd: totalCostUsd,
+          }
+        });
+        
         await updateAIJobStatus(jobId, {
           processed: i + 1,
           summary: { ...summary },
@@ -2047,7 +2094,19 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
         });
       }
       
-      // Mark job as completed
+      // Mark job as completed in both DB and Redis
+      await prisma.aiJob.update({
+        where: { id: jobId },
+        data: {
+          status: 'completed',
+          processed: pendingEvents.length,
+          current_event_id: null,
+          completed_at: new Date(),
+          summary,
+          total_cost_usd: totalCostUsd,
+        }
+      });
+      
       await updateAIJobStatus(jobId, {
         status: 'completed',
         processed: pendingEvents.length,
@@ -2065,76 +2124,114 @@ router.post('/process-pending-ai', async (req: Request, res: Response, next: Nex
   }
 });
 
-// GET /api/admin/ai-job-status/:jobId - Get status of an AI processing job
+// GET /api/admin/ai-job-status/:jobId - Get status of an AI processing job (HYBRID: DB + Redis)
 // Supports ?changed_since=<ISO-timestamp> for efficient polling (only returns changed events)
 router.get('/ai-job-status/:jobId', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { jobId } = req.params;
     const { changed_since } = req.query;
     
-    if (!redis || !isRedisAvailable()) {
-      return res.status(503).json({
-        success: false,
-        error: 'Redis not available for job status tracking',
-      });
-    }
+    // 1. First check the database (always available, source of truth for job status)
+    let dbJob = await prisma.aiJob.findUnique({ where: { id: jobId } });
     
-    const status = await getAIJobStatus(jobId);
-    
-    if (!status) {
+    if (!dbJob) {
+      // Fallback: Try Redis if DB doesn't have it (for backwards compatibility)
+      if (redis && isRedisAvailable()) {
+        const redisStatus = await getAIJobStatus(jobId);
+        if (redisStatus) {
+          return res.json({
+            success: true,
+            data: { ...redisStatus, has_changes: true, source: 'redis_only' },
+          });
+        }
+      }
       return res.status(404).json({
         success: false,
-        error: 'Job not found or expired',
+        error: 'Job not found',
       });
     }
     
-    // If changed_since is provided, filter to only changed events
+    // 2. Check for stale job
+    dbJob = await checkAndMarkStale(dbJob);
+    
+    // 3. Get event details from Redis (optional, graceful degradation)
+    let events: AIJobEventDetail[] = [];
+    let redisAvailable = false;
+    
+    if (redis && isRedisAvailable()) {
+      redisAvailable = true;
+      const redisData = await redis.get(`${AI_JOB_PREFIX}${jobId}`);
+      if (redisData) {
+        const parsed = JSON.parse(redisData);
+        events = parsed.events || [];
+      }
+    }
+    
+    // 4. Calculate heartbeat info
+    const heartbeatAgeMs = Date.now() - new Date(dbJob.last_heartbeat).getTime();
+    const heartbeatAgeSeconds = Math.floor(heartbeatAgeMs / 1000);
+    const heartbeatStatus = dbJob.status === 'running'
+      ? (heartbeatAgeSeconds < 120 ? 'healthy' : heartbeatAgeSeconds < 300 ? 'warning' : 'critical')
+      : null;
+    
+    // 5. Build response
+    const baseResponse = {
+      id: dbJob.id,
+      status: dbJob.status,
+      total: dbJob.total,
+      processed: dbJob.processed,
+      currentEventId: dbJob.current_event_id,
+      startedAt: dbJob.started_at.toISOString(),
+      estimatedSecondsRemaining: dbJob.status === 'running'
+        ? Math.max(0, Math.round((dbJob.total - dbJob.processed) * 3))
+        : 0,
+      summary: dbJob.summary as any || { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 },
+      total_cost_usd: dbJob.total_cost_usd,
+      last_updated_at: dbJob.last_heartbeat.toISOString(),
+      completed_at: dbJob.completed_at?.toISOString() || null,
+      heartbeat_age_seconds: heartbeatAgeSeconds,
+      heartbeat_status: heartbeatStatus,
+      redis_available: redisAvailable,
+    };
+    
+    // Handle changed_since for efficient polling
     if (changed_since && typeof changed_since === 'string') {
       const sinceDate = new Date(changed_since);
-      const lastUpdated = new Date(status.last_updated_at);
+      const lastUpdated = new Date(dbJob.last_heartbeat);
       
-      // If nothing changed since the requested time, return minimal response
       if (lastUpdated <= sinceDate) {
         return res.json({
           success: true,
           data: {
-            id: status.id,
-            status: status.status,
-            total: status.total,
-            processed: status.processed,
-            currentEventId: status.currentEventId,
-            estimatedSecondsRemaining: status.estimatedSecondsRemaining,
-            summary: status.summary,
-            total_cost_usd: status.total_cost_usd,
-            last_updated_at: status.last_updated_at,
-            events: [], // No changed events
+            ...baseResponse,
+            events: [],
             has_changes: false,
           },
         });
       }
       
-      // Filter events to only those that have been processed since changed_since
-      // We consider an event "changed" if it's no longer in 'waiting' status
-      const changedEvents = status.events.filter(e => 
+      // Filter events to only changed ones
+      const changedEvents = events.filter(e => 
         e.processing_status !== 'waiting' || 
-        e.id === status.currentEventId
+        e.id === dbJob.current_event_id
       );
       
       return res.json({
         success: true,
         data: {
-          ...status,
+          ...baseResponse,
           events: changedEvents,
           has_changes: true,
         },
       });
     }
     
-    // Return full status if no changed_since
+    // Return full response
     res.json({
       success: true,
       data: {
-        ...status,
+        ...baseResponse,
+        events,
         has_changes: true,
       },
     });
@@ -2153,6 +2250,201 @@ router.get('/pending-ai-count', async (_req: Request, res: Response, next: NextF
     res.json({
       success: true,
       data: { count }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============================================
+// AI JOBS (Persistent Status Tracking)
+// ============================================
+
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+// Helper: Check if a job is stale (no heartbeat for 5+ minutes while running)
+async function checkAndMarkStale(job: any): Promise<any> {
+  if (job.status !== 'running') return job;
+  
+  const heartbeatAge = Date.now() - new Date(job.last_heartbeat).getTime();
+  if (heartbeatAge > STALE_THRESHOLD_MS) {
+    await prisma.aiJob.update({
+      where: { id: job.id },
+      data: { status: 'stale' }
+    });
+    return { ...job, status: 'stale' };
+  }
+  return job;
+}
+
+// GET /api/admin/ai-jobs - List AI jobs (last 24h)
+router.get('/ai-jobs', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24h
+    
+    const [jobs, total] = await Promise.all([
+      prisma.aiJob.findMany({
+        where: { started_at: { gte: since } },
+        take: Number(limit),
+        skip: Number(offset),
+        orderBy: { started_at: 'desc' },
+      }),
+      prisma.aiJob.count({ where: { started_at: { gte: since } } })
+    ]);
+    
+    // Check for stale jobs
+    const checkedJobs = await Promise.all(jobs.map(checkAndMarkStale));
+    
+    res.json({
+      success: true,
+      data: checkedJobs,
+      pagination: {
+        total,
+        limit: Number(limit),
+        offset: Number(offset)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/ai-jobs/active - Get the currently running job (if any)
+router.get('/ai-jobs/active', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Find running job with recent heartbeat
+    let activeJob = await prisma.aiJob.findFirst({
+      where: { status: 'running' },
+      orderBy: { started_at: 'desc' },
+    });
+    
+    if (!activeJob) {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'No active job'
+      });
+    }
+    
+    // Check if stale
+    activeJob = await checkAndMarkStale(activeJob);
+    
+    // If stale, return null (no active job)
+    if (activeJob.status === 'stale') {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'Last job is stale',
+        stale_job_id: activeJob.id
+      });
+    }
+    
+    // Try to get event details from Redis
+    let events: AIJobEventDetail[] = [];
+    if (redis && isRedisAvailable()) {
+      const redisData = await redis.get(`${AI_JOB_PREFIX}${activeJob.id}`);
+      if (redisData) {
+        const parsed = JSON.parse(redisData);
+        events = parsed.events || [];
+      }
+    }
+    
+    // Calculate heartbeat age for UI
+    const heartbeatAgeMs = Date.now() - new Date(activeJob.last_heartbeat).getTime();
+    const heartbeatAgeSeconds = Math.floor(heartbeatAgeMs / 1000);
+    
+    res.json({
+      success: true,
+      data: {
+        ...activeJob,
+        events,
+        heartbeat_age_seconds: heartbeatAgeSeconds,
+        heartbeat_status: heartbeatAgeSeconds < 120 ? 'healthy' : heartbeatAgeSeconds < 300 ? 'warning' : 'critical',
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/ai-jobs/:id/cancel - Cancel a running job
+router.post('/ai-jobs/:id/cancel', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    
+    const job = await prisma.aiJob.findUnique({ where: { id } });
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+    
+    if (job.status !== 'running' && job.status !== 'stale') {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Job cannot be cancelled (status: ${job.status})` 
+      });
+    }
+    
+    await prisma.aiJob.update({
+      where: { id },
+      data: { 
+        status: 'cancelled',
+        completed_at: new Date()
+      }
+    });
+    
+    // Clean up Redis if available
+    if (redis && isRedisAvailable()) {
+      await redis.del(`${AI_JOB_PREFIX}${id}`);
+    }
+    
+    logger.info(`AI job ${id} cancelled`);
+    
+    res.json({
+      success: true,
+      message: 'Job cancelled'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/ai-jobs/:id - Get specific job by ID (with stale check)
+router.get('/ai-jobs/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    
+    let job = await prisma.aiJob.findUnique({ where: { id } });
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+    
+    // Check if stale
+    job = await checkAndMarkStale(job);
+    
+    // Get event details from Redis
+    let events: AIJobEventDetail[] = [];
+    if (redis && isRedisAvailable()) {
+      const redisData = await redis.get(`${AI_JOB_PREFIX}${id}`);
+      if (redisData) {
+        const parsed = JSON.parse(redisData);
+        events = parsed.events || [];
+      }
+    }
+    
+    const heartbeatAgeMs = Date.now() - new Date(job.last_heartbeat).getTime();
+    const heartbeatAgeSeconds = Math.floor(heartbeatAgeMs / 1000);
+    
+    res.json({
+      success: true,
+      data: {
+        ...job,
+        events,
+        heartbeat_age_seconds: heartbeatAgeSeconds,
+        heartbeat_status: job.status === 'running' 
+          ? (heartbeatAgeSeconds < 120 ? 'healthy' : heartbeatAgeSeconds < 300 ? 'warning' : 'critical')
+          : null,
+      }
     });
   } catch (error) {
     next(error);

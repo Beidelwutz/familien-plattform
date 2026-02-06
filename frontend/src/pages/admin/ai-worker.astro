@@ -90,6 +90,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             <span id="progress-text" class="text-sm text-gray-600">0 / 0</span>
             <span id="progress-percent" class="text-sm font-bold text-primary-600">0%</span>
             <span id="elapsed-time" class="text-sm text-gray-400">0:00</span>
+            <!-- Heartbeat Indicator -->
+            <span id="heartbeat-indicator" class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+              <span id="heartbeat-dot" class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span id="heartbeat-text">Aktiv</span>
+            </span>
           </div>
           <div class="flex items-center gap-3">
             <!-- Summary badges -->
@@ -112,6 +117,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         </div>
         <div id="redis-unavailable-banner" class="hidden mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
           <strong>Live-Fortschritt nicht verfuegbar.</strong> Redis ist nicht konfiguriert. Der Batch laeuft im Hintergrund weiter. Seite in ein paar Minuten neu laden fuer die Ergebnisse.
+        </div>
+        <div id="stale-job-banner" class="hidden mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+          <strong>Job moeglicherweise gestoppt.</strong> Kein Heartbeat seit ueber 5 Minuten. Der Job wurde eventuell unterbrochen.
+          <button id="retry-stale-btn" class="ml-2 underline hover:no-underline">Job abbrechen und neu starten</button>
         </div>
       </div>
 
@@ -455,6 +464,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   let poll503Count = 0;
   const POLL_503_MAX = 2;
 
+  // Heartbeat tracking for reliability
+  let lastHeartbeatStatus = 'healthy'; // 'healthy' | 'warning' | 'critical'
+  let lastHeartbeatAge = 0; // seconds since last heartbeat
+
+  const AI_WORKER_JOB_KEY = 'ai-worker-active-job';
+
   // ========================================
   // DOM ELEMENTS
   // ========================================
@@ -572,6 +587,92 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       el.loadingState.classList.add('hidden');
       el.content.classList.remove('hidden');
+
+      // Nach Refresh: Aktiven Job vom SERVER abfragen (nicht sessionStorage)
+      // Dies ist die vertrauenswuerdige Quelle - DB-basiert mit Heartbeat
+      try {
+        const activeJobRes = await fetch(`${API_URL}/api/admin/ai-jobs/active`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (activeJobRes.ok) {
+          const { data: activeJob, stale_job_id } = await activeJobRes.json();
+          
+          // Handle stale job warning
+          if (stale_job_id) {
+            showStaleJobWarning(stale_job_id);
+          }
+          
+          if (activeJob && activeJob.status === 'running') {
+            // Aktiver Job gefunden - UI wiederherstellen
+            currentJobId = activeJob.id;
+            events = activeJob.events || [];
+            startTime = activeJob.startedAt ? new Date(activeJob.startedAt).getTime() : Date.now();
+            lastChangedAt = activeJob.last_updated_at || null;
+            poll503Count = 0;
+            lastHeartbeatStatus = activeJob.heartbeat_status || 'healthy';
+            lastHeartbeatAge = activeJob.heartbeat_age_seconds || 0;
+            
+            document.getElementById('redis-unavailable-banner')?.classList.add('hidden');
+            
+            showPipeline();
+            updateFromJobStatus(activeJob);
+            renderEventList();
+            updateHeartbeatIndicator(lastHeartbeatStatus, lastHeartbeatAge);
+            
+            const selectId = activeJob.currentEventId || (events[0] && events[0].id);
+            if (selectId) selectEvent(selectId); else if (events[0]) selectEvent(events[0].id);
+            el.listCount.textContent = events.length;
+            
+            isProcessing = true;
+            el.startBatchBtn.disabled = true;
+            el.btnIcon.innerHTML = '&#x23F3;';
+            el.btnText.textContent = 'Verarbeite...';
+            startPolling();
+            startElapsedTimer();
+            
+            console.log(`Restored active job ${currentJobId} from server (heartbeat: ${lastHeartbeatStatus})`);
+          }
+        }
+        
+        // Fallback: sessionStorage fuer abgeschlossene Jobs (Historie)
+        const stored = sessionStorage.getItem(AI_WORKER_JOB_KEY);
+        if (stored && !isProcessing) {
+          const { jobId: savedJobId } = JSON.parse(stored);
+          if (savedJobId) {
+            const jobRes = await fetch(`${API_URL}/api/admin/ai-job-status/${savedJobId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (jobRes.ok) {
+              const { data: jobData } = await jobRes.json();
+              if (jobData && jobData.events && jobData.events.length > 0 && 
+                  (jobData.status === 'completed' || jobData.status === 'failed')) {
+                // Zeige abgeschlossenen Job als Historie
+                currentJobId = jobData.id;
+                events = jobData.events;
+                isHistoryMode = true;
+                
+                showPipeline();
+                updateFromJobStatus(jobData);
+                renderEventList();
+                const selectId = events[0]?.id;
+                if (selectId) selectEvent(selectId);
+                el.listCount.textContent = events.length;
+                
+                setTimeout(() => { el.progressSection.classList.add('hidden'); }, 500);
+                sessionStorage.removeItem(AI_WORKER_JOB_KEY);
+              } else {
+                sessionStorage.removeItem(AI_WORKER_JOB_KEY);
+              }
+            } else {
+              sessionStorage.removeItem(AI_WORKER_JOB_KEY);
+            }
+          }
+        }
+      } catch (restoreErr) {
+        console.warn('Restore job failed:', restoreErr);
+        try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
+      }
     } catch (e) {
       console.error('Load error:', e);
       el.loadingState.classList.add('hidden');
@@ -607,6 +708,65 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     if (diffMins < 60) return `vor ${diffMins}m`;
     if (diffHours < 24) return `vor ${diffHours}h`;
     return `vor ${diffDays}d`;
+  }
+
+  // ========================================
+  // HEARTBEAT INDICATOR (Vertrauenswuerdigkeit)
+  // ========================================
+  function updateHeartbeatIndicator(status, ageSeconds) {
+    lastHeartbeatStatus = status;
+    lastHeartbeatAge = ageSeconds;
+    
+    const indicator = document.getElementById('heartbeat-indicator');
+    const dot = document.getElementById('heartbeat-dot');
+    const text = document.getElementById('heartbeat-text');
+    const staleBanner = document.getElementById('stale-job-banner');
+    
+    if (!indicator || !dot || !text) return;
+    
+    // Update based on status
+    if (status === 'healthy') {
+      indicator.className = 'flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700';
+      dot.className = 'w-2 h-2 rounded-full bg-green-500 animate-pulse';
+      text.textContent = 'Aktiv';
+      staleBanner?.classList.add('hidden');
+    } else if (status === 'warning') {
+      const mins = Math.floor(ageSeconds / 60);
+      indicator.className = 'flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700';
+      dot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+      text.textContent = `Heartbeat vor ${mins}m`;
+      staleBanner?.classList.add('hidden');
+    } else if (status === 'critical') {
+      const mins = Math.floor(ageSeconds / 60);
+      indicator.className = 'flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-red-100 text-red-700';
+      dot.className = 'w-2 h-2 rounded-full bg-red-500';
+      text.textContent = `Gestoppt? (${mins}m)`;
+      staleBanner?.classList.remove('hidden');
+    }
+  }
+
+  function showStaleJobWarning(staleJobId) {
+    const staleBanner = document.getElementById('stale-job-banner');
+    if (staleBanner) {
+      staleBanner.classList.remove('hidden');
+      // Setup retry button
+      const retryBtn = document.getElementById('retry-stale-btn');
+      if (retryBtn) {
+        retryBtn.onclick = async () => {
+          try {
+            // Cancel the stale job
+            await fetch(`${API_URL}/api/admin/ai-jobs/${staleJobId}/cancel`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            staleBanner.classList.add('hidden');
+            window.location.reload();
+          } catch (e) {
+            console.error('Failed to cancel stale job:', e);
+          }
+        };
+      }
+    }
   }
 
   function updateButtonState(pendingCount) {
@@ -650,6 +810,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const data = await res.json();
 
       if (!res.ok) {
+        // Handle 409 Conflict - Job already running
+        if (res.status === 409 && data.activeJobId) {
+          alert(`Ein AI-Batch laeuft bereits (Job: ${data.activeJobId}). ${data.message || ''}`);
+          // Reload to show the running job
+          window.location.reload();
+          return;
+        }
         throw new Error(data.error || 'Processing failed');
       }
 
@@ -660,11 +827,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         lastChangedAt = null;
         pollInterval = POLL_MIN_INTERVAL;
         poll503Count = 0;
+        lastHeartbeatStatus = 'healthy';
+        lastHeartbeatAge = 0;
         document.getElementById('redis-unavailable-banner')?.classList.add('hidden');
+        document.getElementById('stale-job-banner')?.classList.add('hidden');
+        
+        try {
+          sessionStorage.setItem(AI_WORKER_JOB_KEY, JSON.stringify({ jobId: data.jobId, startedAt: startTime }));
+        } catch (e) { /* ignore */ }
         
         showPipeline();
         renderEventList();
         selectEvent(events[0].id);
+        updateHeartbeatIndicator('healthy', 0);
         startPolling();
         startElapsedTimer();
         
@@ -1107,6 +1282,16 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       el.totalCost.textContent = '$' + data.total_cost_usd.toFixed(3);
     }
 
+    // Update heartbeat indicator (vertrauenswuerdiger Status)
+    if (data.heartbeat_status !== undefined && data.heartbeat_age_seconds !== undefined) {
+      updateHeartbeatIndicator(data.heartbeat_status, data.heartbeat_age_seconds);
+    }
+
+    // Handle stale status from server
+    if (data.status === 'stale') {
+      updateHeartbeatIndicator('critical', data.heartbeat_age_seconds || 300);
+    }
+
     // Merge event updates
     if (data.events && data.events.length > 0) {
       data.events.forEach(updatedEvent => {
@@ -1165,6 +1350,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     stopPolling();
     stopElapsedTimer();
     isHistoryMode = true;
+    try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
     
     // Update UI to history mode
     renderEventList();
@@ -1181,6 +1367,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   function cancelProcessing() {
     stopPolling();
     stopElapsedTimer();
+    try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
     el.progressSection.classList.add('hidden');
     el.pipelineSection.classList.add('hidden');
     resetButton();

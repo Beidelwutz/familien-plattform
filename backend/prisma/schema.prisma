@@ -795,3 +795,30 @@ enum JobStatus {
   SUCCESS
   FAILED
 }
+
+enum AiJobStatus {
+  running
+  completed
+  failed
+  stale
+  cancelled
+}
+
+model AiJob {
+  id               String      @id @default(uuid())
+  status           AiJobStatus @default(running)
+  total            Int
+  processed        Int         @default(0)
+  current_event_id String?
+  started_at       DateTime    @default(now()) @db.Timestamptz(6)
+  last_heartbeat   DateTime    @default(now()) @db.Timestamptz(6)
+  completed_at     DateTime?   @db.Timestamptz(6)
+  summary          Json?       // { published, pending_review, rejected, failed, incomplete, archived }
+  total_cost_usd   Float       @default(0)
+  created_by       String?
+
+  @@index([status])
+  @@index([started_at])
+  @@index([last_heartbeat])
+  @@map("ai_jobs")
+}
