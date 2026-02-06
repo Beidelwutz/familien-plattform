@@ -28,8 +28,16 @@ export async function syncAuthToken(): Promise<string | null> {
       // Check if we already have a token
       let token = localStorage.getItem('auth_token');
       
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authSync.ts:syncAuthToken:start',message:'Starting auth sync',data:{hasExistingToken:!!token},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       // If we have a token, check if it's still valid by verifying Supabase session
       const session = await getSession();
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authSync.ts:syncAuthToken:sessionCheck',message:'Supabase session check',data:{hasSession:!!session,hasAccessToken:!!session?.access_token},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       
       if (session?.access_token) {
         // Session exists - update token if different or missing
@@ -42,9 +50,16 @@ export async function syncAuthToken(): Promise<string | null> {
         // Keep the token for now, API will reject if invalid
       }
       
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authSync.ts:syncAuthToken:end',message:'Auth sync complete',data:{returnToken:!!token},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      
       return token;
     } catch (error) {
       console.error('Auth sync error:', error);
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authSync.ts:syncAuthToken:error',message:'Auth sync error',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       return localStorage.getItem('auth_token');
     }
   })();

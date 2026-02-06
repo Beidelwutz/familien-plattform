@@ -250,6 +250,21 @@ router.post('/logout', (_req: Request, res: Response) => {
 router.post('/sync', async (req: Request, res: Response, _next: NextFunction) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
+  // #region agent log
+  const fs = await import('fs');
+  const logEntry = (loc: string, msg: string, data: Record<string, unknown>) => {
+    try {
+      const line = JSON.stringify({location:loc,message:msg,data,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,F,H'}) + '\n';
+      fs.appendFileSync('c:\\02_Kiezling\\.cursor\\debug.log', line);
+    } catch {}
+  };
+  logEntry('auth.ts:sync:entry', 'Sync endpoint called', {
+    hasToken: !!token,
+    tokenLength: token?.length || 0,
+    tokenPrefix: token?.substring(0, 30) || 'empty'
+  });
+  // #endregion
+
   if (!token) {
     return res.status(401).json({ 
       success: false, 
@@ -258,6 +273,9 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
   }
 
   if (!isSupabaseConfigured) {
+    // #region agent log
+    logEntry('auth.ts:sync:notConfigured', 'Supabase not configured', {});
+    // #endregion
     return res.status(503).json({ 
       success: false, 
       error: { code: 'SERVICE_UNAVAILABLE', message: 'Supabase is not configured' } 
@@ -265,8 +283,20 @@ router.post('/sync', async (req: Request, res: Response, _next: NextFunction) =>
   }
 
   try {
+    // #region agent log
+    logEntry('auth.ts:sync:beforeVerify', 'About to verify token', {});
+    // #endregion
+    
     // Verify Supabase token
     const supabaseUser = await verifySupabaseToken(token);
+
+    // #region agent log
+    logEntry('auth.ts:sync:afterVerify', 'Token verification result', {
+      hasUser: !!supabaseUser,
+      userId: supabaseUser?.id,
+      userEmail: supabaseUser?.email
+    });
+    // #endregion
 
     if (!supabaseUser) {
       return res.status(401).json({ 

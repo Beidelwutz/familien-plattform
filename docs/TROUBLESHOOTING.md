@@ -162,9 +162,61 @@ Error: function ST_Distance does not exist
 CREATE EXTENSION IF NOT EXISTS postgis;
 ```
 
+### Migrationen nicht angewendet (Login/API-Fehler)
+
+**Symptom:** Login funktioniert nicht, oder Backend wirft Fehler wie „column does not exist“ (z. B. `failed_login_attempts`, `locked_until`, `last_login_at`).
+
+**Ursache:** Die Datenbank hat nicht alle Prisma-Migrationen ausgeführt – das Schema ist veraltet.
+
+**Prüfen:**
+```bash
+cd backend
+npx prisma migrate status
+```
+
+Wenn „Following migrations have not yet been applied“ angezeigt wird, müssen die Migrationen ausgeführt werden.
+
+**Lösung:**
+```bash
+cd backend
+# Produktion / geteuerte DB (z. B. Supabase)
+npx prisma migrate deploy
+
+# Nur Entwicklung (erstellt ggf. neue Migrationen)
+npx prisma migrate dev
+```
+
+Nach `migrate deploy` Backend neu starten. Danach sollten Login und Sync wieder funktionieren.
+
 ---
 
 ## Authentifizierung
+
+### Login funktioniert nicht – Checkliste
+
+Die Anmeldung läuft über **Supabase** (E-Mail/Passwort und Google). Nach dem Supabase-Login ruft das Frontend `/api/auth/sync` auf; wenn das fehlschlägt, wirkt der Login „kaputt“.
+
+**Typische Ursachen:**
+
+1. **Migrationen nicht angewendet**  
+   Die Tabelle `users` fehlen Spalten (z. B. `failed_login_attempts`, `locked_until`).  
+   → Siehe [Migrationen nicht angewendet](#migrationen-nicht-angewendet-loginapi-fehler): `npx prisma migrate deploy` im Ordner `backend` ausführen.
+
+2. **Supabase nicht konfiguriert**  
+   Backend braucht `SUPABASE_URL` und `SUPABASE_SERVICE_ROLE_KEY` in `backend/.env`.  
+   Frontend braucht `PUBLIC_SUPABASE_URL` und `PUBLIC_SUPABASE_ANON_KEY` (z. B. in `frontend/.env` oder Vercel).  
+   → Wenn Supabase fehlt, gibt `/api/auth/sync` 503 (Service Unavailable).
+
+3. **Falsche API-URL**  
+   Frontend muss die richtige Backend-URL nutzen (`PUBLIC_API_URL`). Sonst schlägt der Sync-Request fehl (CORS/Network).
+
+4. **Nutzer nur in Datenbank, nicht in Supabase**  
+   E-Mail-Login nutzt Supabase Auth. Wer nur per alter Backend-Registrierung angelegt wurde, hat kein Supabase-Konto → E-Mail-Login schlägt fehl.  
+   → Nutzer in Supabase anlegen oder mit gleicher E-Mail registrieren („Mit E-Mail registrieren“).
+
+5. **Konto gesperrt**  
+   Nach mehreren Fehlversuchen wird das Konto temporär gesperrt (`locked_until`).  
+   → Warten oder in der DB `locked_until` und `failed_login_attempts` zurücksetzen.
 
 ### Konto konnte nicht angelegt werden
 

@@ -31,13 +31,46 @@ export const supabaseAdmin: SupabaseClient | null = isSupabaseConfigured
  * Verify a Supabase access token and return the user
  */
 export async function verifyToken(token: string): Promise<User | null> {
+  // #region agent log
+  const fs = await import('fs');
+  const logEntry = (loc: string, msg: string, data: Record<string, unknown>) => {
+    try {
+      const line = JSON.stringify({location:loc,message:msg,data,timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F,G,H'}) + '\n';
+      fs.appendFileSync('c:\\02_Kiezling\\.cursor\\debug.log', line);
+    } catch {}
+  };
+  // #endregion
+  
+  // #region agent log
+  logEntry('supabase.ts:verifyToken:start', 'Token verification started', {
+    tokenLength: token?.length || 0,
+    tokenPrefix: token?.substring(0, 20) || 'empty',
+    isSupabaseConfigured,
+    hasSupabaseAdmin: !!supabaseAdmin
+  });
+  // #endregion
+  
   if (!supabaseAdmin) {
     console.error('Supabase not configured - cannot verify token');
+    // #region agent log
+    logEntry('supabase.ts:verifyToken:noAdmin', 'Supabase admin not configured', {});
+    // #endregion
     return null;
   }
   
   try {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    
+    // #region agent log
+    logEntry('supabase.ts:verifyToken:result', 'getUser result', {
+      hasUser: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      error: error?.message || null,
+      errorCode: (error as any)?.code || null,
+      errorStatus: (error as any)?.status || null
+    });
+    // #endregion
     
     if (error) {
       console.error('Token verification error:', error.message);
@@ -47,6 +80,11 @@ export async function verifyToken(token: string): Promise<User | null> {
     return user;
   } catch (error) {
     console.error('Token verification failed:', error);
+    // #region agent log
+    logEntry('supabase.ts:verifyToken:exception', 'Exception during verification', {
+      error: String(error)
+    });
+    // #endregion
     return null;
   }
 }

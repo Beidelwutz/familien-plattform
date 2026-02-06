@@ -376,12 +376,19 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     // Debug logging
     console.log('[Auth] Checking auth state, API_BASE:', API_BASE);
     console.log('[Auth] Token exists:', !!token);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'StickyHeader.astro:checkAuthState:start',message:'Checking auth state',data:{hasTokenInLocalStorage:!!token,hasTokenInSessionStorage:!!sessionStorage.getItem('auth_token')},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,D'})}).catch(()=>{});
+    // #endregion
 
     // Start with loading state
     setAuthState('loading');
 
     if (!token) {
       token = await syncAuthToken();
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'StickyHeader.astro:checkAuthState:afterSync',message:'After syncAuthToken',data:{tokenAfterSync:!!token},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
     }
 
     if (!token) {
