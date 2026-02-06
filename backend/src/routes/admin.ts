@@ -1813,8 +1813,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             : (pendingEvents.length - i) * 3,
         });
         
+        const AI_REQUEST_TIMEOUT_MS = 90_000; // 90s per request so batch does not hang
         try {
-          // Step 1: Classification
+          // Step 1: Classification (with timeout so stuck AI Worker does not block forever)
           const classifyRes = await fetch(`${AI_WORKER_URL}/classify/event`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1827,6 +1828,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
               is_indoor: event.is_indoor,
               is_outdoor: event.is_outdoor,
             }),
+            signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
           });
           
           if (!classifyRes.ok) {
@@ -1835,7 +1837,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           }
           const classification = await classifyRes.json() as any;
           
-          // Step 2: Scoring
+          // Step 2: Scoring (with timeout)
           const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1844,6 +1846,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
               description: event.description_short || event.description_long || '',
               location_address: event.location_address || '',
             }),
+            signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
           });
           
           if (!scoreRes.ok) {
@@ -2073,8 +2076,11 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           logger.info(`Processed event ${event.id}: ${newStatus} (family_fit: ${scores.family_fit_score}, confidence: ${classification.confidence})`);
           
         } catch (err: any) {
-          const errorMessage = err?.message || (err instanceof Error ? err.message : 'Unknown error');
-          const errorStep = err?.step || 'unknown';
+          const isAbort = err?.name === 'AbortError' || err?.code === 'ABORT_ERR';
+          const errorMessage = isAbort
+            ? 'AI Worker Timeout (90s) – Worker nicht erreichbar oder zu langsam'
+            : (err?.message || (err instanceof Error ? err.message : 'Unknown error'));
+          const errorStep = err?.step || (isAbort ? 'timeout' : 'unknown');
           summary.failed++;
           
           await updateAIJobEventStatus(jobId, event.id, {
@@ -2275,13 +2281,17 @@ router.get('/pending-ai-count', async (_req: Request, res: Response, next: NextF
 // ============================================
 
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const STALE_NO_PROGRESS_MS = 2 * 60 * 1000; // 2 minutes when still 0 processed (stuck at first event)
 
-// Helper: Check if a job is stale (no heartbeat for 5+ minutes while running)
+// Helper: Check if a job is stale (no heartbeat for 5+ min, or no progress for 2+ min)
 async function checkAndMarkStale(job: any): Promise<any> {
   if (job.status !== 'running') return job;
   
   const heartbeatAge = Date.now() - new Date(job.last_heartbeat).getTime();
-  if (heartbeatAge > STALE_THRESHOLD_MS) {
+  const noProgress = (job.processed ?? 0) === 0;
+  const staleThreshold = noProgress ? STALE_NO_PROGRESS_MS : STALE_THRESHOLD_MS;
+  
+  if (heartbeatAge > staleThreshold) {
     await prisma.aiJob.update({
       where: { id: job.id },
       data: { status: 'stale' }

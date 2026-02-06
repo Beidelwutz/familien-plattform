@@ -1377,7 +1377,18 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     reloadPendingCount();
   }
 
-  function cancelProcessing() {
+  async function cancelProcessing() {
+    if (currentJobId) {
+      try {
+        await fetch(`${API_URL}/api/admin/ai-jobs/${currentJobId}/cancel`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {
+        console.error('Cancel job request failed:', e);
+      }
+      currentJobId = null;
+    }
     stopPolling();
     stopElapsedTimer();
     try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
