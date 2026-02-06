@@ -340,6 +340,103 @@ async def detect_source(request: DetectRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SingleEventCrawlRequest(BaseModel):
+    """Request to crawl a single event page URL for missing fields."""
+    url: str
+    fields_needed: Optional[list[str]] = None  # e.g. ["location_address", "end_datetime", "image_url"]
+
+
+class SingleEventCrawlResponse(BaseModel):
+    """Response from single-event crawl."""
+    success: bool = True
+    fields_found: dict = {}  # field name -> value (serializable)
+    fields_missing: list[str] = []
+    error: Optional[str] = None
+
+
+@router.post("/single-event", response_model=SingleEventCrawlResponse)
+async def crawl_single_event(request: SingleEventCrawlRequest):
+    """
+    Crawl a single event page URL to extract structured data (JSON-LD/Microdata).
+    Used when an event has missing fields and we want to try filling them from the detail page.
+    """
+    if not request.url or not request.url.strip().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Valid URL required")
+    url = request.url.strip()
+    fields_needed = request.fields_needed or [
+        "location_address", "location_name", "start_datetime", "end_datetime",
+        "image_url", "description", "price", "organizer_name"
+    ]
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(
+                url,
+                headers={
+                    "User-Agent": "Kiezling-Bot/1.0 (+https://kiezling.com/bot)",
+                    "Accept": "text/html,application/xhtml+xml",
+                },
+            )
+            if response.status_code >= 400:
+                return SingleEventCrawlResponse(
+                    success=False,
+                    fields_found={},
+                    fields_missing=fields_needed,
+                    error=f"HTTP {response.status_code}"
+                )
+            html = response.text
+            from src.crawlers.structured_data import StructuredDataExtractor
+            extractor = StructuredDataExtractor()
+            extracted_list = extractor.extract(html)
+            if not extracted_list:
+                return SingleEventCrawlResponse(
+                    success=True,
+                    fields_found={},
+                    fields_missing=fields_needed,
+                    error="Keine strukturierten Event-Daten (JSON-LD/Microdata) auf der Seite gefunden"
+                )
+            # Use first extracted event
+            e = extracted_list[0]
+            fields_found = {}
+            field_map = {
+                "location_address": ("location_address", e.location_address),
+                "location_name": ("location_name", e.location_name),
+                "start_datetime": ("start_datetime", e.start_datetime.isoformat() if e.start_datetime else None),
+                "end_datetime": ("end_datetime", e.end_datetime.isoformat() if e.end_datetime else None),
+                "image_url": ("image_url", e.image_url),
+                "description": ("description", e.description),
+                "price": ("price", e.price),
+                "organizer_name": ("organizer_name", e.organizer_name),
+                "lat": ("lat", e.lat),
+                "lng": ("lng", e.lng),
+            }
+            for name in fields_needed:
+                if name in field_map:
+                    _key, val = field_map[name]
+                    if val is not None and val != "":
+                        fields_found[name] = val
+            fields_missing = [f for f in fields_needed if f not in fields_found]
+            return SingleEventCrawlResponse(
+                success=True,
+                fields_found=fields_found,
+                fields_missing=fields_missing,
+            )
+    except httpx.TimeoutException as e:
+        return SingleEventCrawlResponse(
+            success=False,
+            fields_found={},
+            fields_missing=fields_needed,
+            error=f"Timeout: {str(e)}"
+        )
+    except Exception as e:
+        logger.exception("Single-event crawl failed")
+        return SingleEventCrawlResponse(
+            success=False,
+            fields_found={},
+            fields_missing=fields_needed,
+            error=str(e)
+        )
+
+
 @router.post("/process-feed")
 async def process_feed(feed_url: str, source_type: str = "rss"):
     """

@@ -117,6 +117,12 @@ class AIClassification:
     extracted_location_district: Optional[str] = None
     location_confidence: float = 0.0
     
+    # AI-generated summaries
+    ai_summary_short: Optional[str] = None  # max 300 chars
+    ai_summary_highlights: list[str] = field(default_factory=list)  # max 3 items
+    ai_fit_blurb: Optional[str] = None  # max 150 chars
+    summary_confidence: float = 0.0
+    
     confidence: float = 0.0
     model: Optional[str] = None
     prompt_version: Optional[str] = None

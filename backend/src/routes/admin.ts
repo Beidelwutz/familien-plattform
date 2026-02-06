@@ -411,6 +411,274 @@ router.get('/events/:id/raw-data', async (req: Request, res: Response, next: Nex
   }
 });
 
+// Field fill status: per-field status for missing data and crawl/AI attempts
+type FieldFillStatusValue = {
+  status: 'filled' | 'missing' | 'crawl_pending' | 'crawl_failed' | 'ai_pending' | 'ai_failed';
+  error?: string;
+  last_attempt?: string;
+  source?: 'feed' | 'crawl' | 'ai' | 'manual';
+};
+
+// POST /api/admin/events/:id/trigger-ai - Manually trigger AI (and optional crawl) for one event to fill missing fields
+router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { force_crawl: forceCrawl = false } = req.body || {};
+    const nowIso = new Date().toISOString();
+
+    const event = await prisma.canonicalEvent.findUnique({
+      where: { id },
+      include: {
+        event_sources: { take: 1, orderBy: { updated_at: 'desc' } }
+      }
+    });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const existingFieldFillStatus = (event.field_fill_status as Record<string, FieldFillStatusValue>) || {};
+    const updatedFields: string[] = [];
+    const failedFields: Array<{ field: string; reason: string }> = [];
+
+    // Optional: crawl single event URL for missing fields
+    const crawlUrl = event.booking_url || event.event_sources?.[0]?.source_url || null;
+    if (forceCrawl && crawlUrl) {
+      const fieldsNeeded: string[] = [];
+      if (!event.location_address) fieldsNeeded.push('location_address');
+      if (!event.start_datetime) fieldsNeeded.push('start_datetime');
+      if (!event.end_datetime) fieldsNeeded.push('end_datetime');
+      if (!event.image_urls?.length) fieldsNeeded.push('image_url');
+
+      if (fieldsNeeded.length > 0) {
+        try {
+          const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: crawlUrl, fields_needed: fieldsNeeded }),
+            signal: AbortSignal.timeout(20000),
+          });
+          const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; fields_missing: string[]; error?: string };
+          if (!crawlRes.ok || !crawlResult.success) {
+            const errMsg = crawlResult.error || `HTTP ${crawlRes.status}`;
+            for (const f of fieldsNeeded) {
+              existingFieldFillStatus[f] = { status: 'crawl_failed', error: errMsg, last_attempt: nowIso, source: 'crawl' };
+              failedFields.push({ field: f, reason: `Crawl fehlgeschlagen: ${errMsg}` });
+            }
+          } else {
+            const eventUpdate: Record<string, unknown> = {};
+            if (crawlResult.fields_found.location_address) {
+              eventUpdate.location_address = crawlResult.fields_found.location_address;
+              existingFieldFillStatus['location_address'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+              updatedFields.push('location_address');
+            } else if (fieldsNeeded.includes('location_address')) {
+              existingFieldFillStatus['location_address'] = { status: 'crawl_failed', error: crawlResult.error || 'Keine Adresse auf der Website gefunden', last_attempt: nowIso, source: 'crawl' };
+              failedFields.push({ field: 'location_address', reason: crawlResult.error || 'Keine Adresse auch nach Crawl der Website gefunden' });
+            }
+            if (crawlResult.fields_found.start_datetime) {
+              try {
+                eventUpdate.start_datetime = new Date(crawlResult.fields_found.start_datetime as string);
+                existingFieldFillStatus['start_datetime'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+                updatedFields.push('start_datetime');
+              } catch { /* ignore */ }
+            } else if (fieldsNeeded.includes('start_datetime')) {
+              existingFieldFillStatus['start_datetime'] = { status: 'crawl_failed', error: crawlResult.error || 'Kein Datum gefunden', last_attempt: nowIso, source: 'crawl' };
+              failedFields.push({ field: 'start_datetime', reason: crawlResult.error || 'Kein Datum auch nach Crawl gefunden' });
+            }
+            if (crawlResult.fields_found.end_datetime) {
+              try {
+                eventUpdate.end_datetime = new Date(crawlResult.fields_found.end_datetime as string);
+                existingFieldFillStatus['end_datetime'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+                updatedFields.push('end_datetime');
+              } catch { /* ignore */ }
+            } else if (fieldsNeeded.includes('end_datetime')) {
+              existingFieldFillStatus['end_datetime'] = { status: 'crawl_failed', error: crawlResult.error || 'Kein Enddatum gefunden', last_attempt: nowIso, source: 'crawl' };
+              failedFields.push({ field: 'end_datetime', reason: crawlResult.error || 'Kein Enddatum auch nach Crawl gefunden' });
+            }
+            if (Object.keys(eventUpdate).length > 0) {
+              await prisma.canonicalEvent.update({
+                where: { id },
+                data: { ...eventUpdate, field_fill_status: existingFieldFillStatus }
+              });
+            }
+          }
+        } catch (e: any) {
+          const errMsg = e?.message || String(e);
+          for (const f of fieldsNeeded) {
+            existingFieldFillStatus[f] = { status: 'crawl_failed', error: errMsg, last_attempt: nowIso, source: 'crawl' };
+            failedFields.push({ field: f, reason: `Crawl fehlgeschlagen: ${errMsg}` });
+          }
+        }
+      }
+    }
+
+    // Re-fetch event after optional crawl so AI gets latest data
+    let eventForAi = event;
+    if (updatedFields.length > 0) {
+      const refreshed = await prisma.canonicalEvent.findUnique({ where: { id } });
+      if (refreshed) eventForAi = refreshed as typeof event;
+    }
+
+    // AI classification + scoring
+    const AI_REQUEST_TIMEOUT_MS = 60000;
+    let classification: any = null;
+    let scores: any = null;
+    try {
+      const classifyRes = await fetch(`${AI_WORKER_URL}/classify/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: eventForAi.title,
+          description: (eventForAi.description_long || eventForAi.description_short || ''),
+          location_address: eventForAi.location_address || '',
+          price_min: eventForAi.price_min ? Number(eventForAi.price_min) : null,
+          price_max: eventForAi.price_max ? Number(eventForAi.price_max) : null,
+          is_indoor: eventForAi.is_indoor,
+          is_outdoor: eventForAi.is_outdoor,
+        }),
+        signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+      });
+      if (!classifyRes.ok) {
+        const errText = await classifyRes.text();
+        throw new Error(`Classification: ${classifyRes.status} - ${errText}`);
+      }
+      classification = await classifyRes.json();
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      ['ai_summary_short', 'location_address', 'start_datetime', 'end_datetime'].forEach(f => {
+        existingFieldFillStatus[f] = { status: 'ai_failed', error: errMsg, last_attempt: nowIso, source: 'ai' };
+        failedFields.push({ field: f, reason: `AI fehlgeschlagen: ${errMsg}` });
+      });
+      await prisma.canonicalEvent.update({
+        where: { id },
+        data: { field_fill_status: existingFieldFillStatus }
+      });
+      return res.json({
+        success: false,
+        error: errMsg,
+        updated_fields: updatedFields,
+        failed_fields: failedFields,
+        field_fill_status: existingFieldFillStatus,
+      });
+    }
+
+    try {
+      const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: eventForAi.title,
+          description: (eventForAi.description_long || eventForAi.description_short || ''),
+          location_address: eventForAi.location_address || '',
+        }),
+        signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
+      });
+      if (!scoreRes.ok) {
+        const errText = await scoreRes.text();
+        throw new Error(`Scoring: ${scoreRes.status} - ${errText}`);
+      }
+      scores = await scoreRes.json();
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      existingFieldFillStatus['ai_summary_short'] = { status: 'ai_failed', error: errMsg, last_attempt: nowIso, source: 'ai' };
+      failedFields.push({ field: 'scores', reason: `Scoring fehlgeschlagen: ${errMsg}` });
+    }
+
+    const datetimeConfidence = classification?.datetime_confidence || 0;
+    const locationConfidence = classification?.location_confidence || 0;
+    const updateData: Record<string, any> = {
+      age_min: classification?.age_min ?? eventForAi.age_min,
+      age_max: classification?.age_max ?? eventForAi.age_max,
+      age_rating: classification?.age_rating ?? eventForAi.age_rating,
+      is_indoor: classification?.is_indoor ?? eventForAi.is_indoor,
+      is_outdoor: classification?.is_outdoor ?? eventForAi.is_outdoor,
+      ai_summary_short: classification?.ai_summary_short ?? eventForAi.ai_summary_short,
+      ai_summary_highlights: classification?.ai_summary_highlights ?? eventForAi.ai_summary_highlights,
+      ai_fit_blurb: classification?.ai_fit_blurb ?? eventForAi.ai_fit_blurb,
+      ai_summary_confidence: classification?.summary_confidence ?? eventForAi.ai_summary_confidence,
+      age_fit_0_2: classification?.age_fit_buckets?.['0_2'] ?? eventForAi.age_fit_0_2,
+      age_fit_3_5: classification?.age_fit_buckets?.['3_5'] ?? eventForAi.age_fit_3_5,
+      age_fit_6_9: classification?.age_fit_buckets?.['6_9'] ?? eventForAi.age_fit_6_9,
+      age_fit_10_12: classification?.age_fit_buckets?.['10_12'] ?? eventForAi.age_fit_10_12,
+      age_fit_13_15: classification?.age_fit_buckets?.['13_15'] ?? eventForAi.age_fit_13_15,
+      ai_flags: classification?.flags ?? eventForAi.ai_flags,
+      field_fill_status: existingFieldFillStatus,
+    };
+    if (classification?.ai_summary_short) {
+      existingFieldFillStatus['ai_summary_short'] = { status: 'filled', source: 'ai', last_attempt: nowIso };
+      updatedFields.push('ai_summary_short');
+    } else {
+      existingFieldFillStatus['ai_summary_short'] = { status: 'ai_failed', error: 'KI konnte keine Zusammenfassung erzeugen', last_attempt: nowIso, source: 'ai' };
+      failedFields.push({ field: 'ai_summary_short', reason: 'Keine KI-Beschreibung erzeugt' });
+    }
+    if (!eventForAi.location_address && classification?.extracted_location_address && locationConfidence >= 0.7) {
+      updateData.location_address = classification.extracted_location_address;
+      updateData.location_district = classification.extracted_location_district ?? eventForAi.location_district;
+      existingFieldFillStatus['location_address'] = { status: 'filled', source: 'ai', last_attempt: nowIso };
+      updatedFields.push('location_address');
+    } else if (!eventForAi.location_address) {
+      existingFieldFillStatus['location_address'] = { status: 'ai_failed', error: 'Keine Adresse in Beschreibung gefunden', last_attempt: nowIso, source: 'ai' };
+      failedFields.push({ field: 'location_address', reason: 'Keine Adresse gefunden, auch nicht in Beschreibung' });
+    }
+    if (!eventForAi.start_datetime && classification?.extracted_start_datetime && datetimeConfidence >= 0.7) {
+      try {
+        updateData.start_datetime = new Date(classification.extracted_start_datetime);
+        existingFieldFillStatus['start_datetime'] = { status: 'filled', source: 'ai', last_attempt: nowIso };
+        updatedFields.push('start_datetime');
+      } catch { /* ignore */ }
+    } else if (!eventForAi.start_datetime) {
+      existingFieldFillStatus['start_datetime'] = { status: 'ai_failed', error: 'Kein Datum/Zeit in Beschreibung gefunden', last_attempt: nowIso, source: 'ai' };
+      failedFields.push({ field: 'start_datetime', reason: 'Kein Datum/Zeit gefunden' });
+    }
+    if (!eventForAi.end_datetime && classification?.extracted_end_datetime && datetimeConfidence >= 0.7) {
+      try {
+        updateData.end_datetime = new Date(classification.extracted_end_datetime);
+        existingFieldFillStatus['end_datetime'] = { status: 'filled', source: 'ai', last_attempt: nowIso };
+        updatedFields.push('end_datetime');
+      } catch { /* ignore */ }
+    } else if (!eventForAi.end_datetime) {
+      existingFieldFillStatus['end_datetime'] = { status: 'ai_failed', error: 'Kein Enddatum in Beschreibung gefunden', last_attempt: nowIso, source: 'ai' };
+      failedFields.push({ field: 'end_datetime', reason: 'Kein Enddatum gefunden' });
+    }
+
+    await prisma.canonicalEvent.update({
+      where: { id },
+      data: updateData,
+    });
+
+    if (scores) {
+      await prisma.eventScore.upsert({
+        where: { event_id: id },
+        create: {
+          event_id: id,
+          relevance_score: scores.relevance_score,
+          quality_score: scores.quality_score,
+          family_fit_score: scores.family_fit_score,
+          stressfree_score: scores.stressfree_score,
+          confidence: classification?.confidence ?? 0.8,
+          ai_model_version: 'classify-v1',
+        },
+        update: {
+          relevance_score: scores.relevance_score,
+          quality_score: scores.quality_score,
+          family_fit_score: scores.family_fit_score,
+          stressfree_score: scores.stressfree_score,
+          confidence: classification?.confidence ?? 0.8,
+          scored_at: new Date(),
+        },
+      });
+    }
+
+    return res.json({
+      success: true,
+      updated_fields: updatedFields,
+      failed_fields: failedFields,
+      field_fill_status: existingFieldFillStatus,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/admin/review/:id/approve - Approve an event
 router.post('/review/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
   try {

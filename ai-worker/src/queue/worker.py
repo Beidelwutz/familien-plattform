@@ -161,6 +161,11 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 extracted_location_address=classification_result.extracted_location_address,
                 extracted_location_district=classification_result.extracted_location_district,
                 location_confidence=classification_result.location_confidence or 0.0,
+                # AI-generated summaries
+                ai_summary_short=classification_result.ai_summary_short,
+                ai_summary_highlights=classification_result.ai_summary_highlights or [],
+                ai_fit_blurb=classification_result.ai_fit_blurb,
+                summary_confidence=classification_result.summary_confidence or 0.0,
                 confidence=classification_result.confidence or 0.0,
                 model=classification_result.model or 'unknown',
                 prompt_version=classification_result.prompt_version or "4.0.0",

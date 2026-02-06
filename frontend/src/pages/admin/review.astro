@@ -310,6 +310,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         <div>
           <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Details</h3>
           <div id="detail-info" class="grid grid-cols-2 gap-3"></div>
+          <div id="detail-field-status" class="mt-3 space-y-1 text-sm text-amber-600 hidden"></div>
         </div>
         <div>
           <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Beschreibungen</h3>
@@ -330,7 +331,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <div id="detail-raw-content" class="space-y-4"></div>
         </div>
       </div>
-      <div class="p-6 border-t border-gray-200 flex flex-wrap gap-3 justify-end bg-gray-50 rounded-b-2xl">
+      <div class="p-6 border-t border-gray-200 flex flex-wrap gap-3 justify-between bg-gray-50 rounded-b-2xl">
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input type="checkbox" id="detail-trigger-crawl" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500">
+            <span>Auch Website crawlen</span>
+          </label>
+          <button id="detail-trigger-ai" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium transition-colors flex items-center gap-2 text-sm" title="KI erneut ausführen, um fehlende Felder zu füllen">
+            <span id="detail-trigger-ai-icon">&#x1F4CA;</span>
+            <span id="detail-trigger-ai-text">AI erneut ausführen</span>
+          </button>
+          <span id="detail-trigger-ai-status" class="text-sm text-gray-500 hidden"></span>
+        </div>
+        <div class="flex flex-wrap gap-3">
         <button id="detail-approve" class="px-5 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium transition-colors flex items-center gap-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -355,6 +368,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </svg>
           Löschen
         </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1000,6 +1014,21 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
     const formatDate = (d) => d ? new Date(d).toLocaleString('de-DE') : '-';
     const provenance = event.field_provenance && typeof event.field_provenance === 'object' ? event.field_provenance : {};
+    const fieldFillStatus = event.field_fill_status && typeof event.field_fill_status === 'object' ? event.field_fill_status : {};
+    const fieldStatusLabel = (field) => {
+      const v = fieldFillStatus[field];
+      if (!v || v.status === 'filled') return null;
+      if (v.status === 'missing') return field === 'location_address' ? 'Keine Adresse gefunden, Crawl steht noch aus' : (field === 'ai_summary_short' ? 'Keine KI-Beschreibung, Ausführung steht noch aus' : 'Fehlend');
+      if (v.status === 'crawl_pending') return field === 'location_address' ? 'Keine Adresse gefunden, Crawl ausstehend' : 'Crawl ausstehend';
+      if (v.status === 'crawl_failed') return field === 'location_address' ? 'Keine Adresse auch nach Crawl der Website gefunden' : (v.error ? `Crawl fehlgeschlagen: ${v.error}` : 'Crawl fehlgeschlagen');
+      if (v.status === 'ai_failed') return v.error || (field === 'location_address' ? 'Keine Adresse, KI konnte nicht extrahieren' : 'KI fehlgeschlagen');
+      return null;
+    };
+    const addrDisplay = event.location_address || fieldStatusLabel('location_address') || '-';
+    const startDisplay = formatDate(event.start_datetime);
+    const startHint = !event.start_datetime ? fieldStatusLabel('start_datetime') : null;
+    const endDisplay = formatDate(event.end_datetime);
+    const endHint = !event.end_datetime ? fieldStatusLabel('end_datetime') : null;
     const provLabel = (src) => src ? (src === 'ai' ? 'AI' : src.toUpperCase()) : '';
     const provBadge = (field) => {
       const src = provenance[field];
@@ -1010,13 +1039,26 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     const confPct = event.ai_summary_confidence != null ? Math.round(Number(event.ai_summary_confidence) * 100) : null;
     const confClass = confPct != null ? (confPct >= 80 ? 'text-green-600' : confPct >= 60 ? 'text-yellow-600' : 'text-red-600') : '';
     document.getElementById('detail-info').innerHTML = `
-      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Start ${provBadge('start_datetime')}</span><span class="font-medium text-gray-900">${formatDate(event.start_datetime)}</span></div>
-      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Ende ${provBadge('end_datetime')}</span><span class="font-medium text-gray-900">${formatDate(event.end_datetime)}</span></div>
-      <div class="bg-gray-50 p-3 rounded-lg col-span-2"><span class="text-xs text-gray-500 block mb-1">Adresse ${provBadge('location_address')}</span><span class="font-medium text-gray-900">${event.location_address || '-'}</span></div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Start ${provBadge('start_datetime')}</span><span class="font-medium text-gray-900">${startDisplay}</span>${startHint ? `<span class="block text-xs text-amber-600 mt-1">${startHint}</span>` : ''}</div>
+      <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Ende ${provBadge('end_datetime')}</span><span class="font-medium text-gray-900">${endDisplay}</span>${endHint ? `<span class="block text-xs text-amber-600 mt-1">${endHint}</span>` : ''}</div>
+      <div class="bg-gray-50 p-3 rounded-lg col-span-2"><span class="text-xs text-gray-500 block mb-1">Adresse ${provBadge('location_address')}</span><span class="font-medium text-gray-900">${addrDisplay}</span></div>
       <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Preis</span><span class="font-medium text-gray-900">${event.price_type || '-'}</span></div>
       <div class="bg-gray-50 p-3 rounded-lg"><span class="text-xs text-gray-500 block mb-1">Alter</span><span class="font-medium text-gray-900">${event.age_min || '?'} - ${event.age_max || '?'} Jahre</span></div>
       ${confPct != null ? `<div class="col-span-2 text-xs ${confClass}">Zusammenfassung-Konfidenz: <strong>${confPct}%</strong></div>` : ''}
     `;
+    const statusLines = [];
+    ['location_address', 'start_datetime', 'end_datetime', 'ai_summary_short'].forEach(f => {
+      const lbl = fieldStatusLabel(f);
+      if (lbl) statusLines.push(lbl);
+    });
+    const detailFieldStatusEl = document.getElementById('detail-field-status');
+    if (statusLines.length) {
+      detailFieldStatusEl.classList.remove('hidden');
+      detailFieldStatusEl.innerHTML = statusLines.map(s => `<p>• ${s}</p>`).join('');
+    } else {
+      detailFieldStatusEl.classList.add('hidden');
+      detailFieldStatusEl.innerHTML = '';
+    }
 
     document.getElementById('detail-descriptions').innerHTML = `
       <div>
@@ -1457,6 +1499,45 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('detail-edit').addEventListener('click', () => openEditModal(currentEventId));
   document.getElementById('detail-reject').addEventListener('click', () => openRejectModal(currentEventId));
   document.getElementById('detail-delete').addEventListener('click', () => openDeleteModal(currentEventId));
+
+  document.getElementById('detail-trigger-ai').addEventListener('click', async () => {
+    const id = currentEventId;
+    if (!id) return;
+    const btn = document.getElementById('detail-trigger-ai');
+    const btnText = document.getElementById('detail-trigger-ai-text');
+    const statusEl = document.getElementById('detail-trigger-ai-status');
+    const forceCrawl = document.getElementById('detail-trigger-crawl').checked;
+    btn.disabled = true;
+    btnText.textContent = 'Wird ausgeführt…';
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = '';
+    statusEl.classList.remove('text-red-600', 'text-green-600');
+    try {
+      const data = await apiFetch(`/api/admin/events/${id}/trigger-ai`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force_crawl: forceCrawl }),
+      });
+      if (data && data.success) {
+        statusEl.textContent = `Fertig. ${(data.updated_fields && data.updated_fields.length) || 0} Felder aktualisiert.`;
+        statusEl.classList.add('text-green-600');
+        if (data.failed_fields && data.failed_fields.length) {
+          statusEl.textContent += ` ${data.failed_fields.length} fehlgeschlagen.`;
+        }
+        await loadEvents(false);
+        openDetailModal(id);
+      } else {
+        statusEl.textContent = data?.error || 'Fehler beim Ausführen';
+        statusEl.classList.add('text-red-600');
+      }
+    } catch (e) {
+      statusEl.textContent = e?.message || 'Netzwerkfehler';
+      statusEl.classList.add('text-red-600');
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'AI erneut ausführen';
+    }
+  });
 
   document.getElementById('reject-cancel').addEventListener('click', closeRejectModal);
   document.getElementById('reject-confirm').addEventListener('click', handleReject);

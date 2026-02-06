@@ -10,6 +10,35 @@ import { calculateCompleteness, determineInitialStatus, determineStatusFromAI, t
 // Staleness threshold in days
 const STALENESS_DAYS = 180;
 
+/** Per-field status for missing data and crawl/AI attempts (used in field_fill_status JSON) */
+export type FieldFillStatusValue = {
+  status: 'filled' | 'missing' | 'crawl_pending' | 'crawl_failed' | 'ai_pending' | 'ai_failed';
+  error?: string;
+  last_attempt?: string;
+  source?: 'feed' | 'crawl' | 'ai' | 'manual';
+};
+
+const KEY_FIELDS_FOR_FILL_STATUS = ['location_address', 'start_datetime', 'end_datetime', 'ai_summary_short'] as const;
+
+function buildFieldFillStatus(
+  eventLike: Record<string, any>,
+  provenance: Record<string, string>,
+  nowIso: string
+): Record<string, FieldFillStatusValue> {
+  const status: Record<string, FieldFillStatusValue> = {};
+  for (const field of KEY_FIELDS_FOR_FILL_STATUS) {
+    const value = eventLike[field];
+    const hasValue = value !== null && value !== undefined && value !== '' &&
+      !(Array.isArray(value) && value.length === 0);
+    if (hasValue) {
+      status[field] = { status: 'filled', source: (provenance[field] as 'feed' | 'crawl' | 'ai' | 'manual') || 'feed', last_attempt: nowIso };
+    } else {
+      status[field] = { status: 'missing', last_attempt: nowIso };
+    }
+  }
+  return status;
+}
+
 /**
  * Canonical Candidate from AI-Worker
  */
@@ -52,6 +81,24 @@ export interface CanonicalCandidate {
       is_indoor?: boolean;
       is_outdoor?: boolean;
       confidence: number;
+      ai_summary_short?: string;
+      ai_summary_highlights?: string[];
+      ai_fit_blurb?: string;
+      summary_confidence?: number;
+      extracted_start_datetime?: string;
+      extracted_end_datetime?: string;
+      datetime_confidence?: number;
+      extracted_location_address?: string;
+      extracted_location_district?: string;
+      location_confidence?: number;
+      age_recommendation_text?: string;
+      sibling_friendly?: boolean;
+      language?: string;
+      complexity_level?: string;
+      noise_level?: string;
+      has_seating?: boolean;
+      typical_wait_minutes?: number;
+      food_drink_allowed?: boolean;
     };
     scores?: {
       relevance: number;
@@ -317,6 +364,20 @@ export async function processSingleCandidate(
       if (ai.extracted_location_district && locationConfidence >= 0.7 && !existingEvent.location_district) {
         fieldMappings.push({ candidateField: 'ai_location_district', dbField: 'location_district', value: ai.extracted_location_district });
       }
+      
+      // AI-generated summaries
+      if (ai.ai_summary_short) {
+        fieldMappings.push({ candidateField: 'ai_summary_short', dbField: 'ai_summary_short', value: ai.ai_summary_short });
+      }
+      if (ai.ai_summary_highlights?.length) {
+        fieldMappings.push({ candidateField: 'ai_summary_highlights', dbField: 'ai_summary_highlights', value: ai.ai_summary_highlights });
+      }
+      if (ai.ai_fit_blurb) {
+        fieldMappings.push({ candidateField: 'ai_fit_blurb', dbField: 'ai_fit_blurb', value: ai.ai_fit_blurb });
+      }
+      if (ai.summary_confidence !== undefined && ai.summary_confidence !== null) {
+        fieldMappings.push({ candidateField: 'ai_summary_confidence', dbField: 'ai_summary_confidence', value: ai.summary_confidence });
+      }
     }
     
     // Apply AI geocode if we don't have coords
@@ -378,13 +439,17 @@ export async function processSingleCandidate(
     });
     
     if (Object.keys(updates).length > 0) {
-      // Apply updates
+      const mergedEvent = { ...existingEvent, ...updates };
+      const newFieldFillStatus = buildFieldFillStatus(mergedEvent, newProvenance, nowIso);
+      const existingFieldFillStatus = (existingEvent.field_fill_status as Record<string, FieldFillStatusValue>) || {};
+      const combinedFieldFillStatus = { ...existingFieldFillStatus, ...newFieldFillStatus };
       await prisma.canonicalEvent.update({
         where: { id: existingEvent.id },
         data: {
           ...updates,
           field_provenance: newProvenance,
           field_updated_at: newFieldUpdatedAt,
+          field_fill_status: combinedFieldFillStatus,
         }
       });
       
@@ -471,6 +536,11 @@ export async function processSingleCandidate(
     has_seating: candidate.data.has_seating ?? aiClassification?.has_seating ?? null,
     typical_wait_minutes: candidate.data.typical_wait_minutes || aiClassification?.typical_wait_minutes || null,
     food_drink_allowed: candidate.data.food_drink_allowed ?? aiClassification?.food_drink_allowed ?? null,
+    // AI-generated summaries
+    ai_summary_short: aiClassification?.ai_summary_short || null,
+    ai_summary_highlights: aiClassification?.ai_summary_highlights?.length ? aiClassification.ai_summary_highlights : [],
+    ai_fit_blurb: aiClassification?.ai_fit_blurb || null,
+    ai_summary_confidence: aiClassification?.summary_confidence ?? null,
   };
   
   const completeness = calculateCompleteness(eventData);
@@ -502,6 +572,8 @@ export async function processSingleCandidate(
     }
   }
   
+  const initialFieldFillStatus = buildFieldFillStatus(eventData, initialProvenance, nowIso);
+  
   const newEvent = await prisma.canonicalEvent.create({
     data: {
       ...eventData,
@@ -510,6 +582,7 @@ export async function processSingleCandidate(
       completeness_score: completeness.score,
       field_provenance: initialProvenance,
       field_updated_at: initialFieldUpdatedAt,
+      field_fill_status: initialFieldFillStatus,
     }
   });
   
