@@ -88,6 +88,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       <!-- Progress Bar (shown during processing) -->
       <div id="progress-section" class="hidden bg-white rounded-2xl shadow-card p-4">
+        <div id="progress-current-banner" class="hidden mb-2 p-2 rounded-lg bg-primary-50 border border-primary-200 text-sm text-primary-800">
+          <span id="progress-current-text">Event 1 von 1 wird bearbeitet:</span> <strong id="progress-current-title" class="truncate block"></strong>
+        </div>
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-4">
             <span id="progress-text" class="text-sm text-gray-600">0 / 0</span>
@@ -347,6 +350,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     border-left: 3px solid #4f46e5;
   }
   
+  .event-list-item--current {
+    background: #fef3c7 !important;
+    border: 2px solid #f59e0b;
+    box-shadow: 0 0 0 1px #f59e0b;
+  }
+  
   .event-list-item--waiting {
     opacity: 0.7;
   }
@@ -471,6 +480,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   let lastHeartbeatStatus = 'healthy'; // 'healthy' | 'warning' | 'critical'
   let lastHeartbeatAge = 0; // seconds since last heartbeat
 
+  // Current job progress (for pipeline banner and list labels)
+  let jobProcessed = 0;
+  let jobTotal = 0;
+  let jobCurrentEventId = null;
+
   const AI_WORKER_JOB_KEY = 'ai-worker-active-job';
 
   // ========================================
@@ -499,6 +513,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     btnHint: document.getElementById('btn-hint'),
     noPendingHint: document.getElementById('no-pending-hint'),
     progressSection: document.getElementById('progress-section'),
+    progressCurrentBanner: document.getElementById('progress-current-banner'),
+    progressCurrentText: document.getElementById('progress-current-text'),
+    progressCurrentTitle: document.getElementById('progress-current-title'),
     progressText: document.getElementById('progress-text'),
     progressPercent: document.getElementById('progress-percent'),
     progressBar: document.getElementById('progress-bar'),
@@ -883,18 +900,34 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     el.costBadge.classList.add('hidden');
   }
 
+  function getPipelineStatusLabel(event, index) {
+    if (event.processing_status === 'processing') return 'Wird bearbeitet';
+    if (event.processing_status === 'done') return 'Erledigt';
+    if (event.processing_status === 'error') return 'Fehler';
+    if (event.processing_status === 'waiting') {
+      return index === jobProcessed ? 'An der Reihe' : 'Wartet';
+    }
+    return 'Wartet';
+  }
+
   function renderEventList() {
     el.eventList.innerHTML = '';
     
-    events.forEach(event => {
+    events.forEach((event, index) => {
       const item = document.createElement('div');
       item.id = `event-item-${event.id}`;
       item.className = getEventItemClasses(event);
       item.onclick = () => selectEvent(event.id);
+      const position = index + 1;
+      const statusLabel = getPipelineStatusLabel(event, index);
       
       item.innerHTML = `
         <span class="status-dot status-dot--${event.processing_status}"></span>
-        <span class="flex-1 truncate text-sm">${escapeHtml(event.title)}</span>
+        <span class="flex-shrink-0 text-xs text-gray-500 w-6">${position}.</span>
+        <div class="flex-1 min-w-0">
+          <span class="block truncate text-sm">${escapeHtml(event.title)}</span>
+          <span class="text-xs text-gray-500">${statusLabel}</span>
+        </div>
         ${event.result_status ? `<span class="text-xs px-1.5 py-0.5 rounded ${getResultBadgeClass(event.result_status)}">${event.result_status}</span>` : ''}
       `;
       
@@ -906,8 +939,22 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     let classes = 'event-list-item';
     classes += ` event-list-item--${event.processing_status}`;
     if (event.id === selectedEventId) classes += ' event-list-item--selected';
+    if (event.id === jobCurrentEventId) classes += ' event-list-item--current';
     if (isHistoryMode) classes += ' event-list-item--history';
     return classes;
+  }
+
+  function updateProgressCurrentBanner() {
+    if (!el.progressCurrentBanner || !el.progressCurrentText || !el.progressCurrentTitle) return;
+    if (jobTotal > 0 && jobCurrentEventId) {
+      const currentEvent = events.find(e => e.id === jobCurrentEventId);
+      const title = currentEvent ? currentEvent.title : '(Laden…)';
+      el.progressCurrentText.textContent = `Event ${jobProcessed + 1} von ${jobTotal} wird bearbeitet:`;
+      el.progressCurrentTitle.textContent = title;
+      el.progressCurrentBanner.classList.remove('hidden');
+    } else {
+      el.progressCurrentBanner.classList.add('hidden');
+    }
   }
 
   function getResultBadgeClass(status) {
@@ -1276,11 +1323,17 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   }
 
   function updateFromJobStatus(data) {
+    jobProcessed = data.processed ?? jobProcessed;
+    jobTotal = data.total ?? jobTotal;
+    jobCurrentEventId = data.current_event_id ?? data.currentEventId ?? jobCurrentEventId;
+
     // Update progress
     const percent = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
     el.progressBar.style.width = `${percent}%`;
     el.progressText.textContent = `${data.processed} / ${data.total}`;
     el.progressPercent.textContent = `${percent}%`;
+
+    updateProgressCurrentBanner();
 
     // Update summary
     if (data.summary) {
@@ -1314,8 +1367,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         }
       });
       
-      renderEventList();
-      
       // Auto-select current processing event
       if (data.currentEventId && data.currentEventId !== selectedEventId) {
         selectEvent(data.currentEventId);
@@ -1324,6 +1375,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         renderDetailPanel();
       }
     }
+    // Always refresh list so pipeline labels and current row reflect jobProcessed/jobCurrentEventId
+    if (events.length > 0) renderEventList();
   }
 
   function scrollEventIntoView(eventId) {

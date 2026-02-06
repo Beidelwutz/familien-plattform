@@ -667,6 +667,24 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     return '';
   }
 
+  /** Relative Zeit für "Von KI überprüft vor X" (z.B. vor 2 Min., vor 2 Std., vor 3 Tagen) */
+  function formatRelativeTime(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHours = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffSec < 60) return 'vor wenigen Sek.';
+    if (diffMin < 60) return diffMin === 1 ? 'vor 1 Min.' : `vor ${diffMin} Min.`;
+    if (diffHours < 24) return diffHours === 1 ? 'vor 1 Std.' : `vor ${diffHours} Std.`;
+    if (diffDays < 7) return diffDays === 1 ? 'vor 1 Tag' : `vor ${diffDays} Tagen`;
+    return date.toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
   // Render event list
   function renderEvents() {
     const list = document.getElementById('review-list');
@@ -743,6 +761,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               <div class="flex flex-wrap items-center gap-2 mt-3">
                 <span class="px-2 py-0.5 text-xs rounded-full ${statusBadge.style}">${statusBadge.label}</span>
                 ${reasonBadge}
+                ${scores.scored_at ? `
+                  <span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 inline-flex items-center gap-1" title="Von KI überprüft">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Von KI überprüft ${formatRelativeTime(scores.scored_at)}
+                  </span>
+                ` : ''}
                 <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">${sourceName}</span>
                 <span class="px-2 py-0.5 text-xs rounded-full ${completenessScore < 50 ? 'bg-red-100 text-red-600' : completenessScore < 80 ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}">
                   ${completenessScore}% vollständig
@@ -951,11 +975,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     const scores = event.scores || {};
     const scoreBadge = getScoreBadge(scores.family_fit_score);
     
+    const scoredAtRel = scores.scored_at ? formatRelativeTime(scores.scored_at) : '';
+    const scoredAtFormatted = scores.scored_at ? new Date(scores.scored_at).toLocaleString('de-DE') : '';
     document.getElementById('detail-badges').innerHTML = `
       <span class="px-2.5 py-1 text-xs rounded-full ${statusBadge.style} font-medium">${statusBadge.label}</span>
       ${scores.family_fit_score !== null && scores.family_fit_score !== undefined ? `
         <span class="px-2.5 py-1 text-xs rounded-full ${scoreBadge.style} font-medium">
           Family Fit: ${scores.family_fit_score}%
+        </span>
+      ` : ''}
+      ${scores.scored_at ? `
+        <span class="px-2.5 py-1 text-xs rounded-full bg-green-100 text-green-800 font-medium inline-flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          Von KI überprüft ${scoredAtRel}
         </span>
       ` : ''}
       ${event.completeness_score ? `
@@ -1028,6 +1060,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <strong class="text-lg">${scores.stressfree_score !== null ? scores.stressfree_score + '%' : '-'}</strong>
         </div>
       </div>
+      ${scores.scored_at ? `<div class="mt-3 text-sm text-gray-600 flex items-center gap-2"><span class="text-green-600">✓</span> Von KI überprüft am <strong>${scoredAtFormatted}</strong> (${scoredAtRel})</div>` : ''}
       ${confidence !== null ? `<div class="mt-3 text-sm text-gray-600 flex items-center gap-2"><span class="text-primary-500">🎯</span> AI-Konfidenz (Scores): <strong>${confidence}%</strong></div>` : ''}
       ${Object.keys(event.field_provenance || {}).length ? `<div class="mt-3 text-xs text-gray-500">Provenance: ${Object.entries(event.field_provenance).map(([k, v]) => k + ': ' + v).join(', ')}</div>` : ''}
       ${event.review_reason_label && event.status === 'pending_review' ? `<div class="mt-3 text-sm bg-amber-50 border border-amber-100 p-3 rounded-lg"><span class="text-amber-600 font-medium">📋 Review-Grund:</span> ${event.review_reason_label}</div>` : ''}
