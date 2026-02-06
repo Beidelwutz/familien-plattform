@@ -295,9 +295,13 @@
         if (messageEl) messageEl.textContent = 'Konto wird synchronisiert...';
 
         // Sync user to backend database (Prisma user must exist before login is complete)
+        const syncUrl = `${API_BASE || window.location.origin}/api/auth/sync`;
+        console.log('[Callback] Syncing user to backend:', syncUrl);
+
         // Retry logic for transient database errors (P2024 connection timeout, P1001/P1002 unreachable)
         const RETRYABLE_CODES = ['DB_CONNECTION_ERROR', 'DB_UNAVAILABLE'];
         const MAX_RETRIES = 2;
+        const SYNC_TIMEOUT_MS = 15000; // 15 seconds per attempt
         let syncResponse = null;
         let lastSyncData = null;
 
@@ -309,15 +313,39 @@
             await new Promise(r => setTimeout(r, attempt * 1000));
           }
 
-          syncResponse = await fetch(`${API_BASE || window.location.origin}/api/auth/sync`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${session.access_token}` }
-          });
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+
+            syncResponse = await fetch(syncUrl, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${session.access_token}` },
+              signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+            console.log('[Callback] Sync response:', syncResponse.status);
+          } catch (fetchErr) {
+            console.error('[Callback] Sync fetch error:', fetchErr.name, fetchErr.message);
+            if (fetchErr.name === 'AbortError') {
+              // Timeout - retry if we have attempts left
+              if (attempt < MAX_RETRIES) continue;
+              errorCode = 'DB_CONNECTION_ERROR';
+              await cleanupAuthState();
+              throw new Error('Backend antwortet nicht (Timeout). Bitte versuche es erneut.');
+            }
+            // Network error (CORS, offline, etc.)
+            if (attempt < MAX_RETRIES) continue;
+            errorCode = 'ACCOUNT_SYNC_FAILED';
+            await cleanupAuthState();
+            throw new Error(`Backend nicht erreichbar: ${fetchErr.message}`);
+          }
 
           if (syncResponse.ok) break;
 
           lastSyncData = await syncResponse.json().catch(() => ({}));
           const syncErrorCode = lastSyncData.error?.code || 'ACCOUNT_SYNC_FAILED';
+          console.log('[Callback] Sync error:', syncErrorCode, lastSyncData.error?.message);
 
           // Only retry on transient database errors
           if (!RETRYABLE_CODES.includes(syncErrorCode) || attempt === MAX_RETRIES) {
