@@ -2358,6 +2358,10 @@ router.get('/ai-jobs/active', async (_req: Request, res: Response, next: NextFun
       success: true,
       data: {
         ...activeJob,
+        // Camelcase aliases for frontend compatibility
+        startedAt: activeJob.started_at.toISOString(),
+        currentEventId: activeJob.current_event_id,
+        totalCostUsd: activeJob.total_cost_usd,
         events,
         heartbeat_age_seconds: heartbeatAgeSeconds,
         heartbeat_status: heartbeatAgeSeconds < 120 ? 'healthy' : heartbeatAgeSeconds < 300 ? 'warning' : 'critical',

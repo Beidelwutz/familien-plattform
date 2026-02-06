@@ -607,7 +607,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             // Aktiver Job gefunden - UI wiederherstellen
             currentJobId = activeJob.id;
             events = activeJob.events || [];
-            startTime = activeJob.startedAt ? new Date(activeJob.startedAt).getTime() : Date.now();
+            // WICHTIG: startedAt vom Server nutzen fuer korrekte Laufzeit
+            startTime = activeJob.startedAt ? new Date(activeJob.startedAt).getTime() : 
+                        (activeJob.started_at ? new Date(activeJob.started_at).getTime() : Date.now());
             lastChangedAt = activeJob.last_updated_at || null;
             poll503Count = 0;
             lastHeartbeatStatus = activeJob.heartbeat_status || 'healthy';
@@ -619,6 +621,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             updateFromJobStatus(activeJob);
             renderEventList();
             updateHeartbeatIndicator(lastHeartbeatStatus, lastHeartbeatAge);
+            
+            // Sofort korrekte Laufzeit anzeigen (nicht 0:00)
+            updateElapsedTime();
             
             const selectId = activeJob.currentEventId || (events[0] && events[0].id);
             if (selectId) selectEvent(selectId); else if (events[0]) selectEvent(events[0].id);
