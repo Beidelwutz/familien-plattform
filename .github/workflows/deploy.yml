@@ -44,7 +44,16 @@ jobs:
           PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
       
       - name: Deploy to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy-frontend
+        run: |
+          OUTPUT=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.vercel\.app' | tail -1)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+      - name: Promote to Current (Staged -> Current)
+        if: steps.deploy-frontend.outputs.url != ''
+        run: |
+          vercel promote ${{ steps.deploy-frontend.outputs.url }} --token=${{ secrets.VERCEL_TOKEN }} --yes
 
   # ============================================
   # DEPLOY BACKEND TO VERCEL
@@ -76,7 +85,16 @@ jobs:
         run: vercel build --prod --token=${{ secrets.VERCEL_BACKEND_TOKEN }}
       
       - name: Deploy to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_BACKEND_TOKEN }}
+        id: deploy-backend
+        run: |
+          OUTPUT=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_BACKEND_TOKEN }} 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.vercel\.app' | tail -1)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+      - name: Promote to Current (Staged -> Current)
+        if: steps.deploy-backend.outputs.url != ''
+        run: |
+          vercel promote ${{ steps.deploy-backend.outputs.url }} --token=${{ secrets.VERCEL_BACKEND_TOKEN }} --yes
 
   # ============================================
   # POST-DEPLOY CHECKS
