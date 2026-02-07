@@ -1,3 +1,6 @@
+# Deploys laufen über dieses Workflow (nicht über Vercel Git Auto-Deploy).
+# Bei "grau" in Vercel: GitHub → Actions → "Deploy" prüfen (Lauf/Fehler).
+# Secrets: VERCEL_TOKEN (Frontend), VERCEL_BACKEND_TOKEN (Backend).
 name: Deploy
 
 on:
@@ -15,7 +18,7 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
-    environment: production
+    # environment: production  # Reaktivieren wenn GitHub Environment-Protection gewünscht (sonst Deploy bleibt "grau" / pending)
     defaults:
       run:
         working-directory: frontend
@@ -49,7 +52,7 @@ jobs:
   deploy-backend:
     name: Deploy Backend (Vercel)
     runs-on: ubuntu-latest
-    environment: production
+    # environment: production  # Reaktivieren wenn GitHub Environment-Protection gewünscht
     defaults:
       run:
         working-directory: backend
@@ -81,6 +84,7 @@ jobs:
   health-check:
     name: Post-Deploy Health Check
     runs-on: ubuntu-latest
+    # environment: production  # optional
     needs: [deploy-frontend, deploy-backend]
     steps:
       - name: Wait for deployment
