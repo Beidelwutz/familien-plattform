@@ -77,6 +77,22 @@ class ClassificationResult:
     datetime_confidence: float = 0.0
     location_confidence: float = 0.0
     
+    # AI-extracted price
+    extracted_price_type: Optional[str] = None  # "free", "paid", "donation", null
+    extracted_price_min: Optional[float] = None
+    extracted_price_max: Optional[float] = None
+    price_confidence: float = 0.0
+    
+    # AI-extracted venue (Location-Entity-Split)
+    extracted_venue_name: Optional[str] = None
+    extracted_address_line: Optional[str] = None
+    extracted_city: Optional[str] = None
+    extracted_postal_code: Optional[str] = None
+    venue_confidence: float = 0.0
+    
+    # AI-extracted cancellation / availability
+    is_cancelled_or_postponed: Optional[bool] = None
+    
     # Flags for processing
     flags: dict = field(default_factory=lambda: {
         "sensitive_content": False,
@@ -178,6 +194,12 @@ AUFGABEN:
       * "jeden Samstag von 10-12 Uhr"
       * "täglich ab 10 Uhr"
       * "Sonntag, 16.03.2026, 15:00"
+      * "16 bis 16.15" (ohne "Uhr"!)
+      * "nachmittags" (= ca. 14:00)
+      * "ab 14h" / "14h-16h"
+      * "Di, 10:30-11:15"
+      * "bis 16 Uhr" (nur Endzeit)
+    - Wenn Endzeit < Startzeit (z.B. "22-01 Uhr"): Endzeit ist am Folgetag
     - Bei wiederkehrenden Events: Das HEUTIGE DATUM ist {current_date}. Berechne das nächste vorkommende Datum.
     - null falls kein Datum/Zeit erkennbar
 
@@ -190,6 +212,27 @@ AUFGABEN:
       * Bekannte Orte ("im Schlosspark", "beim ZKM", "in der Stadtbibliothek")
       * Stadtteile
     - null falls kein Ort erkennbar
+
+16. PREIS-EXTRAKTION (falls in Beschreibung erwähnt):
+    - extracted_price_type: "free", "paid", "donation" oder null
+    - extracted_price_min: Mindestpreis als Zahl (0 für kostenlos, null wenn unbekannt)
+    - extracted_price_max: Maximalpreis als Zahl (null wenn unbekannt)
+    - price_confidence: 0.0-1.0
+    - Suche nach: "Kostenfrei", "kostenlos", "5 Euro", "Eintritt: 3€", "Spendenbasis", "gegen Gebühr"
+    - "Spendenbasis"/"pay what you want" = "donation" mit price_min 0
+
+17. VENUE/ORT-NAME EXTRAKTION (WICHTIG - trenne Veranstaltungsort von Adresse):
+    - extracted_venue_name: Name des Veranstaltungsortes (z.B. "Kinder- und Jugendbibliothek", "ZKM", "Stadtpark")
+    - extracted_address_line: Straße + Hausnummer (z.B. "Karlstraße 10")
+    - extracted_city: Stadt (z.B. "Karlsruhe")
+    - extracted_postal_code: PLZ (z.B. "76133")
+    - venue_confidence: 0.0-1.0
+    - Beispiel: "Prinz-Max-Palais, Karlstraße 10, 76133 Karlsruhe"
+      -> venue_name: "Prinz-Max-Palais", address_line: "Karlstraße 10", city: "Karlsruhe", postal_code: "76133"
+
+18. ABSAGE-ERKENNUNG:
+    - is_cancelled_or_postponed: true/false
+    - Suche nach: "abgesagt", "entfällt", "verschoben", "ausverkauft", "fällt aus"
 
 Antworte NUR mit diesem JSON:
 {{
@@ -220,7 +263,17 @@ Antworte NUR mit diesem JSON:
   "datetime_confidence": 0.85,
   "extracted_location_address": "Kaiserstraße 42, 76131 Karlsruhe",
   "extracted_location_district": "Innenstadt",
-  "location_confidence": 0.9
+  "location_confidence": 0.9,
+  "extracted_price_type": "free",
+  "extracted_price_min": 0,
+  "extracted_price_max": null,
+  "price_confidence": 0.9,
+  "extracted_venue_name": "Kinder- und Jugendbibliothek im Prinz-Max-Palais",
+  "extracted_address_line": "Kaiserstraße 42",
+  "extracted_city": "Karlsruhe",
+  "extracted_postal_code": "76131",
+  "venue_confidence": 0.85,
+  "is_cancelled_or_postponed": false
 }}"""
 
 
@@ -257,7 +310,17 @@ Bitte antworte NUR mit validem JSON im korrekten Format:
   "datetime_confidence": 0.0,
   "extracted_location_address": null,
   "extracted_location_district": null,
-  "location_confidence": 0.0
+  "location_confidence": 0.0,
+  "extracted_price_type": null,
+  "extracted_price_min": null,
+  "extracted_price_max": null,
+  "price_confidence": 0.0,
+  "extracted_venue_name": null,
+  "extracted_address_line": null,
+  "extracted_city": null,
+  "extracted_postal_code": null,
+  "venue_confidence": 0.0,
+  "is_cancelled_or_postponed": false
 }}"""
 
 
@@ -571,6 +634,19 @@ class EventClassifier:
             extracted_location_district=data.get("extracted_location_district"),
             datetime_confidence=data.get("datetime_confidence", 0.0),
             location_confidence=data.get("location_confidence", 0.0),
+            # AI-extracted price
+            extracted_price_type=data.get("extracted_price_type"),
+            extracted_price_min=data.get("extracted_price_min"),
+            extracted_price_max=data.get("extracted_price_max"),
+            price_confidence=data.get("price_confidence", 0.0),
+            # AI-extracted venue (Location-Entity-Split)
+            extracted_venue_name=data.get("extracted_venue_name"),
+            extracted_address_line=data.get("extracted_address_line"),
+            extracted_city=data.get("extracted_city"),
+            extracted_postal_code=data.get("extracted_postal_code"),
+            venue_confidence=data.get("venue_confidence", 0.0),
+            # Cancellation
+            is_cancelled_or_postponed=data.get("is_cancelled_or_postponed"),
             # Metadata
             model=model,
             temperature=temperature,

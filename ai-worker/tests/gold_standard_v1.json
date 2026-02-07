@@ -1,0 +1,122 @@
+{
+  "version": "1.0",
+  "description": "Gold-Standard Events fuer Regression-Testing des AI-Classifiers",
+  "created_at": "2026-02-06",
+  "events": [
+    {
+      "title": "Kinderbasteln in der Bibliothek",
+      "description": "Bastelnachmittag fuer Kinder ab 5 Jahren. Kostenlos, ohne Anmeldung. Kinder- und Jugendbibliothek im Prinz-Max-Palais, Karlstr. 10, 76133 Karlsruhe.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "free",
+        "categories": ["kreativ", "bibliothek"]
+      }
+    },
+    {
+      "title": "Firmen-Networking-Abend",
+      "description": "Business Networking fuer Gruender und Unternehmer. Eintritt 15 Euro. Nur fuer Erwachsene.",
+      "expected": {
+        "is_family_friendly": false
+      }
+    },
+    {
+      "title": "Familien-Flohmarkt im Stadtpark",
+      "description": "Grosser Kinderflohmarkt mit Huepfburg und Kinderschminken. Eintritt frei. Stadtpark Karlsruhe.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "free"
+      }
+    },
+    {
+      "title": "Vorlesestunde fuer kleine Ohren",
+      "description": "Jeden Samstag von 10 bis 11 Uhr liest unsere Vorlesepatin Geschichten fuer Kinder ab 3 Jahren vor. Stadtbibliothek Durlach.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "free"
+      }
+    },
+    {
+      "title": "Craft Beer Festival",
+      "description": "Ueber 50 Craft Beer Sorten zum Probieren. Ab 18 Jahren. Eintritt 25 Euro.",
+      "expected": {
+        "is_family_friendly": false
+      }
+    },
+    {
+      "title": "Kindertheater: Der kleine Drache",
+      "description": "Puppentheater fuer Kinder ab 4 Jahren. Eintritt: 5 Euro, Erwachsene 8 Euro. Dauer ca. 45 Minuten.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "paid"
+      }
+    },
+    {
+      "title": "Yoga fuer Erwachsene",
+      "description": "Entspannungs-Yoga am Abend. Ab 18 Jahren. 12 Euro pro Stunde.",
+      "expected": {
+        "is_family_friendly": false
+      }
+    },
+    {
+      "title": "Familienschwimmen im Freibad",
+      "description": "Jeden Sonntag nachmittags Familienschwimmen mit Spielgeraeten. Kinder bis 6 Jahre frei, ab 6 Jahre 2 Euro, Erwachsene 4 Euro.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "paid"
+      }
+    },
+    {
+      "title": "Casino Night - Pokerturnament",
+      "description": "Grosses Pokerturnier mit Preisen. Ab 21 Jahren. Buy-in 50 Euro.",
+      "expected": {
+        "is_family_friendly": false
+      }
+    },
+    {
+      "title": "Musikalische Frueherziehung",
+      "description": "Musikstunde fuer Kinder von 3-6 Jahren. Auf Spendenbasis. Jeden Mittwoch 15 bis 16 Uhr.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "free"
+      }
+    },
+    {
+      "title": "Krabbelgruppe im Gemeindehaus",
+      "description": "Offene Krabbelgruppe fuer Babys ab 6 Monaten und ihre Eltern. Kostenlos. Dienstags von 9:30 bis 11 Uhr.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "free"
+      }
+    },
+    {
+      "title": "Ausstellung: Moderne Kunst",
+      "description": "Neue Ausstellung zeitgenoessischer Kuenstler. Eintritt 10 Euro, ermaeessigt 7 Euro. ZKM Karlsruhe.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "paid"
+      }
+    },
+    {
+      "title": "Seniorentreff Kaffee und Kuchen",
+      "description": "Gemuetlicher Nachmittag fuer Senioren ab 60 Jahren. Kaffee und Kuchen inklusive.",
+      "expected": {
+        "is_family_friendly": false
+      }
+    },
+    {
+      "title": "Waldtag fuer Familien",
+      "description": "Gemeinsam den Wald entdecken! Fuer Familien mit Kindern ab 4 Jahren. Treffpunkt Waldparkplatz. Kostenfrei.",
+      "expected": {
+        "is_family_friendly": true,
+        "price_type": "free"
+      }
+    },
+    {
+      "title": "Speed Dating 25-35",
+      "description": "Speed Dating fuer Singles zwischen 25 und 35 Jahren. 20 Euro pro Person.",
+      "expected": {
+        "is_family_friendly": false
+      }
+    }
+  ]
+}

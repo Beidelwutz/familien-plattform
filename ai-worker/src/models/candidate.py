@@ -112,10 +112,26 @@ class AIClassification:
     extracted_end_datetime: Optional[str] = None    # ISO-8601 format
     datetime_confidence: float = 0.0
     
+    # AI-extracted price (from description text)
+    extracted_price_type: Optional[str] = None  # "free", "paid", "donation", null
+    extracted_price_min: Optional[float] = None
+    extracted_price_max: Optional[float] = None
+    price_confidence: float = 0.0
+    
     # AI-extracted location (from description text)
     extracted_location_address: Optional[str] = None
     extracted_location_district: Optional[str] = None
     location_confidence: float = 0.0
+    
+    # AI-extracted venue (separate from address)
+    extracted_venue_name: Optional[str] = None
+    extracted_address_line: Optional[str] = None
+    extracted_city: Optional[str] = None
+    extracted_postal_code: Optional[str] = None
+    venue_confidence: float = 0.0
+    
+    # AI-extracted cancellation / availability
+    is_cancelled_or_postponed: Optional[bool] = None
     
     # AI-generated summaries
     ai_summary_short: Optional[str] = None  # max 300 chars

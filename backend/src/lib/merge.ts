@@ -3,7 +3,7 @@
  * Implements Option A: Backend makes all final merge decisions.
  */
 
-import { EventStatus } from '@prisma/client';
+import { EventStatus, Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { SOURCE_PRIORITY, computeFingerprint } from './idempotency.js';
 import { calculateCompleteness, determineInitialStatus, determineStatusFromAI, type AIScoreInput } from './eventCompleteness.js';
@@ -12,12 +12,24 @@ import { calculateCompleteness, determineInitialStatus, determineStatusFromAI, t
 const STALENESS_DAYS = 180;
 
 /** Per-field status for missing data and crawl/AI attempts (used in field_fill_status JSON) */
+export type FieldSource = 'feed' | 'crawl' | 'ai' | 'manual' | 'normalizer' | 'deep_fetch';
+
 export type FieldFillStatusValue = {
   status: 'filled' | 'missing' | 'crawl_pending' | 'crawl_failed' | 'ai_pending' | 'ai_failed';
   error?: string;
   last_attempt?: string;
-  source?: 'feed' | 'crawl' | 'ai' | 'manual';
+  source?: FieldSource;
+  confidence?: number;
 };
+
+// PriceType validation
+const VALID_PRICE_TYPES = ['free', 'paid', 'range', 'unknown', 'donation'] as const;
+type PriceType = typeof VALID_PRICE_TYPES[number];
+
+function sanitizePriceType(val: string | null | undefined): PriceType {
+  if (val && (VALID_PRICE_TYPES as readonly string[]).includes(val)) return val as PriceType;
+  return 'unknown';
+}
 
 const KEY_FIELDS_FOR_FILL_STATUS = ['location_address', 'start_datetime', 'end_datetime', 'ai_summary_short'] as const;
 
@@ -59,10 +71,15 @@ export interface CanonicalCandidate {
     timezone_original?: string;
     venue_name?: string;
     address?: string;
+    city?: string;
+    postal_code?: string;
+    country_code?: string;
     lat?: number;
     lng?: number;
+    price_type?: string;
     price_min?: number;
     price_max?: number;
+    price_details?: Record<string, any> | null;
     age_min?: number;
     age_max?: number;
     categories?: string[];
@@ -81,6 +98,9 @@ export interface CanonicalCandidate {
     has_seating?: boolean | null;
     typical_wait_minutes?: number | null;
     food_drink_allowed?: boolean | null;
+    // Recurrence / Availability
+    recurrence_rule?: string | null;
+    availability_status?: string | null;
   };
   
   ai?: {
@@ -109,6 +129,19 @@ export interface CanonicalCandidate {
       has_seating?: boolean;
       typical_wait_minutes?: number;
       food_drink_allowed?: boolean;
+      // AI-extracted price (Phase 0.2: saubere Typen statt 'as any')
+      extracted_price_type?: string | null;
+      extracted_price_min?: number | null;
+      extracted_price_max?: number | null;
+      price_confidence?: number;
+      // AI-extracted venue (Location-Entity-Split)
+      extracted_venue_name?: string | null;
+      extracted_address_line?: string | null;
+      extracted_city?: string | null;
+      extracted_postal_code?: string | null;
+      venue_confidence?: number;
+      // AI-extracted cancellation
+      is_cancelled_or_postponed?: boolean;
     };
     scores?: {
       relevance: number;
@@ -307,6 +340,14 @@ export async function processSingleCandidate(
       { candidateField: 'is_indoor', dbField: 'is_indoor', value: candidate.data.is_indoor },
       { candidateField: 'is_outdoor', dbField: 'is_outdoor', value: candidate.data.is_outdoor },
       { candidateField: 'images', dbField: 'image_urls', value: candidate.data.images },
+      // New fields
+      { candidateField: 'venue_name', dbField: 'venue_name', value: candidate.data.venue_name },
+      { candidateField: 'city', dbField: 'city', value: candidate.data.city },
+      { candidateField: 'postal_code', dbField: 'postal_code', value: candidate.data.postal_code },
+      { candidateField: 'country_code', dbField: 'country_code', value: candidate.data.country_code },
+      { candidateField: 'price_details', dbField: 'price_details', value: candidate.data.price_details },
+      { candidateField: 'recurrence_rule', dbField: 'recurrence_rule', value: candidate.data.recurrence_rule },
+      { candidateField: 'availability_status', dbField: 'availability_status', value: candidate.data.availability_status },
     ];
     
     // Apply AI suggestions if available
@@ -373,6 +414,33 @@ export async function processSingleCandidate(
       }
       if (ai.extracted_location_district && locationConfidence >= 0.7 && !existingEvent.location_district) {
         fieldMappings.push({ candidateField: 'ai_location_district', dbField: 'location_district', value: ai.extracted_location_district });
+      }
+      
+      // AI-extracted venue (Location-Entity-Split)
+      const venueConfidence = ai.venue_confidence || 0;
+      if (ai.extracted_venue_name && venueConfidence >= 0.7 && !(existingEvent as any).venue_name) {
+        fieldMappings.push({ candidateField: 'ai_venue_name', dbField: 'venue_name', value: ai.extracted_venue_name });
+      }
+      if (ai.extracted_address_line && venueConfidence >= 0.7 && !existingEvent.location_address) {
+        fieldMappings.push({ candidateField: 'ai_address_line', dbField: 'location_address', value: ai.extracted_address_line });
+      }
+      if (ai.extracted_city && !(existingEvent as any).city) {
+        fieldMappings.push({ candidateField: 'ai_city', dbField: 'city', value: ai.extracted_city });
+      }
+      if (ai.extracted_postal_code && !(existingEvent as any).postal_code) {
+        fieldMappings.push({ candidateField: 'ai_postal_code', dbField: 'postal_code', value: ai.extracted_postal_code });
+      }
+      
+      // AI-extracted price (use == null, not falsy!)
+      const priceConfidence = ai.price_confidence || 0;
+      if (ai.extracted_price_type && priceConfidence >= 0.7 && (existingEvent as any).price_min == null) {
+        if (ai.extracted_price_type === 'free' || ai.extracted_price_type === 'donation') {
+          fieldMappings.push({ candidateField: 'ai_price_min', dbField: 'price_min', value: 0 });
+          fieldMappings.push({ candidateField: 'ai_price_type', dbField: 'price_type', value: 'free' });
+        } else if (ai.extracted_price_min != null) {
+          fieldMappings.push({ candidateField: 'ai_price_min', dbField: 'price_min', value: ai.extracted_price_min });
+          fieldMappings.push({ candidateField: 'ai_price_type', dbField: 'price_type', value: 'paid' });
+        }
       }
       
       // AI-generated summaries
@@ -515,6 +583,52 @@ export async function processSingleCandidate(
     locationDistrict = aiClassification.extracted_location_district || null;
   }
   
+  // Determine venue_name: candidate first, then AI
+  let venueNameResolved = candidate.data.venue_name || null;
+  let cityResolved = candidate.data.city || null;
+  let postalCodeResolved = candidate.data.postal_code || null;
+  
+  if (aiClassification?.extracted_venue_name && (aiClassification.venue_confidence ?? 0) >= 0.7) {
+    if (!venueNameResolved) venueNameResolved = aiClassification.extracted_venue_name;
+    if (!locationAddress && aiClassification.extracted_address_line) {
+      locationAddress = aiClassification.extracted_address_line;
+    }
+    if (!cityResolved && aiClassification.extracted_city) {
+      cityResolved = aiClassification.extracted_city;
+    }
+    if (!postalCodeResolved && aiClassification.extracted_postal_code) {
+      postalCodeResolved = aiClassification.extracted_postal_code;
+    }
+  }
+  
+  // Determine price: candidate data first, then AI (use == null, NOT falsy -- price_min 0 is valid!)
+  let priceType = sanitizePriceType(candidate.data.price_type);
+  let priceMin: number | null = candidate.data.price_min ?? null;
+  let priceMax: number | null = candidate.data.price_max ?? null;
+  
+  // Derive price_type from price_min if not explicitly set
+  if (priceType === 'unknown' && priceMin != null) {
+    priceType = priceMin === 0 ? 'free' : 'paid';
+  }
+  
+  // AI-extracted price (only if normalizer didn't detect it -- use == null!)
+  if (priceMin == null && aiClassification?.extracted_price_type && (aiClassification.price_confidence ?? 0) >= 0.7) {
+    if (aiClassification.extracted_price_type === 'free' || aiClassification.extracted_price_type === 'donation') {
+      priceType = aiClassification.extracted_price_type === 'donation' ? 'free' : 'free';
+      priceMin = 0;
+    } else if (aiClassification.extracted_price_min != null) {
+      priceType = 'paid';
+      priceMin = aiClassification.extracted_price_min;
+      if (aiClassification.extracted_price_max != null) priceMax = aiClassification.extracted_price_max;
+    }
+  }
+  
+  // Determine availability_status (from data or AI)
+  let availabilityStatus = candidate.data.availability_status || null;
+  if (!availabilityStatus && aiClassification?.is_cancelled_or_postponed) {
+    availabilityStatus = 'cancelled';
+  }
+  
   const eventData = {
     title: candidate.data.title,
     description_short: candidate.data.description?.substring(0, 500) || null,
@@ -526,9 +640,14 @@ export async function processSingleCandidate(
     location_district: locationDistrict,
     location_lat: candidate.data.lat || candidate.ai?.geocode?.lat || null,
     location_lng: candidate.data.lng || candidate.ai?.geocode?.lng || null,
-    price_min: candidate.data.price_min || null,
-    price_max: candidate.data.price_max || null,
-    price_type: candidate.data.price_min ? (candidate.data.price_min === 0 ? 'free' : 'paid') : 'unknown' as any,
+    venue_name: venueNameResolved,
+    city: cityResolved || 'Karlsruhe',
+    postal_code: postalCodeResolved,
+    country_code: candidate.data.country_code || 'DE',
+    price_min: priceMin,
+    price_max: priceMax,
+    price_type: priceType as any,
+    price_details: candidate.data.price_details ? (candidate.data.price_details as Prisma.InputJsonValue) : undefined,
     age_min: candidate.data.age_min || aiClassification?.age_min || null,
     age_max: candidate.data.age_max || aiClassification?.age_max || null,
     is_indoor: candidate.data.is_indoor || aiClassification?.is_indoor || false,
@@ -546,6 +665,9 @@ export async function processSingleCandidate(
     has_seating: candidate.data.has_seating ?? aiClassification?.has_seating ?? null,
     typical_wait_minutes: candidate.data.typical_wait_minutes || aiClassification?.typical_wait_minutes || null,
     food_drink_allowed: candidate.data.food_drink_allowed ?? aiClassification?.food_drink_allowed ?? null,
+    // Recurrence / Availability
+    recurrence_rule: candidate.data.recurrence_rule || null,
+    availability_status: availabilityStatus,
     // AI-generated summaries
     ai_summary_short: aiClassification?.ai_summary_short || null,
     ai_summary_highlights: aiClassification?.ai_summary_highlights?.length ? aiClassification.ai_summary_highlights : [],
@@ -573,16 +695,54 @@ export async function processSingleCandidate(
   const initialProvenance: Record<string, string> = {};
   const initialFieldUpdatedAt: Record<string, string> = {};
   
+  // Track which fields came from AI vs feed/normalizer
+  const aiExtractedFields = new Set<string>();
+  if (aiClassification) {
+    if ((aiClassification.venue_confidence ?? 0) >= 0.7) {
+      if (!candidate.data.venue_name && aiClassification.extracted_venue_name) aiExtractedFields.add('venue_name');
+      if (!candidate.data.address && aiClassification.extracted_address_line) aiExtractedFields.add('location_address');
+      if (!candidate.data.city && aiClassification.extracted_city) aiExtractedFields.add('city');
+      if (!candidate.data.postal_code && aiClassification.extracted_postal_code) aiExtractedFields.add('postal_code');
+    }
+    if ((aiClassification.price_confidence ?? 0) >= 0.7 && candidate.data.price_min == null) {
+      aiExtractedFields.add('price_min');
+      aiExtractedFields.add('price_type');
+    }
+    if ((aiClassification.datetime_confidence ?? 0) >= 0.7) {
+      if (!candidate.data.start_at && aiClassification.extracted_start_datetime) aiExtractedFields.add('start_datetime');
+      if (!candidate.data.end_at && aiClassification.extracted_end_datetime) aiExtractedFields.add('end_datetime');
+    }
+    if (aiClassification.extracted_location_address && !candidate.data.address) aiExtractedFields.add('location_address');
+  }
+  
   for (const [key, value] of Object.entries(eventData)) {
     if (value !== null && value !== undefined && value !== '' && 
         !(Array.isArray(value) && value.length === 0)) {
-      initialProvenance[key] = sourceType;
+      const fieldSource = aiExtractedFields.has(key) ? 'ai' : sourceType;
+      initialProvenance[key] = fieldSource;
       initialFieldUpdatedAt[key] = nowIso;
       appliedFields.push(key);
     }
   }
   
   const initialFieldFillStatus = buildFieldFillStatus(eventData, initialProvenance, nowIso);
+  
+  // Enrich field_fill_status with AI confidence where applicable
+  if (aiClassification) {
+    for (const field of aiExtractedFields) {
+      if (initialFieldFillStatus[field]) {
+        let confidence = 1.0;
+        if (['venue_name', 'location_address', 'city', 'postal_code'].includes(field)) {
+          confidence = aiClassification.venue_confidence ?? 0.7;
+        } else if (['price_min', 'price_type'].includes(field)) {
+          confidence = aiClassification.price_confidence ?? 0.7;
+        } else if (['start_datetime', 'end_datetime'].includes(field)) {
+          confidence = aiClassification.datetime_confidence ?? 0.7;
+        }
+        initialFieldFillStatus[field].confidence = confidence;
+      }
+    }
+  }
   
   const newEvent = await prisma.canonicalEvent.create({
     data: {

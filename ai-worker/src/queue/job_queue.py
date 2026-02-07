@@ -713,3 +713,108 @@ async def get_queue() -> JobQueue:
     """
     await job_queue.connect()  # Returns False if unavailable, doesn't throw
     return job_queue
+
+
+# ==================== Ingest DLQ (for failed batch candidates) ====================
+
+INGEST_DLQ_KEY = "dlq:ingest_candidates"
+
+
+async def store_in_dlq(source_id: str, candidates: list) -> int:
+    """
+    Store failed ingest candidates in DLQ as Redis Sorted Set.
+    Uses ZADD with timestamp as score for ordering.
+    
+    Args:
+        source_id: Source UUID
+        candidates: List of CanonicalCandidate objects
+    
+    Returns:
+        Number of items stored
+    """
+    await job_queue.connect()
+    if not job_queue._redis:
+        logger.error("Cannot store in DLQ: Redis not connected")
+        return 0
+    
+    stored = 0
+    score = datetime.utcnow().timestamp()
+    
+    for c in candidates:
+        try:
+            member = json.dumps({
+                "source_id": source_id,
+                "candidate": c.to_dict() if hasattr(c, 'to_dict') else c,
+                "failed_at": datetime.utcnow().isoformat(),
+            })
+            await job_queue._redis.zadd(INGEST_DLQ_KEY, {member: score})
+            stored += 1
+        except Exception as e:
+            logger.error(f"Failed to store candidate in DLQ: {e}")
+    
+    # Set TTL of 7 days if not already set
+    ttl = await job_queue._redis.ttl(INGEST_DLQ_KEY)
+    if ttl < 0:
+        await job_queue._redis.expire(INGEST_DLQ_KEY, 7 * 86400)
+    
+    logger.info(f"Stored {stored} candidates in ingest DLQ for source {source_id}")
+    return stored
+
+
+async def get_ingest_dlq_count() -> int:
+    """Get count of candidates in ingest DLQ."""
+    await job_queue.connect()
+    if not job_queue._redis:
+        return 0
+    return await job_queue._redis.zcard(INGEST_DLQ_KEY)
+
+
+async def get_ingest_dlq_items(limit: int = 50, offset: int = 0) -> list:
+    """Get items from ingest DLQ with pagination."""
+    await job_queue.connect()
+    if not job_queue._redis:
+        return []
+    items = await job_queue._redis.zrange(
+        INGEST_DLQ_KEY, offset, offset + limit - 1, withscores=True
+    )
+    result = []
+    for member, score in items:
+        try:
+            data = json.loads(member)
+            data['score'] = score
+            result.append(data)
+        except json.JSONDecodeError:
+            pass
+    return result
+
+
+async def retry_ingest_dlq(source_id: str = None, limit: int = 10) -> list:
+    """
+    Pop items from ingest DLQ for reprocessing.
+    
+    Args:
+        source_id: Optional filter by source
+        limit: Max items to pop
+    
+    Returns:
+        List of candidate dicts to reprocess
+    """
+    await job_queue.connect()
+    if not job_queue._redis:
+        return []
+    
+    items = await job_queue._redis.zpopmin(INGEST_DLQ_KEY, limit)
+    candidates = []
+    
+    for member, score in items:
+        try:
+            data = json.loads(member)
+            if source_id and data.get('source_id') != source_id:
+                # Put back if wrong source
+                await job_queue._redis.zadd(INGEST_DLQ_KEY, {member: score})
+                continue
+            candidates.append(data)
+        except json.JSONDecodeError:
+            pass
+    
+    return candidates

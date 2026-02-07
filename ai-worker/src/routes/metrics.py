@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Depends
 
 from src.queue import job_queue, QUEUE_CRAWL, QUEUE_CLASSIFY, QUEUE_SCORE, QUEUE_GEOCODE
+from src.queue.job_queue import get_ingest_dlq_count
 from src.monitoring.ai_cost_tracker import AICostTracker, BudgetStatus
 from src.config import get_settings
 
@@ -234,4 +235,41 @@ async def get_health_summary():
             "issues": [f"Failed to check health: {e}"],
             "indicators": {},
             "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+
+
+@router.get("/pipeline-stats")
+async def pipeline_stats():
+    """
+    Pipeline statistics from Redis counters.
+    
+    Counters are set by the worker during crawl jobs via HINCRBY.
+    Key: pipeline:stats:daily (48h TTL, reset by worker).
+    """
+    try:
+        redis_connected = await job_queue.connect()
+        
+        stats = {}
+        if redis_connected and job_queue.is_connected and job_queue._redis:
+            raw = await job_queue._redis.hgetall("pipeline:stats:daily") or {}
+            stats = {k: int(v) for k, v in raw.items()}
+        
+        # Add DLQ sizes
+        job_dlq = await job_queue.get_dlq_count() if redis_connected else 0
+        ingest_dlq = await get_ingest_dlq_count() if redis_connected else 0
+        
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "counters": stats,
+            "dlq": {
+                "job_dlq": job_dlq,
+                "ingest_dlq": ingest_dlq,
+            },
+            "redis_connected": redis_connected,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get pipeline stats: {e}")
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "error": str(e),
         }

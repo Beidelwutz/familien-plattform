@@ -167,3 +167,76 @@ def create_health_summary(source_statuses: list[HealthStatus]) -> SourceHealthSu
         dead=sum(1 for s in source_statuses if s == HealthStatus.DEAD),
         unknown=sum(1 for s in source_statuses if s == HealthStatus.UNKNOWN),
     )
+
+
+# ==================== Source Quality Tracking ====================
+
+# Field-specific emptiness checks (0 is valid for price_min!)
+FIELD_RULES = {
+    'title':            lambda v: isinstance(v, str) and v.strip() != '',
+    'description':      lambda v: isinstance(v, str) and len(v.strip()) > 10,
+    'start_datetime':   lambda v: v is not None,
+    'end_datetime':     lambda v: v is not None,
+    'location_address': lambda v: isinstance(v, str) and v.strip() != '',
+    'venue_name':       lambda v: isinstance(v, str) and v.strip() != '',
+    'price_type':       lambda v: v is not None and v != 'unknown',
+    'price_min':        lambda v: v is not None,  # 0 is VALID (free)!
+    'age_min':          lambda v: v is not None,
+    'image_urls':       lambda v: isinstance(v, list) and len(v) > 0,
+    'booking_url':      lambda v: isinstance(v, str) and v.startswith('http'),
+}
+
+
+class SourceQuality:
+    """Track field-level quality per source."""
+    
+    def compute_field_coverage(self, events: list[dict]) -> dict[str, float]:
+        """
+        Compute per-field fill rate across a batch of events.
+        
+        Args:
+            events: List of event dicts
+            
+        Returns:
+            Dict of field -> percentage filled (0-100)
+        """
+        if not events:
+            return {}
+        
+        coverage = {}
+        for field, check_fn in FIELD_RULES.items():
+            try:
+                filled = sum(1 for e in events if check_fn(e.get(field)))
+                coverage[field] = round(filled / len(events) * 100, 1)
+            except Exception:
+                coverage[field] = 0.0
+        
+        return coverage
+    
+    def compute_overall_quality(self, coverage: dict[str, float]) -> float:
+        """Compute weighted overall quality score (0-100)."""
+        if not coverage:
+            return 0.0
+        
+        # Important fields have higher weight
+        weights = {
+            'title': 3.0,
+            'description': 2.0,
+            'start_datetime': 3.0,
+            'location_address': 2.0,
+            'venue_name': 1.0,
+            'price_type': 1.5,
+            'price_min': 1.0,
+            'age_min': 1.0,
+            'image_urls': 1.5,
+            'booking_url': 1.0,
+            'end_datetime': 1.0,
+        }
+        
+        total_weight = sum(weights.get(f, 1.0) for f in coverage)
+        weighted_sum = sum(
+            coverage.get(f, 0.0) * weights.get(f, 1.0)
+            for f in coverage
+        )
+        
+        return round(weighted_sum / total_weight, 1) if total_weight > 0 else 0.0

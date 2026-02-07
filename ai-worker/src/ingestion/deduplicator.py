@@ -10,7 +10,10 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 import hashlib
 from datetime import datetime
+from difflib import SequenceMatcher
 import geohash2
+import pytz
+import re
 
 
 @dataclass
@@ -71,16 +74,22 @@ class EventDeduplicator:
         # Normalize title
         title_norm = self._normalize_title(title)
         
-        # Date string (date only, no time)
+        # Date+Time string (including hour for better dedup)
+        # Normalize to Europe/Berlin timezone
         date_str = ""
         if start_datetime:
-            date_str = start_datetime.strftime("%Y-%m-%d")
+            berlin = pytz.timezone('Europe/Berlin')
+            if start_datetime.tzinfo:
+                local_dt = start_datetime.astimezone(berlin)
+            else:
+                local_dt = berlin.localize(start_datetime)
+            date_str = local_dt.strftime("%Y-%m-%dT%H")  # Include hour
         
-        # Geo-hash (precision 7 = ~153m x 153m)
+        # Geo-hash (precision 8 = ~38m x 19m for better accuracy)
         geo_str = ""
         if lat is not None and lng is not None:
             try:
-                geo_str = geohash2.encode(lat, lng, precision=7)
+                geo_str = geohash2.encode(lat, lng, precision=8)
             except Exception:
                 pass
         
@@ -251,36 +260,48 @@ class EventDeduplicator:
         )
     
     def _normalize_title(self, title: str) -> str:
-        """Normalize title for comparison."""
-        import re
+        """Normalize title for comparison.
         
-        # Lowercase
+        Removes date fragments, times, emojis, stopwords to reduce noise.
+        """
         title = title.lower()
         
-        # Remove extra whitespace
-        title = ' '.join(title.split())
+        # Remove date fragments: "15.03.", "2026", "15. März"
+        title = re.sub(r'\d{1,2}\.\d{1,2}\.(\d{2,4})?', '', title)
+        title = re.sub(r'\b\d{4}\b', '', title)
         
-        # Remove special characters
+        # Remove times: "14:00", "14 Uhr", "14.30"
+        title = re.sub(r'\d{1,2}[:.]\d{2}', '', title)
+        title = re.sub(r'\d{1,2}\s*uhr', '', title)
+        
+        # Remove emojis and special characters
         title = re.sub(r'[^\w\s]', '', title)
+        
+        # Remove German stopwords
+        stopwords = {
+            'und', 'der', 'die', 'das', 'in', 'im', 'am', 'an',
+            'fuer', 'für', 'mit', 'von', 'zu', 'zum', 'zur',
+            'den', 'dem', 'des', 'ein', 'eine', 'einer', 'einem',
+        }
+        title = ' '.join(w for w in title.split() if w not in stopwords)
         
         return title.strip()
     
     def _title_similarity(self, title1: str, title2: str) -> float:
-        """Calculate similarity between two titles."""
+        """Calculate similarity between two titles using Levenshtein + Jaccard mix."""
         if not title1 or not title2:
             return 0.0
         
-        # Simple word overlap similarity
+        # Jaccard (word-level overlap)
         words1 = set(title1.split())
         words2 = set(title2.split())
+        jaccard = len(words1 & words2) / len(words1 | words2) if (words1 | words2) else 0.0
         
-        if not words1 or not words2:
-            return 0.0
+        # Levenshtein ratio (character-level, via SequenceMatcher)
+        levenshtein = SequenceMatcher(None, title1, title2).ratio()
         
-        intersection = len(words1 & words2)
-        union = len(words1 | words2)
-        
-        return intersection / union if union > 0 else 0.0
+        # Weighted mix: 60% Levenshtein + 40% Jaccard
+        return 0.6 * levenshtein + 0.4 * jaccard
     
     def _calculate_completeness(self, event: dict) -> int:
         """Calculate completeness score (0-100)."""

@@ -22,9 +22,14 @@ model CanonicalEvent {
   location_district       String?                   @db.VarChar(100)
   location_lat            Decimal?                  @db.Decimal(10, 8)
   location_lng            Decimal?                  @db.Decimal(11, 8)
+  venue_name              String?                   @db.VarChar(300)
+  city                    String?                   @db.VarChar(100)
+  postal_code             String?                   @db.VarChar(10)
+  country_code            String?                   @db.VarChar(2)
   price_type              PriceType                 @default(unknown)
   price_min               Decimal?                  @db.Decimal(8, 2)
   price_max               Decimal?                  @db.Decimal(8, 2)
+  price_details           Json?
   age_min                 Int?                      @db.SmallInt
   age_max                 Int?                      @db.SmallInt
   is_indoor               Boolean                   @default(false)
@@ -46,6 +51,10 @@ model CanonicalEvent {
   is_cancelled            Boolean                   @default(false)
   cancelled_at            DateTime?                 @db.Timestamptz(6)
   cancellation_reason     String?
+  availability_status     String?                   @db.VarChar(30)
+  recurrence_rule         String?                   @db.VarChar(200)
+  next_occurrence_at      DateTime?                 @db.Timestamptz(6)
+  rejection_reason        String?                   @db.VarChar(500)
   rescheduled_to_event_id String?
   previous_start_datetime DateTime?                 @db.Timestamptz(6)
   locked_fields           Json?                     @default("[]")
@@ -659,6 +668,7 @@ enum PriceType {
   free
   paid
   range
+  donation
   unknown
 }
 

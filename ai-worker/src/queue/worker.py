@@ -118,27 +118,73 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
     """
     Enrich candidates with AI classification and scoring.
     
+    Pipeline:
+    1. Rule-Filter: Hard/Soft exclude before AI to save costs
+    2. AI Classification: For uncertain/included events
+    3. AI Scoring: Quality, relevance, family_fit
+    
     AI results are stored as suggestions - Backend decides final merge.
     """
+    from src.rules.rule_filter import RuleBasedFilter
+    rule_filter = RuleBasedFilter()
+    
     if not settings.openai_api_key and not settings.anthropic_api_key:
         logger.warning("No AI API keys configured, skipping AI enrichment")
         return candidates
     
+    rule_rejected = 0
+    ai_called = 0
+    
     for candidate in candidates:
         try:
             # Prepare event data for classifier/scorer
-            # Note: Classifier/Scorer expect 'location_address', not 'location'
             event_data = {
                 'title': candidate.data.title,
                 'description': candidate.data.description,
                 'location_address': candidate.data.address,
-                'price_type': candidate.data.price_type,
+                'price_type': getattr(candidate.data, 'price_type', None),
             }
             
-            # Classification
+            # Step 1: Rule-Filter BEFORE AI
+            rule_result = rule_filter.check(event_data)
+            
+            if rule_result.is_relevant is False and rule_result.is_hard_exclude:
+                # Hard exclude -> skip AI entirely
+                candidate.ai = AISuggestions(
+                    classification=AIClassification(
+                        categories=[], confidence=rule_result.confidence,
+                        model='rule_filter', prompt_version='rule_v1',
+                    ),
+                    scores=AIScores(
+                        relevance=10, quality=30, family_fit=10,
+                        confidence=rule_result.confidence, model='rule_filter',
+                    ),
+                )
+                rule_rejected += 1
+                logger.info(f"Rule-Filter hard-rejected: {candidate.data.title} ({rule_result.reason})")
+                continue
+            
+            if rule_result.is_relevant is False and not rule_result.is_hard_exclude:
+                # Soft exclude without include hits -> skip AI
+                candidate.ai = AISuggestions(
+                    classification=AIClassification(
+                        categories=rule_result.suggested_categories or [],
+                        confidence=rule_result.confidence,
+                        model='rule_filter', prompt_version='rule_v1',
+                    ),
+                    scores=AIScores(
+                        relevance=20, quality=30, family_fit=20,
+                        confidence=rule_result.confidence, model='rule_filter',
+                    ),
+                )
+                rule_rejected += 1
+                logger.info(f"Rule-Filter soft-rejected: {candidate.data.title} ({rule_result.reason})")
+                continue
+            
+            # Step 2: AI Classification (uncertain or included events)
+            ai_called += 1
             classification_result = await event_classifier.classify(event_data)
             
-            # Note: classification_result is a ClassificationResult dataclass, not a dict!
             classification = AIClassification(
                 categories=classification_result.categories or [],
                 age_min=classification_result.age_min,
@@ -153,7 +199,7 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 has_seating=classification_result.has_seating,
                 typical_wait_minutes=classification_result.typical_wait_minutes,
                 food_drink_allowed=classification_result.food_drink_allowed,
-                # AI-extracted datetime (e.g. "17 Uhr" from description)
+                # AI-extracted datetime
                 extracted_start_datetime=classification_result.extracted_start_datetime,
                 extracted_end_datetime=classification_result.extracted_end_datetime,
                 datetime_confidence=classification_result.datetime_confidence or 0.0,
@@ -161,6 +207,19 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 extracted_location_address=classification_result.extracted_location_address,
                 extracted_location_district=classification_result.extracted_location_district,
                 location_confidence=classification_result.location_confidence or 0.0,
+                # AI-extracted price
+                extracted_price_type=classification_result.extracted_price_type,
+                extracted_price_min=classification_result.extracted_price_min,
+                extracted_price_max=classification_result.extracted_price_max,
+                price_confidence=classification_result.price_confidence or 0.0,
+                # AI-extracted venue (Location-Entity-Split)
+                extracted_venue_name=classification_result.extracted_venue_name,
+                extracted_address_line=classification_result.extracted_address_line,
+                extracted_city=classification_result.extracted_city,
+                extracted_postal_code=classification_result.extracted_postal_code,
+                venue_confidence=classification_result.venue_confidence or 0.0,
+                # Cancellation
+                is_cancelled_or_postponed=classification_result.is_cancelled_or_postponed,
                 # AI-generated summaries
                 ai_summary_short=classification_result.ai_summary_short,
                 ai_summary_highlights=classification_result.ai_summary_highlights or [],
@@ -171,10 +230,9 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 prompt_version=classification_result.prompt_version or "4.0.0",
             )
             
-            # Scoring
+            # Step 3: Scoring
             scoring_result = await event_scorer.score(event_data)
             
-            # Note: scoring_result is a ScoringResult dataclass, not a dict!
             scores = AIScores(
                 relevance=scoring_result.relevance_score,
                 quality=scoring_result.quality_score,
@@ -188,14 +246,42 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
             candidate.ai = AISuggestions(
                 classification=classification,
                 scores=scores,
-                geocode=None,  # TODO: Add geocoding if address present
+                geocode=None,
             )
             
         except Exception as e:
             logger.warning(f"AI enrichment failed for {candidate.data.title}: {e}")
             continue
     
+    logger.info(f"AI enrichment complete: {ai_called} AI calls, {rule_rejected} rule-rejected (saved {rule_rejected} AI calls)")
     return candidates
+
+
+BATCH_SIZE = 10
+MAX_RETRIES = 3
+
+
+async def _send_single_batch(
+    client: httpx.AsyncClient,
+    source_id: str,
+    batch: list[CanonicalCandidate],
+    run_id: Optional[str],
+    headers: dict,
+) -> dict:
+    """Send a single batch to backend. Raises on failure."""
+    request = IngestBatchRequest(
+        run_id=run_id,
+        source_id=source_id,
+        candidates=batch,
+    )
+    
+    target_url = f"{settings.backend_url}/api/events/ingest/batch"
+    response = await client.post(target_url, json=request.to_dict(), headers=headers)
+    
+    if response.status_code in (200, 201):
+        return response.json()
+    else:
+        raise RuntimeError(f"Backend returned {response.status_code}: {response.text[:500]}")
 
 
 async def send_batch_to_backend(
@@ -205,6 +291,8 @@ async def send_batch_to_backend(
 ) -> dict:
     """
     Send batch of candidates to backend for ingestion.
+    Splits into sub-batches of BATCH_SIZE with retry logic.
+    Failed candidates are stored in DLQ.
     
     Args:
         source_id: Source UUID
@@ -214,81 +302,67 @@ async def send_batch_to_backend(
     Returns:
         Backend response with results and summary
     """
-    # #region agent log - Production debug logging
-    logger.info(f"[BATCH] send_batch_to_backend called: source_id={source_id}, num_candidates={len(candidates)}, run_id={run_id}")
-    logger.info(f"[BATCH] Config check: backend_url={settings.backend_url}, has_service_token={bool(settings.service_token)}")
-    # #endregion
+    logger.info(f"[BATCH] send_batch_to_backend: source_id={source_id}, total={len(candidates)}, batch_size={BATCH_SIZE}")
     
     client = await get_http_client()
-    
-    # Build request payload
-    request = IngestBatchRequest(
-        run_id=run_id,
-        source_id=source_id,
-        candidates=candidates,
-    )
     
     headers = {"Content-Type": "application/json"}
     if settings.service_token:
         headers["Authorization"] = f"Bearer {settings.service_token}"
     
-    # #region agent log
-    target_url = f"{settings.backend_url}/api/events/ingest/batch"
-    logger.info(f"[BATCH] Sending POST to: {target_url}")
-    # #endregion
+    all_results = {"created": 0, "updated": 0, "unchanged": 0, "ignored": 0}
+    failed_candidates = []
     
-    try:
-        response = await client.post(
-            target_url,
-            json=request.to_dict(),
-            headers=headers,
-        )
+    # Split into sub-batches
+    for i in range(0, len(candidates), BATCH_SIZE):
+        batch = candidates[i:i + BATCH_SIZE]
+        batch_num = i // BATCH_SIZE + 1
+        total_batches = (len(candidates) + BATCH_SIZE - 1) // BATCH_SIZE
         
-        # #region agent log
-        logger.info(f"[BATCH] Response received: status_code={response.status_code}")
-        # #endregion
+        success = False
+        for attempt in range(MAX_RETRIES):
+            try:
+                result = await _send_single_batch(client, source_id, batch, run_id, headers)
+                summary = result.get("summary", {})
+                for key in all_results:
+                    all_results[key] += summary.get(key, 0)
+                logger.info(f"[BATCH] Sub-batch {batch_num}/{total_batches} OK: +{summary.get('created', 0)} created")
+                success = True
+                break
+            except Exception as e:
+                if attempt < MAX_RETRIES - 1:
+                    wait = 2 ** attempt
+                    logger.warning(f"[BATCH] Sub-batch {batch_num} attempt {attempt+1} failed: {e}, retrying in {wait}s")
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error(f"[BATCH] Sub-batch {batch_num} failed after {MAX_RETRIES} retries: {e}")
         
-        if response.status_code in (200, 201):
-            data = response.json()
-            logger.info(
-                f"Batch ingest successful: "
-                f"created={data['summary']['created']}, "
-                f"updated={data['summary']['updated']}, "
-                f"unchanged={data['summary']['unchanged']}, "
-                f"ignored={data['summary']['ignored']}"
-            )
-            return data
-        else:
-            # #region agent log
-            logger.error(f"[BATCH] Error response body (first 1000 chars): {response.text[:1000]}")
-            # #endregion
-            logger.error(f"Batch ingest failed: {response.status_code} - {response.text[:500]}")
-            return {
-                "success": False,
-                "error": response.text[:500],
-                "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
-            }
-    except httpx.TimeoutException as e:
-        # #region agent log
-        logger.error(f"[BATCH] Timeout during POST: type={type(e).__name__}, after sending {len(candidates)} candidates")
-        # #endregion
-        logger.error(f"Batch ingest timed out for {len(candidates)} candidates - consider smaller batches")
-        return {
-            "success": False,
-            "error": f"Timeout after sending {len(candidates)} candidates",
-            "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
-        }
-    except Exception as e:
-        # #region agent log
-        import traceback
-        logger.error(f"[BATCH] Exception during POST: type={type(e).__name__}, message={str(e)}, traceback={traceback.format_exc()}")
-        # #endregion
-        logger.error(f"Failed to send batch to backend: {e}")
-        return {
-            "success": False,
-            "error": str(e) or f"Unknown error: {type(e).__name__}",
-            "summary": {"created": 0, "updated": 0, "unchanged": 0, "ignored": len(candidates)}
-        }
+        if not success:
+            failed_candidates.extend(batch)
+    
+    # Store failed candidates in DLQ
+    if failed_candidates:
+        try:
+            from .job_queue import store_in_dlq
+            await store_in_dlq(source_id, failed_candidates)
+            logger.warning(f"[BATCH] {len(failed_candidates)} candidates moved to DLQ")
+        except Exception as e:
+            logger.error(f"[BATCH] Failed to store in DLQ: {e}")
+    
+    total_summary = {**all_results}
+    logger.info(
+        f"Batch ingest complete: "
+        f"created={total_summary['created']}, updated={total_summary['updated']}, "
+        f"unchanged={total_summary['unchanged']}, ignored={total_summary['ignored']}, "
+        f"failed={len(failed_candidates)}"
+    )
+    
+    return {
+        "success": len(failed_candidates) == 0,
+        "summary": total_summary,
+        "failed": len(failed_candidates),
+        "run_id": run_id,
+    }
 
 
 async def update_ingest_run(

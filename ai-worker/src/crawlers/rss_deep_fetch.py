@@ -200,7 +200,22 @@ class SelectiveDeepFetcher:
                 return None
             
             # Return first event (usually there's only one on a detail page)
-            return events[0]
+            event = events[0]
+            
+            # OG-Image fallback: if no image from structured data, try og:image
+            if not event.image_url:
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html, 'html.parser')
+                    og_image = soup.find('meta', property='og:image')
+                    if og_image and og_image.get('content'):
+                        img_url = og_image['content']
+                        if img_url.startswith(('http://', 'https://')):
+                            event.image_url = img_url
+                except Exception:
+                    pass  # Best-effort, don't fail on og:image extraction
+            
+            return event
             
         except httpx.TimeoutException:
             logger.debug(f"Timeout fetching {url}")

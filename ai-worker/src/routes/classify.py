@@ -4,6 +4,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+import json
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.classifiers.event_classifier import EventClassifier
 from src.scorers.event_scorer import EventScorer
@@ -166,4 +171,76 @@ async def classify_batch(events: list[EventInput]):
         "total": len(events),
         "successful": sum(1 for r in results if r["success"]),
         "results": results
+    }
+
+
+@router.post("/test-gold-standard")
+async def test_gold_standard():
+    """
+    Test AI classifier against manually annotated gold-standard events.
+    
+    Gold events are loaded from tests/gold_standard_v1.json.
+    Results include per-event accuracy + model/prompt version for regression tracking.
+    """
+    # Load gold standard file
+    gold_path = os.path.join(os.path.dirname(__file__), '..', '..', 'tests', 'gold_standard_v1.json')
+    
+    if not os.path.exists(gold_path):
+        raise HTTPException(status_code=404, detail=f"Gold standard file not found at {gold_path}")
+    
+    try:
+        with open(gold_path, 'r', encoding='utf-8') as f:
+            gold = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load gold standard: {e}")
+    
+    results = []
+    correct = 0
+    total = 0
+    
+    for event in gold.get("events", []):
+        total += 1
+        expected = event.get("expected", {})
+        
+        try:
+            ai_result = await classifier.classify(event)
+            
+            # Check family_friendly match
+            match = True
+            if "is_family_friendly" in expected:
+                match = ai_result.is_family_friendly == expected["is_family_friendly"]
+            
+            if match:
+                correct += 1
+            
+            results.append({
+                "title": event.get("title", "?"),
+                "correct": match,
+                "confidence": ai_result.confidence,
+                "model": ai_result.model,
+                "prompt_version": ai_result.prompt_version,
+                "expected": expected,
+                "actual": {
+                    "is_family_friendly": ai_result.is_family_friendly,
+                    "categories": ai_result.categories,
+                    "age_min": ai_result.age_min,
+                    "age_max": ai_result.age_max,
+                },
+            })
+        except Exception as e:
+            results.append({
+                "title": event.get("title", "?"),
+                "correct": False,
+                "error": str(e),
+            })
+    
+    accuracy = correct / total if total > 0 else 0.0
+    
+    return {
+        "accuracy": round(accuracy, 3),
+        "correct": correct,
+        "total": total,
+        "gold_version": gold.get("version", "unknown"),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "results": results,
     }

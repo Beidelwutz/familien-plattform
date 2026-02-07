@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from dateutil import parser as date_parser
 import pytz
@@ -135,6 +135,19 @@ class EventNormalizer:
         location_lng = self._safe_float(raw_data.get('location_lng') or raw_data.get('lng'))
         venue_name = raw_data.get('venue_name') or raw_data.get('location_name')
         city, postal_code = self._extract_city_postal(raw_data, location_address)
+        
+        # Smart venue/address separation
+        if location_address and not self._is_street_address(location_address):
+            # Text sieht nicht nach Strasse aus -> ist vermutlich Venue-Name
+            if not venue_name:
+                venue_name = location_address
+                location_address = None
+        elif location_address and not venue_name:
+            # Zusammengesetzter String: "Prinz-Max-Palais, Karlstr. 10, 76133 Karlsruhe"
+            parts = location_address.split(',')
+            if len(parts) >= 2 and not self._is_street_address(parts[0].strip()):
+                venue_name = parts[0].strip()
+                location_address = ', '.join(parts[1:]).strip()
         
         # Price (basic + structured)
         price_type, price_min, price_max = self._extract_price(raw_data)
@@ -287,21 +300,34 @@ class EventNormalizer:
         return address.strip() or None
     
     def _extract_price(self, raw_data: dict) -> tuple[str, Optional[float], Optional[float]]:
-        """Extract price information."""
+        """Extract price information with free/donation/paid distinction."""
         # Check explicit price fields
         price_type = raw_data.get('price_type', 'unknown')
         price_min = self._safe_float(raw_data.get('price_min') or raw_data.get('price'))
         price_max = self._safe_float(raw_data.get('price_max'))
         
-        if price_type not in ['free', 'paid', 'range', 'unknown']:
+        VALID_PRICE_TYPES = ['free', 'paid', 'range', 'unknown', 'donation']
+        if price_type not in VALID_PRICE_TYPES:
             price_type = 'unknown'
         
         # Try to detect from text
         text = f"{raw_data.get('title', '')} {raw_data.get('description', '')}".lower()
         
+        FREE_KEYWORDS = [
+            'kostenlos', 'kostenfrei', 'gratis', 'umsonst',
+            'eintritt frei', 'freier eintritt', 'ohne eintritt',
+            'kein eintritt', 'ohne kosten', '0 euro', '0€', '0,00', 'for free',
+        ]
+        DONATION_KEYWORDS = [
+            'auf spendenbasis', 'spende erbeten', 'pay what you want',
+            'gegen spende', 'hutsammlung', 'freiwilliger beitrag',
+        ]
+        
         if price_type == 'unknown':
-            if 'kostenlos' in text or 'gratis' in text or 'eintritt frei' in text:
+            if any(kw in text for kw in FREE_KEYWORDS):
                 price_type = 'free'
+            elif any(kw in text for kw in DONATION_KEYWORDS):
+                price_type = 'free'  # Treated as free, details in price_details
             elif price_min is not None:
                 price_type = 'paid'
         
@@ -313,6 +339,10 @@ class EventNormalizer:
                 price_str = match.group(1).replace(',', '.')
                 price_min = float(price_str)
                 price_type = 'paid'
+        
+        # Ensure free events always have price_min = 0
+        if price_type == 'free' and price_min is None:
+            price_min = 0.0
         
         return price_type, price_min, price_max
     
@@ -479,9 +509,9 @@ class EventNormalizer:
         start_time = None
         end_time = None
         
-        # Pattern 1: Time range "11 bis 12 Uhr" / "11-12 Uhr" / "von 11 bis 12 Uhr"
-        # Also matches: "11:30 bis 14:00 Uhr", "11.30 - 14.00 Uhr"
-        time_range_pattern = r'(?:von\s+)?(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr\s*)?(?:bis|[-–])\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*uhr'
+        # Pattern 1: Time range - "Uhr" am Ende OPTIONAL wenn Minuten vorhanden
+        # Matcht: "16 bis 16.15", "11 bis 12 Uhr", "von 14:00 bis 15:30", "14-16 Uhr", "14h-16h"
+        time_range_pattern = r'(?:von\s+)?(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)?\s*(?:bis|[-–])\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)?'
         match = re.search(time_range_pattern, text_lower)
         if match:
             start_hour = int(match.group(1))
@@ -489,24 +519,71 @@ class EventNormalizer:
             end_hour = int(match.group(3))
             end_minute = int(match.group(4)) if match.group(4) else 0
             
-            if 0 <= start_hour <= 23 and 0 <= start_minute <= 59:
+            # Plausibilitaetspruefung: Stunden 6-23 (keine versehentlichen Matches mit Datumsangaben)
+            if 6 <= start_hour <= 23 and 0 <= end_hour <= 23 and 0 <= start_minute <= 59 and 0 <= end_minute <= 59:
                 start_time = base_date.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-            if 0 <= end_hour <= 23 and 0 <= end_minute <= 59:
                 end_time = base_date.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
-            
-            return start_time, end_time
+                # Endzeit < Startzeit (z.B. 22-01 Uhr) -> naechster Tag
+                if end_time <= start_time:
+                    end_time = end_time + timedelta(days=1)
+                return start_time, end_time
         
-        # Pattern 2: Single time "11 Uhr" / "11:30 Uhr" / "ab 17 Uhr" / "um 14 Uhr"
-        single_time_pattern = r'(?:ab|um|gegen)?\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*uhr'
+        # Pattern 2: Single time "11 Uhr" / "11:30 Uhr" / "um 14 Uhr"
+        single_time_pattern = r'(?:um|gegen)\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)'
         match = re.search(single_time_pattern, text_lower)
         if match:
             hour = int(match.group(1))
             minute = int(match.group(2)) if match.group(2) else 0
             
-            if 0 <= hour <= 23 and 0 <= minute <= 59:
+            if 6 <= hour <= 23 and 0 <= minute <= 59:
                 start_time = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-            
-            return start_time, None
+                return start_time, None
+        
+        # Pattern 3: "ab 14 Uhr" / "ab 14h" -> nur Start
+        ab_pattern = r'\bab\s+(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)\b'
+        match = re.search(ab_pattern, text_lower)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2)) if match.group(2) else 0
+            if 6 <= hour <= 23 and 0 <= minute <= 59:
+                start_time = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                return start_time, None
+        
+        # Pattern 4: "bis 16 Uhr" -> nur End
+        bis_pattern = r'\bbis\s+(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)\b'
+        match = re.search(bis_pattern, text_lower)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2)) if match.group(2) else 0
+            if 6 <= hour <= 23 and 0 <= minute <= 59:
+                end_time = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                return None, end_time
+        
+        # Pattern 5: Simple "14 Uhr" (without ab/um/gegen prefix)
+        simple_time_pattern = r'\b(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*uhr\b'
+        match = re.search(simple_time_pattern, text_lower)
+        if match:
+            hour = int(match.group(1))
+            minute = int(match.group(2)) if match.group(2) else 0
+            if 6 <= hour <= 23 and 0 <= minute <= 59:
+                start_time = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                return start_time, None
+        
+        # Pattern 6: Tageszeit-Woerter - NUR "morgens" (NICHT "morgen" = tomorrow)
+        tageszeit_pattern = r'\b(vormittags?|nachmittags?|abends?|morgens)\b'
+        match = re.search(tageszeit_pattern, text_lower)
+        if match:
+            tageszeit_map = {
+                'vormittag': (10, 0), 'vormittags': (10, 0),
+                'morgens': (9, 0),
+                'nachmittag': (14, 0), 'nachmittags': (14, 0),
+                'abend': (19, 0), 'abends': (19, 0),
+            }
+            word = match.group(1)
+            if word in tageszeit_map:
+                h, m = tageszeit_map[word]
+                start_time = base_date.replace(hour=h, minute=m, second=0, microsecond=0)
+                return start_time, None
         
         return None, None
     
@@ -524,6 +601,23 @@ class EventNormalizer:
                 valid_images.append(img[:500])
         
         return valid_images[:10]  # Max 10 images
+    
+    def _is_street_address(self, text: str) -> bool:
+        """Check if text looks like a street address (not a venue name)."""
+        if not text:
+            return False
+        text_lower = text.lower()
+        # Starkes Signal: PLZ (5 Ziffern)
+        has_postal = bool(re.search(r'\b\d{5}\b', text))
+        # Strassen-Suffix MIT Hausnummer = sicher Adresse
+        street_with_nr = bool(re.search(
+            r'(?:str\.|straße|strasse|weg|platz|allee|gasse|ring|damm|ufer)\s*\d+', text_lower
+        ))
+        # Strassen-Suffix OHNE Nummer = wahrscheinlich Adresse wenn PLZ dabei
+        street_no_nr = bool(re.search(
+            r'(?:str\.|straße|strasse|weg|allee|gasse|ring|damm|ufer)\b', text_lower
+        ))
+        return street_with_nr or (street_no_nr and has_postal) or has_postal
     
     def _extract_city_postal(
         self, 
@@ -582,6 +676,12 @@ class EventNormalizer:
             price = float(match.group(1).replace(',', '.'))
             details['family'] = {'min': price, 'max': price}
         
+        # Donation detection
+        if any(kw in text for kw in ['spendenbasis', 'spende erbeten', 'pay what you want',
+                                      'gegen spende', 'hutsammlung', 'freiwilliger beitrag']):
+            details['mode'] = 'donation'
+            details['hint'] = 'Spendenbasis'
+        
         if details:
             details['currency'] = 'EUR'
             return details
@@ -599,6 +699,14 @@ class EventNormalizer:
             return status
         
         text = description.lower()
+        
+        # Check for cancelled
+        if any(kw in text for kw in ['abgesagt', 'entfällt', 'cancelled', 'fällt aus', 'findet nicht statt']):
+            return 'cancelled'
+        
+        # Check for postponed
+        if any(kw in text for kw in ['verschoben', 'postponed', 'neuer termin']):
+            return 'postponed'
         
         # Check for sold out
         if any(kw in text for kw in ['ausverkauft', 'sold out', 'keine tickets', 'restlos vergriffen']):
@@ -621,21 +729,28 @@ class EventNormalizer:
         return None
     
     def _extract_language(self, raw_data: dict, description: str) -> Optional[str]:
-        """Extract event language."""
+        """Extract event language as ISO code."""
         language = raw_data.get('language')
         if language:
-            return language
+            # Normalize to ISO code if full name given
+            lang_map = {
+                'deutsch': 'de', 'german': 'de', 'de': 'de',
+                'englisch': 'en', 'english': 'en', 'en': 'en',
+                'französisch': 'fr', 'french': 'fr', 'fr': 'fr',
+                'türkisch': 'tr', 'turkish': 'tr', 'tr': 'tr',
+            }
+            return lang_map.get(language.lower(), language)
         
         text = description.lower()
         
         # Check for explicit language mentions
-        if any(kw in text for kw in ['auf englisch', 'in englisch', 'english']):
-            return 'Englisch'
+        if any(kw in text for kw in ['auf englisch', 'in englisch', 'english', 'in english']):
+            return 'en'
         if any(kw in text for kw in ['auf deutsch', 'in deutsch', 'auf deutscher sprache']):
-            return 'Deutsch'
+            return 'de'
         
         # Default to German for German sources
-        return 'Deutsch'
+        return 'de'
     
     def _detect_spots_limited(self, raw_data: dict, description: str) -> Optional[bool]:
         """Detect if event has limited spots."""
