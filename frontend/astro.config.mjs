@@ -3,7 +3,7 @@ import vercel from '@astrojs/vercel';
 import tailwind from '@astrojs/tailwind';
 
 // https://astro.build/config
-// Build trigger: 2026-02-06
+// Build trigger: 2026-02-06 (deploy test)
 export default defineConfig({
   site: 'https://www.kiezling.com',
   output: 'server',
