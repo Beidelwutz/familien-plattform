@@ -155,93 +155,195 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                 </div>
               </div>
               <!-- Detail content (hidden by default) -->
-              <div id="detail-content" class="hidden p-6">
+              <div id="detail-content" class="hidden p-6 space-y-6">
                 <!-- Header -->
-                <div class="mb-6">
+                <div>
                   <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0">
-                      <h2 id="detail-title" class="text-xl font-bold text-gray-900 truncate">Event Title</h2>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2">
+                        <h2 id="detail-title" class="text-xl font-bold text-gray-900 truncate">Event Title</h2>
+                        <button id="copy-event-id" class="copy-btn" title="Event-ID kopieren">&#x1F4CB;</button>
+                      </div>
                       <a id="detail-source-link" href="#" target="_blank" class="text-sm text-primary-600 hover:underline truncate block">
                         <span id="detail-source-name">Quelle</span>
                       </a>
                     </div>
-                    <div id="detail-status-badge" class="flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium">
-                      waiting
+                    <div class="flex items-center gap-2">
+                      <span id="detail-source-type-badge" class="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600"></span>
+                      <div id="detail-status-badge" class="flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium">waiting</div>
                     </div>
-                  </div>
-                  <!-- Missing fields warning -->
-                  <div id="detail-missing" class="hidden mt-3 p-3 bg-amber-50 rounded-lg">
-                    <p class="text-sm text-amber-700 font-medium">Fehlende Felder:</p>
-                    <p id="detail-missing-list" class="text-sm text-amber-600 mt-1"></p>
-                  </div>
-                  <!-- Field fill status (per-field status messages) -->
-                  <div id="detail-field-status" class="hidden mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                    <p class="text-sm font-medium text-gray-700 mb-1">Feldstatus</p>
-                    <div id="detail-field-status-list" class="text-sm text-gray-600 space-y-0.5"></div>
-                  </div>
-                  <!-- Trigger AI for this event -->
-                  <div class="mt-3 flex flex-wrap items-center gap-3">
-                    <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                      <input type="checkbox" id="detail-trigger-crawl" class="rounded border-gray-300 text-primary-500 focus:ring-primary-500">
-                      <span>Auch Website crawlen</span>
-                    </label>
-                    <button id="detail-trigger-ai" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium transition-colors flex items-center gap-2 text-sm">
-                      <span id="detail-trigger-ai-text">AI erneut ausführen</span>
-                    </button>
-                    <span id="detail-trigger-ai-status" class="text-sm text-gray-500 hidden"></span>
                   </div>
                 </div>
 
-                <!-- Fields Grid -->
-                <div class="space-y-6">
-                  <!-- Basic Info -->
-                  <div>
-                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <span>&#x1F4CB;</span> Basis-Informationen
-                    </h4>
-                    <div class="grid grid-cols-2 gap-3" id="fields-basic">
-                      <!-- Fields will be inserted here -->
-                    </div>
+                <!-- Suggested Actions (Next Steps) -->
+                <div id="section-actions" class="hidden">
+                  <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p class="text-sm font-semibold text-blue-800 mb-2">Empfohlene naechste Schritte</p>
+                    <div id="actions-list" class="flex flex-wrap gap-2"></div>
                   </div>
+                </div>
 
-                  <!-- AI Classifications -->
-                  <div id="section-ai" class="hidden">
-                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <span>&#x1F916;</span> AI Klassifikation
-                    </h4>
-                    <div class="grid grid-cols-2 gap-3" id="fields-ai">
-                      <!-- AI fields will be inserted here -->
-                    </div>
+                <!-- Validation Checks (Ampel) -->
+                <div id="section-checks" class="hidden">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-sm font-semibold text-gray-700">Checks</span>
+                    <span id="checks-summary" class="text-xs px-2 py-0.5 rounded-full"></span>
                   </div>
+                  <div id="checks-list" class="hidden space-y-1"></div>
+                </div>
 
-                  <!-- AI Scores -->
-                  <div id="section-scores" class="hidden">
-                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <span>&#x1F4CA;</span> AI Scores
-                    </h4>
-                    <div class="grid grid-cols-2 gap-3" id="fields-scores">
-                      <!-- Score bars will be inserted here -->
-                    </div>
-                  </div>
+                <!-- Missing fields warning -->
+                <div id="detail-missing" class="hidden p-3 bg-amber-50 rounded-lg">
+                  <p class="text-sm text-amber-700 font-medium">Fehlende Felder:</p>
+                  <p id="detail-missing-list" class="text-sm text-amber-600 mt-1"></p>
+                </div>
 
-                  <!-- Meta Info -->
-                  <div id="section-meta" class="hidden">
-                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <span>&#x2699;</span> Verarbeitungs-Details
-                    </h4>
-                    <div class="grid grid-cols-4 gap-3 text-center" id="fields-meta">
-                      <!-- Meta info will be inserted here -->
+                <!-- Smart Crawl UI -->
+                <div id="section-crawl" class="hidden">
+                  <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-sm font-semibold text-gray-700">Website Crawl</span>
+                      <span id="crawl-status-badge" class="text-xs px-2 py-0.5 rounded-full"></span>
                     </div>
+                    <div id="crawl-url-display" class="flex items-center gap-2 mb-3">
+                      <span class="text-xs text-gray-500">URL:</span>
+                      <a id="crawl-url-link" href="#" target="_blank" class="text-xs text-primary-600 hover:underline truncate"></a>
+                      <button id="copy-crawl-url" class="copy-btn text-xs" title="URL kopieren">&#x1F4CB;</button>
+                    </div>
+                    <div id="crawl-result" class="hidden mb-3 text-xs space-y-1"></div>
+                    <div class="flex items-center gap-3">
+                      <button id="crawl-btn" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 font-medium transition-colors text-sm disabled:bg-gray-300 disabled:cursor-not-allowed">
+                        Website crawlen
+                      </button>
+                      <button id="detail-trigger-ai" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium transition-colors text-sm">
+                        <span id="detail-trigger-ai-text">AI erneut ausfuehren</span>
+                      </button>
+                      <span id="detail-trigger-ai-status" class="text-sm text-gray-500 hidden"></span>
+                    </div>
+                    <!-- Crawl Diagnostics (collapsible) -->
+                    <details id="crawl-diagnostics" class="hidden mt-3">
+                      <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Crawl Diagnostics</summary>
+                      <div id="crawl-diagnostics-content" class="mt-2 p-2 bg-white rounded text-xs font-mono space-y-1"></div>
+                    </details>
                   </div>
+                </div>
 
-                  <!-- Error Info -->
-                  <div id="section-error" class="hidden">
-                    <div class="p-4 bg-red-50 rounded-lg">
-                      <p class="text-sm font-medium text-red-700">Fehler bei der Verarbeitung</p>
-                      <p id="error-message" class="text-sm text-red-600 mt-1"></p>
-                      <p id="error-step" class="text-xs text-red-500 mt-2"></p>
+                <!-- Data Sources Timeline -->
+                <div id="section-sources" class="hidden">
+                  <details>
+                    <summary class="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900 flex items-center gap-2">
+                      <span>Datenquellen</span>
+                      <span id="sources-count" class="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">0</span>
+                    </summary>
+                    <div id="sources-timeline" class="mt-3 space-y-3"></div>
+                  </details>
+                </div>
+
+                <!-- All Fields (expanded from Basic Info) -->
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <span>&#x1F4CB;</span> Alle Felder
+                    <span id="fields-provenance-hint" class="text-xs font-normal text-gray-400">(Badges zeigen Datenquelle)</span>
+                  </h4>
+                  <!-- Field groups -->
+                  <div class="space-y-4">
+                    <div>
+                      <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Basis</p>
+                      <div class="grid grid-cols-2 gap-3" id="fields-basic"></div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Datum / Zeit</p>
+                      <div class="grid grid-cols-2 gap-3" id="fields-datetime"></div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Ort</p>
+                      <div class="grid grid-cols-2 gap-3" id="fields-location"></div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Preis</p>
+                      <div class="grid grid-cols-2 gap-3" id="fields-price"></div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Zielgruppe</p>
+                      <div class="grid grid-cols-2 gap-3" id="fields-audience"></div>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-400 mb-2 uppercase tracking-wide">Details</p>
+                      <div class="grid grid-cols-2 gap-3" id="fields-details"></div>
                     </div>
                   </div>
+                </div>
+
+                <!-- Field Conflicts -->
+                <div id="section-conflicts" class="hidden">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <span>&#x26A0;</span> Konflikte
+                    <span id="conflicts-count" class="text-xs px-1.5 py-0.5 rounded-full bg-orange-200 text-orange-700">0</span>
+                  </h4>
+                  <div id="conflicts-list" class="space-y-2"></div>
+                </div>
+
+                <!-- AI Classifications -->
+                <div id="section-ai" class="hidden">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <span>&#x1F916;</span> AI Klassifikation
+                  </h4>
+                  <div class="grid grid-cols-2 gap-3" id="fields-ai"></div>
+                </div>
+
+                <!-- AI Scores -->
+                <div id="section-scores" class="hidden">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <span>&#x1F4CA;</span> AI Scores
+                  </h4>
+                  <div class="grid grid-cols-2 gap-3" id="fields-scores"></div>
+                </div>
+
+                <!-- Meta Info -->
+                <div id="section-meta" class="hidden">
+                  <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <span>&#x2699;</span> Verarbeitungs-Details
+                  </h4>
+                  <div class="grid grid-cols-4 gap-3 text-center" id="fields-meta"></div>
+                </div>
+
+                <!-- AI Run History -->
+                <div id="section-ai-history" class="hidden">
+                  <details>
+                    <summary class="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900 flex items-center gap-2">
+                      <span>AI Verlauf</span>
+                      <span id="ai-history-count" class="text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">0</span>
+                    </summary>
+                    <div id="ai-history-list" class="mt-3 space-y-2"></div>
+                  </details>
+                </div>
+
+                <!-- Duplicate Candidates -->
+                <div id="section-duplicates" class="hidden">
+                  <details>
+                    <summary class="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900 flex items-center gap-2">
+                      <span>Moegliche Duplikate</span>
+                      <span id="duplicates-count" class="text-xs px-1.5 py-0.5 rounded-full bg-yellow-200 text-yellow-700">0</span>
+                    </summary>
+                    <div id="duplicates-list" class="mt-3 space-y-2"></div>
+                  </details>
+                </div>
+
+                <!-- Error Info -->
+                <div id="section-error" class="hidden">
+                  <div class="p-4 bg-red-50 rounded-lg">
+                    <p class="text-sm font-medium text-red-700">Fehler bei der Verarbeitung</p>
+                    <p id="error-message" class="text-sm text-red-600 mt-1"></p>
+                    <p id="error-step" class="text-xs text-red-500 mt-2"></p>
+                  </div>
+                </div>
+
+                <!-- Audit Log -->
+                <div id="section-audit" class="hidden">
+                  <details>
+                    <summary class="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900">Aenderungsverlauf</summary>
+                    <div id="audit-list" class="mt-3 space-y-2 text-xs"></div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -464,6 +566,122 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   .score-bar-fill--high { background: #10b981; }
   .score-bar-fill--medium { background: #f59e0b; }
   .score-bar-fill--low { background: #ef4444; }
+
+  /* Source badges */
+  .source-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.2rem;
+    margin-left: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .source-badge--feed { background: #dbeafe; color: #1e40af; }
+  .source-badge--crawl { background: #fce7f3; color: #9d174d; }
+  .source-badge--ai { background: #ede9fe; color: #7c3aed; }
+  .source-badge--manual { background: #fef3c7; color: #92400e; }
+  .source-badge--unknown { background: #f3f4f6; color: #6b7280; }
+
+  /* Copy button */
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.25rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.75rem;
+    opacity: 0.4;
+    transition: opacity 0.15s;
+  }
+  .copy-btn:hover { opacity: 1; background: #f3f4f6; }
+
+  /* Validation check styles */
+  .check-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .check-dot--pass { background: #10b981; }
+  .check-dot--warn { background: #f59e0b; }
+  .check-dot--fail { background: #ef4444; }
+
+  /* Source timeline */
+  .source-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+  .source-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: #f9fafb;
+    cursor: pointer;
+  }
+  .source-card-header:hover { background: #f3f4f6; }
+  .source-card-body { padding: 0.75rem; display: none; }
+  .source-card-body.open { display: block; }
+
+  /* Action button */
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid #bfdbfe;
+    background: white;
+    color: #1e40af;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .action-btn:hover { background: #dbeafe; }
+
+  /* Conflict card */
+  .conflict-item {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #fed7aa;
+    border-radius: 0.375rem;
+    background: #fffbeb;
+  }
+
+  /* Keyboard hint */
+  .kbd-hint {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.2rem;
+    background: #f9fafb;
+    color: #6b7280;
+    font-family: monospace;
+  }
+
+  /* JSON tree */
+  .json-tree { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.7rem; line-height: 1.4; }
+  .json-key { color: #0369a1; }
+  .json-string { color: #059669; }
+  .json-number { color: #d97706; }
+  .json-null { color: #9ca3af; }
+  .json-bool { color: #7c3aed; }
+
+  /* Inline edit */
+  .inline-edit-input {
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    width: 100%;
+  }
+  .inline-edit-input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  }
 </style>
 
 <script is:inline define:vars={{ API_URL }}>
@@ -480,6 +698,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   let currentJobId = null;
   let events = [];
   let selectedEventId = null;
+  let sourceDetailsCache = {}; // Cache source-details per event ID
+  let selectedBulkIds = new Set(); // For bulk selection
   let startTime = null;
   let elapsedInterval = null;
   
@@ -558,36 +778,48 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   el.startBatchBtn.addEventListener('click', startBatch);
   el.cancelBtn.addEventListener('click', cancelProcessing);
 
-  document.getElementById('detail-trigger-ai').addEventListener('click', async () => {
+  // Crawl button handler
+  document.getElementById('crawl-btn').addEventListener('click', async () => {
     const id = selectedEventId;
     if (!id) return;
-    const btn = document.getElementById('detail-trigger-ai');
-    const btnText = document.getElementById('detail-trigger-ai-text');
+    const btn = document.getElementById('crawl-btn');
     const statusEl = document.getElementById('detail-trigger-ai-status');
-    const forceCrawl = document.getElementById('detail-trigger-crawl').checked;
     btn.disabled = true;
-    btnText.textContent = 'Wird ausgeführt…';
+    btn.textContent = 'Crawle...';
     statusEl.classList.remove('hidden');
     statusEl.textContent = '';
-    statusEl.classList.remove('text-red-600', 'text-green-600');
     try {
       const res = await fetch(`${API_URL}/api/admin/events/${id}/trigger-ai`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force_crawl: forceCrawl }),
+        body: JSON.stringify({ force_crawl: true }),
       });
       const data = await res.json();
-      if (data && data.success) {
-        statusEl.textContent = `Fertig. ${(data.updated_fields && data.updated_fields.length) || 0} Felder aktualisiert.`;
-        statusEl.classList.add('text-green-600');
-        if (data.failed_fields && data.failed_fields.length) statusEl.textContent += ` ${data.failed_fields.length} fehlgeschlagen.`;
-        const event = events.find(e => e.id === id);
-        if (event && data.field_fill_status) {
-          event.field_fill_status = data.field_fill_status;
-          renderDetail(event);
+      if (data && data.success !== false) {
+        // Show crawl results
+        const resultEl = document.getElementById('crawl-result');
+        resultEl.classList.remove('hidden');
+        let resultHtml = '';
+        if (data.updated_fields && data.updated_fields.length > 0) {
+          resultHtml += data.updated_fields.map(f => `<p class="text-green-600">&#x2705; ${f}: GEFUNDEN</p>`).join('');
         }
+        if (data.failed_fields && data.failed_fields.length > 0) {
+          resultHtml += data.failed_fields.map(f => `<p class="text-red-500">&#x274C; ${f.field}: ${escapeHtml(f.reason)}</p>`).join('');
+        }
+        resultEl.innerHTML = resultHtml || '<p class="text-gray-400">Keine Ergebnisse</p>';
+        
+        // Update crawl status badge
+        const statusBadge = document.getElementById('crawl-status-badge');
+        statusBadge.textContent = 'Gecrawlt';
+        statusBadge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+        
+        // Clear source details cache to force reload
+        delete sourceDetailsCache[id];
+        
+        statusEl.textContent = `${(data.updated_fields?.length || 0)} Felder aktualisiert.`;
+        statusEl.classList.add('text-green-600');
       } else {
-        statusEl.textContent = data?.error || 'Fehler beim Ausführen';
+        statusEl.textContent = data?.error || 'Fehler';
         statusEl.classList.add('text-red-600');
       }
     } catch (e) {
@@ -595,7 +827,48 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       statusEl.classList.add('text-red-600');
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'AI erneut ausführen';
+      btn.textContent = 'Website crawlen';
+    }
+  });
+
+  document.getElementById('detail-trigger-ai').addEventListener('click', async () => {
+    const id = selectedEventId;
+    if (!id) return;
+    const btn = document.getElementById('detail-trigger-ai');
+    const btnText = document.getElementById('detail-trigger-ai-text');
+    const statusEl = document.getElementById('detail-trigger-ai-status');
+    btn.disabled = true;
+    btnText.textContent = 'Wird ausgefuehrt...';
+    statusEl.classList.remove('hidden');
+    statusEl.textContent = '';
+    statusEl.classList.remove('text-red-600', 'text-green-600');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/events/${id}/trigger-ai`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force_crawl: false }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        statusEl.textContent = `Fertig. ${(data.updated_fields && data.updated_fields.length) || 0} Felder aktualisiert.`;
+        statusEl.classList.add('text-green-600');
+        if (data.failed_fields && data.failed_fields.length) statusEl.textContent += ` ${data.failed_fields.length} fehlgeschlagen.`;
+        delete sourceDetailsCache[id];
+        const event = events.find(e => e.id === id);
+        if (event && data.field_fill_status) {
+          event.field_fill_status = data.field_fill_status;
+          renderDetailPanel();
+        }
+      } else {
+        statusEl.textContent = data?.error || 'Fehler beim Ausfuehren';
+        statusEl.classList.add('text-red-600');
+      }
+    } catch (e) {
+      statusEl.textContent = e?.message || 'Netzwerkfehler';
+      statusEl.classList.add('text-red-600');
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'AI erneut ausfuehren';
     }
   });
 
@@ -1037,8 +1310,50 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       selectedItem.classList.add('event-list-item--selected');
     }
     
-    // Render detail panel
+    // Render detail panel with existing data
     renderDetailPanel();
+    
+    // Lazy-load source details in background
+    loadSourceDetails(eventId);
+  }
+
+  async function loadSourceDetails(eventId) {
+    if (sourceDetailsCache[eventId]) {
+      renderSourceDetails(eventId, sourceDetailsCache[eventId]);
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_URL}/api/admin/events/${eventId}/source-details?include=meta,provenance,validation,conflicts,duplicates,ai_runs`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const { data } = await res.json();
+      if (!data) return;
+      
+      sourceDetailsCache[eventId] = data;
+      
+      // Only render if still viewing this event
+      if (selectedEventId === eventId) {
+        renderSourceDetails(eventId, data);
+      }
+    } catch (e) {
+      console.error('Failed to load source details:', e);
+    }
+  }
+
+  async function loadRawPayload(eventId, sourceId) {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/events/${eventId}/source-details?include=raw_payload&sourceId=${sourceId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return null;
+      const { data } = await res.json();
+      return data?.sources?.[0] || null;
+    } catch (e) {
+      console.error('Failed to load raw payload:', e);
+      return null;
+    }
   }
 
   function renderDetailPanel() {
@@ -1054,6 +1369,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
     // Header
     document.getElementById('detail-title').textContent = event.title;
+    document.getElementById('copy-event-id').onclick = () => copyToClipboard(event.id);
+    
     const sourceLink = document.getElementById('detail-source-link');
     const sourceName = document.getElementById('detail-source-name');
     if (event.source_url) {
@@ -1064,10 +1381,25 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       sourceLink.classList.add('hidden');
     }
 
+    // Source type badge
+    const sourceTypeBadge = document.getElementById('detail-source-type-badge');
+    if (event.source_type) {
+      sourceTypeBadge.textContent = event.source_type.toUpperCase();
+      sourceTypeBadge.classList.remove('hidden');
+    } else {
+      sourceTypeBadge.classList.add('hidden');
+    }
+
     // Status badge
     const statusBadge = document.getElementById('detail-status-badge');
     statusBadge.textContent = event.processing_status;
     statusBadge.className = `flex-shrink-0 px-3 py-1 rounded-full text-sm font-medium ${getStatusBadgeClass(event.processing_status)}`;
+
+    // Suggested actions
+    renderSuggestedActions(event);
+    
+    // Validation checks  
+    renderValidationChecks(event);
 
     // Missing fields
     const missingSection = document.getElementById('detail-missing');
@@ -1078,33 +1410,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       missingSection.classList.add('hidden');
     }
 
-    // Field fill status
-    const fieldFillStatus = event.field_fill_status && typeof event.field_fill_status === 'object' ? event.field_fill_status : {};
-    const fieldStatusLabel = (field) => {
-      const v = fieldFillStatus[field];
-      if (!v || v.status === 'filled') return null;
-      if (v.status === 'missing') return field === 'location_address' ? 'Keine Adresse gefunden, Crawl steht noch aus' : (field === 'ai_summary_short' ? 'Keine KI-Beschreibung' : 'Fehlend');
-      if (v.status === 'crawl_failed') return field === 'location_address' ? 'Keine Adresse auch nach Crawl der Website gefunden' : (v.error || 'Crawl fehlgeschlagen');
-      if (v.status === 'ai_failed') return v.error || 'KI fehlgeschlagen';
-      return v.error || v.status;
-    };
-    const statusLines = [];
-    ['location_address', 'start_datetime', 'end_datetime', 'ai_summary_short'].forEach(f => {
-      const lbl = fieldStatusLabel(f);
-      if (lbl) statusLines.push(lbl);
-    });
-    const detailFieldStatusEl = document.getElementById('detail-field-status');
-    const detailFieldStatusList = document.getElementById('detail-field-status-list');
-    if (statusLines.length) {
-      detailFieldStatusEl.classList.remove('hidden');
-      detailFieldStatusList.innerHTML = statusLines.map(s => `<p>• ${escapeHtml(s)}</p>`).join('');
-    } else {
-      detailFieldStatusEl.classList.add('hidden');
-      detailFieldStatusList.innerHTML = '';
-    }
+    // Smart crawl UI
+    renderCrawlSection(event);
 
-    // Basic fields
-    renderBasicFields(event);
+    // All fields (grouped)
+    renderAllFields(event);
     
     // AI fields
     renderAIFields(event);
@@ -1129,60 +1439,134 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     return map[status] || 'bg-gray-100 text-gray-600';
   }
 
-  function renderBasicFields(event) {
-    const container = document.getElementById('fields-basic');
+  function renderAllFields(event) {
     const existing = event.existing || {};
     const diff = event.diff || {};
-    
-    const fields = [
-      { key: 'start_datetime', label: 'Datum', format: v => v ? formatDateTime(v) : null },
-      { key: 'location_address', label: 'Ort' },
-      { key: 'price_min', label: 'Preis Min', format: v => v !== null ? `${v} EUR` : null },
-      { key: 'price_max', label: 'Preis Max', format: v => v !== null ? `${v} EUR` : null },
+    const provenance = existing.field_provenance || {};
+
+    // Helper to render a field group into a container
+    function renderFieldGroup(containerId, fields) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = fields.map(f => renderSingleField(f, existing, diff, provenance)).join('');
+    }
+
+    // Basis
+    renderFieldGroup('fields-basic', [
+      { key: 'title', label: 'Titel' },
+      { key: 'description_short', label: 'Kurzbeschreibung', wide: true },
+    ]);
+
+    // Datum/Zeit
+    renderFieldGroup('fields-datetime', [
+      { key: 'start_datetime', label: 'Start', format: v => v ? formatDateTime(v) : null },
+      { key: 'end_datetime', label: 'Ende', format: v => v ? formatDateTime(v) : null },
+      { key: 'is_all_day', label: 'Ganztaegig', format: v => v ? 'Ja' : 'Nein' },
+      { key: 'recurrence_rule', label: 'Wiederholung' },
+    ]);
+
+    // Ort
+    renderFieldGroup('fields-location', [
+      { key: 'venue_name', label: 'Venue' },
+      { key: 'location_address', label: 'Adresse' },
+      { key: 'city', label: 'Stadt' },
+      { key: 'postal_code', label: 'PLZ' },
+      { key: 'location_district', label: 'Stadtteil' },
+      { key: 'country_code', label: 'Land' },
+    ]);
+
+    // Preis
+    renderFieldGroup('fields-price', [
+      { key: 'price_type', label: 'Preistyp' },
+      { key: 'price_min', label: 'Preis Min', format: v => v !== null && v !== undefined ? `${v} EUR` : null },
+      { key: 'price_max', label: 'Preis Max', format: v => v !== null && v !== undefined ? `${v} EUR` : null },
+      { key: 'price_details', label: 'Preis-Details', format: v => v && typeof v === 'object' ? JSON.stringify(v) : v },
+    ]);
+
+    // Zielgruppe
+    renderFieldGroup('fields-audience', [
       { key: 'age_min', label: 'Alter Min', format: v => v !== null ? `${v}+` : null },
       { key: 'age_max', label: 'Alter Max', format: v => v !== null ? `bis ${v}` : null },
+      { key: 'age_rating', label: 'Altersfreigabe' },
+    ]);
+
+    // Details
+    renderFieldGroup('fields-details', [
       { key: 'is_indoor', label: 'Indoor', format: v => v ? 'Ja' : 'Nein' },
       { key: 'is_outdoor', label: 'Outdoor', format: v => v ? 'Ja' : 'Nein' },
-    ];
+      { key: 'booking_url', label: 'Buchungs-URL', format: v => v ? `<a href="${escapeHtml(v)}" target="_blank" class="text-primary-600 hover:underline truncate block text-xs">${escapeHtml(v)}</a>` : null, html: true },
+      { key: 'image_urls', label: 'Bilder', format: v => Array.isArray(v) && v.length > 0 ? `${v.length} Bild(er)` : null },
+      { key: 'availability_status', label: 'Verfuegbarkeit' },
+      { key: 'ai_summary_short', label: 'AI Zusammenfassung' },
+    ]);
+  }
+
+  function renderSingleField(f, existing, diff, provenance) {
+    const existingVal = existing[f.key];
+    const diffEntry = diff[f.key];
+    const prov = provenance[f.key];
+    const displayVal = f.format ? f.format(existingVal) : existingVal;
     
-    container.innerHTML = fields.map(f => {
-      const existingVal = existing[f.key];
-      const diffEntry = diff[f.key];
-      const displayVal = f.format ? f.format(existingVal) : existingVal;
-      
-      let cardClass = 'field-card';
-      let valueHtml = '';
-      let aiBadge = '';
-      
-      if (diffEntry) {
-        if (diffEntry.type === 'added') {
-          cardClass += ' field-card--added';
-          const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
-          valueHtml = `<span class="text-green-700">${escapeHtml(String(newVal || '--'))}</span>`;
-          aiBadge = '<span class="ai-badge">AI</span>';
-        } else if (diffEntry.type === 'changed') {
-          cardClass += ' field-card--changed';
-          const oldVal = f.format ? f.format(diffEntry.old_value) : diffEntry.old_value;
-          const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
-          valueHtml = `<span class="text-gray-400 line-through">${escapeHtml(String(oldVal || '--'))}</span> <span class="text-amber-700">${escapeHtml(String(newVal || '--'))}</span>`;
-          aiBadge = '<span class="ai-badge">AI</span>';
-        } else {
-          valueHtml = `<span class="text-gray-900">${escapeHtml(String(displayVal || '--'))}</span>`;
-        }
-      } else if (displayVal === null || displayVal === undefined || displayVal === '') {
-        cardClass += ' field-card--empty';
-        valueHtml = '<span class="text-gray-400">--leer--</span>';
-      } else {
-        valueHtml = `<span class="text-gray-900">${escapeHtml(String(displayVal))}</span>`;
+    let cardClass = 'field-card';
+    let valueHtml = '';
+    let badges = '';
+    
+    // Source badge
+    if (prov) {
+      const src = typeof prov === 'string' ? prov : prov.source;
+      badges += getSourceBadge(src);
+      if (prov.confidence) {
+        badges += `<span class="text-xs text-gray-400 ml-1">${Math.round(prov.confidence * 100)}%</span>`;
       }
-      
-      return `
-        <div class="${cardClass}">
-          <p class="text-xs text-gray-500 mb-1">${f.label}${aiBadge}</p>
-          <p class="text-sm font-medium">${valueHtml}</p>
-        </div>
-      `;
-    }).join('');
+    }
+    
+    if (diffEntry) {
+      if (diffEntry.type === 'added') {
+        cardClass += ' field-card--added';
+        const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
+        valueHtml = `<span class="text-green-700">${f.html ? (newVal || '--') : escapeHtml(String(newVal || '--'))}</span>`;
+        badges += '<span class="ai-badge">AI</span>';
+      } else if (diffEntry.type === 'changed') {
+        cardClass += ' field-card--changed';
+        const oldVal = f.format ? f.format(diffEntry.old_value) : diffEntry.old_value;
+        const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
+        valueHtml = `<span class="text-gray-400 line-through text-xs">${escapeHtml(String(oldVal || '--'))}</span> <span class="text-amber-700">${escapeHtml(String(newVal || '--'))}</span>`;
+        badges += '<span class="ai-badge">AI</span>';
+      } else {
+        valueHtml = displayVal === null || displayVal === undefined || displayVal === '' 
+          ? '<span class="text-gray-400">--</span>'
+          : (f.html ? String(displayVal) : `<span class="text-gray-900">${escapeHtml(String(displayVal))}</span>`);
+      }
+    } else if (displayVal === null || displayVal === undefined || displayVal === '') {
+      cardClass += ' field-card--empty';
+      valueHtml = '<span class="text-gray-400">--leer--</span>';
+    } else {
+      valueHtml = f.html ? String(displayVal) : `<span class="text-gray-900">${escapeHtml(String(displayVal))}</span>`;
+    }
+    
+    const colSpan = f.wide ? ' col-span-2' : '';
+    
+    return `
+      <div class="${cardClass}${colSpan}">
+        <p class="text-xs text-gray-500 mb-1">${f.label}${badges}</p>
+        <p class="text-sm font-medium">${valueHtml}</p>
+      </div>
+    `;
+  }
+
+  function getSourceBadge(source) {
+    const map = {
+      feed: { cls: 'source-badge--feed', label: 'Feed' },
+      rss: { cls: 'source-badge--feed', label: 'RSS' },
+      ical: { cls: 'source-badge--feed', label: 'iCal' },
+      crawl: { cls: 'source-badge--crawl', label: 'Crawl' },
+      ai: { cls: 'source-badge--ai', label: 'AI' },
+      ai_classify: { cls: 'source-badge--ai', label: 'AI' },
+      manual: { cls: 'source-badge--manual', label: 'Manuell' },
+      manual_override: { cls: 'source-badge--manual', label: 'Manuell' },
+    };
+    const m = map[source] || { cls: 'source-badge--unknown', label: source || '?' };
+    return `<span class="source-badge ${m.cls}">${m.label}</span>`;
   }
 
   function renderAIFields(event) {
@@ -1303,6 +1687,367 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     document.getElementById('error-message').textContent = error.message || 'Unbekannter Fehler';
     document.getElementById('error-step').textContent = `Schritt: ${error.step || 'unbekannt'} | ${error.retryable ? 'Wiederholbar' : 'Nicht wiederholbar'}`;
   }
+
+  // ========================================
+  // NEW RENDERING FUNCTIONS
+  // ========================================
+
+  function renderSuggestedActions(event) {
+    const section = document.getElementById('section-actions');
+    const list = document.getElementById('actions-list');
+    const actions = event.suggested_actions || [];
+    
+    if (actions.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    section.classList.remove('hidden');
+    list.innerHTML = actions.map(a => 
+      `<button class="action-btn" data-action="${a.action_type}" data-field="${a.field || ''}" title="${escapeHtml(a.description)}">
+        ${a.action_type === 'crawl' ? '&#x1F310;' : a.action_type === 'ai_rerun' ? '&#x1F916;' : '&#x270F;'} ${escapeHtml(a.label)}
+      </button>`
+    ).join('');
+    
+    // Bind action buttons
+    list.querySelectorAll('.action-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const actionType = btn.getAttribute('data-action');
+        if (actionType === 'crawl') {
+          document.getElementById('crawl-btn')?.click();
+        } else if (actionType === 'ai_rerun') {
+          document.getElementById('detail-trigger-ai')?.click();
+        }
+      });
+    });
+  }
+
+  function renderValidationChecks(event) {
+    const section = document.getElementById('section-checks');
+    const summary = document.getElementById('checks-summary');
+    const list = document.getElementById('checks-list');
+    const checks = event.validation_checks || [];
+    
+    if (checks.length === 0 || (checks.length === 1 && checks[0].status === 'pass')) {
+      if (checks.length === 1 && checks[0].status === 'pass') {
+        section.classList.remove('hidden');
+        summary.textContent = 'Alle OK';
+        summary.className = 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+        list.classList.add('hidden');
+      } else {
+        section.classList.add('hidden');
+      }
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    const fails = checks.filter(c => c.status === 'fail').length;
+    const warns = checks.filter(c => c.status === 'warn').length;
+    
+    if (fails > 0) {
+      summary.textContent = `${fails} Fehler, ${warns} Warnungen`;
+      summary.className = 'text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700';
+    } else {
+      summary.textContent = `${warns} Warnungen`;
+      summary.className = 'text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700';
+    }
+    
+    list.classList.remove('hidden');
+    list.innerHTML = checks.filter(c => c.status !== 'pass').map(c => 
+      `<div class="flex items-center gap-2 text-xs">
+        <span class="check-dot check-dot--${c.status}"></span>
+        <span class="font-medium">${escapeHtml(c.label)}</span>
+        <span class="text-gray-400">${escapeHtml(c.message)}</span>
+      </div>`
+    ).join('');
+  }
+
+  function renderCrawlSection(event) {
+    const section = document.getElementById('section-crawl');
+    const urlDisplay = document.getElementById('crawl-url-display');
+    const urlLink = document.getElementById('crawl-url-link');
+    const copyBtn = document.getElementById('copy-crawl-url');
+    const statusBadge = document.getElementById('crawl-status-badge');
+    const crawlBtn = document.getElementById('crawl-btn');
+    const crawlUrl = event.crawl_url || event.source_url;
+    
+    section.classList.remove('hidden');
+    
+    if (crawlUrl) {
+      urlLink.href = crawlUrl;
+      urlLink.textContent = crawlUrl;
+      urlDisplay.classList.remove('hidden');
+      copyBtn.onclick = () => copyToClipboard(crawlUrl);
+      crawlBtn.disabled = false;
+    } else {
+      urlDisplay.classList.add('hidden');
+      crawlBtn.disabled = true;
+      crawlBtn.textContent = 'Keine URL vorhanden';
+    }
+    
+    // Crawl status
+    if (event.has_been_crawled) {
+      statusBadge.textContent = 'Bereits gecrawlt';
+      statusBadge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+    } else if (crawlUrl) {
+      statusBadge.textContent = 'Noch nicht gecrawlt';
+      statusBadge.className = 'text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600';
+    } else {
+      statusBadge.textContent = 'Keine URL';
+      statusBadge.className = 'text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600';
+    }
+
+    // Hide diagnostics by default
+    document.getElementById('crawl-diagnostics').classList.add('hidden');
+    document.getElementById('crawl-result').classList.add('hidden');
+  }
+
+  function renderSourceDetails(eventId, data) {
+    // Sources timeline
+    renderSourceTimeline(data.sources || []);
+    
+    // Field conflicts
+    renderFieldConflicts(data.field_conflicts || {});
+    
+    // AI run history
+    renderAIRunHistory(data.ai_runs || []);
+    
+    // Duplicate candidates
+    renderDuplicateCandidates(data.duplicate_candidates || []);
+    
+    // Update field provenance from fresh data
+    const event = events.find(e => e.id === eventId);
+    if (event && data.field_provenance) {
+      if (!event.existing) event.existing = {};
+      event.existing.field_provenance = data.field_provenance;
+      event.existing.field_fill_status = data.field_fill_status || {};
+      renderAllFields(event);
+    }
+  }
+
+  function renderSourceTimeline(sources) {
+    const section = document.getElementById('section-sources');
+    const timeline = document.getElementById('sources-timeline');
+    const countEl = document.getElementById('sources-count');
+    
+    if (!sources || sources.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    countEl.textContent = sources.length;
+    
+    timeline.innerHTML = sources.map((src, idx) => `
+      <div class="source-card" id="source-card-${idx}">
+        <div class="source-card-header" onclick="toggleSourceCard(${idx})">
+          <div class="flex items-center gap-2">
+            ${getSourceBadge(src.source_type)}
+            <span class="text-sm font-medium">${escapeHtml(src.source_name)}</span>
+            <span class="text-xs text-gray-400">${src.field_count} Felder</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">${formatDateTime(src.fetched_at)}</span>
+            ${src.source_url ? `<a href="${escapeHtml(src.source_url)}" target="_blank" class="text-xs text-primary-600 hover:underline" onclick="event.stopPropagation()">&#x1F517;</a>` : ''}
+            <span class="text-xs text-gray-400">&#x25BC;</span>
+          </div>
+        </div>
+        <div class="source-card-body" id="source-body-${idx}">
+          <div class="mb-2">
+            <p class="text-xs text-gray-500 mb-1">Extrahierte Felder:</p>
+            <p class="text-xs text-gray-700">${src.fields_preview?.join(', ') || 'keine'}</p>
+          </div>
+          <div id="source-raw-${idx}" class="mt-2">
+            ${src.raw_payload ? renderJsonTree(src.raw_payload, 'Raw Payload') : ''}
+            ${src.extracted_fields ? renderJsonTree(src.extracted_fields, 'Extracted Fields') : ''}
+            ${src.normalized_data ? renderJsonTree(src.normalized_data, 'Normalized Data') : ''}
+            ${!src.raw_payload && !src.extracted_fields && !src.normalized_data ? `<button class="action-btn" onclick="loadAndShowRawPayload('${selectedEventId}', '${src.id}', ${idx})">Raw-Daten laden</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderJsonTree(data, label) {
+    if (!data || typeof data !== 'object') return '';
+    const json = JSON.stringify(data, null, 2);
+    const truncated = json.length > 2000 ? json.substring(0, 2000) + '\n...' : json;
+    return `
+      <details class="mt-1">
+        <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">${escapeHtml(label)} (${Object.keys(data).length} keys)</summary>
+        <pre class="json-tree mt-1 p-2 bg-white border border-gray-200 rounded overflow-x-auto max-h-60 overflow-y-auto">${syntaxHighlightJson(truncated)}</pre>
+      </details>
+    `;
+  }
+
+  function syntaxHighlightJson(json) {
+    return escapeHtml(json)
+      .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+      .replace(/: "([^"]*?)"/g, ': <span class="json-string">"$1"</span>')
+      .replace(/: (\d+\.?\d*)/g, ': <span class="json-number">$1</span>')
+      .replace(/: (null)/g, ': <span class="json-null">null</span>')
+      .replace(/: (true|false)/g, ': <span class="json-bool">$1</span>');
+  }
+
+  function renderFieldConflicts(conflicts) {
+    const section = document.getElementById('section-conflicts');
+    const list = document.getElementById('conflicts-list');
+    const countEl = document.getElementById('conflicts-count');
+    const keys = Object.keys(conflicts);
+    
+    if (keys.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    countEl.textContent = keys.length;
+    
+    list.innerHTML = keys.map(field => {
+      const conflict = conflicts[field];
+      return `
+        <div class="conflict-item">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-sm font-medium">${escapeHtml(field)}</span>
+            <span class="text-xs text-orange-600">${conflict.values.length} Quellen</span>
+          </div>
+          ${conflict.values.map(v => `
+            <div class="flex items-center justify-between mt-1 text-xs">
+              <div class="flex items-center gap-2">
+                ${getSourceBadge(v.source_type)}
+                <span class="text-gray-700">${escapeHtml(String(v.value).substring(0, 80))}</span>
+              </div>
+              <button class="action-btn text-xs py-0.5 px-2" onclick="applyOverride('${selectedEventId}', '${escapeHtml(field)}', ${JSON.stringify(v.value).replace(/'/g, "\\'")})" title="Diesen Wert uebernehmen">Uebernehmen</button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderAIRunHistory(runs) {
+    const section = document.getElementById('section-ai-history');
+    const list = document.getElementById('ai-history-list');
+    const countEl = document.getElementById('ai-history-count');
+    
+    if (!runs || runs.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    countEl.textContent = runs.length;
+    
+    list.innerHTML = runs.map(run => `
+      <div class="p-2 bg-gray-50 rounded text-xs space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="font-medium">${escapeHtml(run.model)} (${escapeHtml(run.prompt_version)})</span>
+          <span class="text-gray-400">${formatDateTime(run.timestamp)}</span>
+        </div>
+        <div class="flex items-center gap-3 text-gray-500">
+          <span>Trigger: ${run.triggered_by}</span>
+          ${run.cost_usd ? `<span>Kosten: $${run.cost_usd.toFixed(4)}</span>` : ''}
+          ${run.processing_time_ms ? `<span>Zeit: ${run.processing_time_ms}ms</span>` : ''}
+          ${run.input_hash ? `<span class="font-mono text-gray-300" title="Input Hash">#${run.input_hash.substring(0, 8)}</span>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderDuplicateCandidates(candidates) {
+    const section = document.getElementById('section-duplicates');
+    const list = document.getElementById('duplicates-list');
+    const countEl = document.getElementById('duplicates-count');
+    
+    if (!candidates || candidates.length === 0) {
+      section.classList.add('hidden');
+      return;
+    }
+    
+    section.classList.remove('hidden');
+    countEl.textContent = candidates.length;
+    
+    list.innerHTML = candidates.map(dup => {
+      const scoreColor = dup.matching_score >= 0.8 ? 'text-green-600' : dup.matching_score >= 0.5 ? 'text-amber-600' : 'text-red-600';
+      return `
+        <div class="p-2 border border-gray-200 rounded text-xs">
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-medium">${escapeHtml(dup.event_title)}</span>
+            <span class="${scoreColor} font-bold">${(dup.matching_score * 100).toFixed(0)}%</span>
+          </div>
+          <div class="flex items-center gap-3 text-gray-500">
+            ${dup.event_date ? `<span>${formatDateTime(dup.event_date)}</span>` : ''}
+            ${dup.event_location ? `<span>${escapeHtml(dup.event_location.substring(0, 40))}</span>` : ''}
+          </div>
+          ${dup.resolution ? `<span class="text-xs text-gray-400">Status: ${dup.resolution}</span>` : `
+            <div class="mt-1 flex gap-2">
+              <button class="action-btn text-xs py-0.5">Nicht gleich</button>
+            </div>
+          `}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ========================================
+  // UTILITY FUNCTIONS
+  // ========================================
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      // Brief visual feedback (could be improved with a toast)
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    });
+  }
+
+  async function applyOverride(eventId, field, value) {
+    const reason = prompt('Begruendung (optional):');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/events/${eventId}/fields`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, value, reason: reason || null }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Clear cache and reload
+        delete sourceDetailsCache[eventId];
+        loadSourceDetails(eventId);
+      } else {
+        alert('Fehler: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      alert('Netzwerkfehler: ' + e.message);
+    }
+  }
+
+  // Global functions for onclick handlers
+  window.toggleSourceCard = function(idx) {
+    const body = document.getElementById(`source-body-${idx}`);
+    if (body) body.classList.toggle('open');
+  };
+
+  window.loadAndShowRawPayload = async function(eventId, sourceId, idx) {
+    const container = document.getElementById(`source-raw-${idx}`);
+    if (!container) return;
+    container.innerHTML = '<span class="text-xs text-gray-400">Laden...</span>';
+    const data = await loadRawPayload(eventId, sourceId);
+    if (data) {
+      let html = '';
+      if (data.raw_payload) html += renderJsonTree(data.raw_payload, 'Raw Payload');
+      if (data.extracted_fields) html += renderJsonTree(data.extracted_fields, 'Extracted Fields');
+      if (data.normalized_data) html += renderJsonTree(data.normalized_data, 'Normalized Data');
+      container.innerHTML = html || '<span class="text-xs text-gray-400">Keine Rohdaten vorhanden</span>';
+    } else {
+      container.innerHTML = '<span class="text-xs text-red-400">Fehler beim Laden</span>';
+    }
+  };
 
   function formatDateTime(isoString) {
     if (!isoString) return null;
@@ -1641,6 +2386,44 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       diagLoading.classList.add('hidden');
       diagError.classList.remove('hidden');
     }
+  }
+
+  // ========================================
+  // KEYBOARD NAVIGATION
+  // ========================================
+  document.addEventListener('keydown', (e) => {
+    // Don't capture when typing in inputs
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateEvents(1);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateEvents(-1);
+    } else if (e.key === 'Escape') {
+      selectedEventId = null;
+      el.detailEmpty.classList.remove('hidden');
+      el.detailContent.classList.add('hidden');
+      document.querySelectorAll('.event-list-item').forEach(item => item.classList.remove('event-list-item--selected'));
+    } else if (e.key === 'c' && !e.ctrlKey && !e.metaKey) {
+      document.getElementById('crawl-btn')?.click();
+    }
+  });
+
+  function navigateEvents(direction) {
+    if (events.length === 0) return;
+    const currentIdx = events.findIndex(e => e.id === selectedEventId);
+    let newIdx;
+    if (currentIdx === -1) {
+      newIdx = direction > 0 ? 0 : events.length - 1;
+    } else {
+      newIdx = currentIdx + direction;
+      if (newIdx < 0) newIdx = events.length - 1;
+      if (newIdx >= events.length) newIdx = 0;
+    }
+    selectEvent(events[newIdx].id);
+    scrollEventIntoView(events[newIdx].id);
   }
 
   // ========================================

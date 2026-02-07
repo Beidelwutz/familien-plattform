@@ -411,6 +411,350 @@ router.get('/events/:id/raw-data', async (req: Request, res: Response, next: Nex
   }
 });
 
+// GET /api/admin/events/:id/source-details - Comprehensive source data for admin detail panel
+router.get('/events/:id/source-details', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const include = ((req.query.include as string) || 'meta,provenance').split(',');
+    const sourceId = req.query.sourceId as string | undefined;
+
+    // Always fetch the canonical event with full data
+    const event = await prisma.canonicalEvent.findUnique({
+      where: { id },
+      include: {
+        scores: true,
+        categories: { include: { category: { select: { slug: true, name_de: true } } } },
+      }
+    });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    // Build sources list
+    let sources: SourceMeta[] = [];
+    if (include.includes('meta') || include.includes('raw_payload')) {
+      const includeRaw = include.includes('raw_payload');
+      
+      // Get EventSources
+      const eventSourcesQuery: any = {
+        where: sourceId ? { canonical_event_id: id, id: sourceId } : { canonical_event_id: id },
+        include: { source: { select: { id: true, name: true, type: true, url: true } } },
+        orderBy: { fetched_at: 'desc' as const },
+      };
+      const eventSources = await prisma.eventSource.findMany(eventSourcesQuery) as any[];
+      
+      // Get RawEventItems  
+      const rawItemsQuery: any = {
+        where: sourceId 
+          ? { canonical_event_id: id }
+          : { canonical_event_id: id },
+        include: { source: { select: { id: true, name: true, type: true, url: true } }, run: { select: { id: true, started_at: true, status: true } } },
+        orderBy: { fetched_at: 'desc' as const },
+      };
+      const rawItems = await prisma.rawEventItem.findMany(rawItemsQuery) as any[];
+
+      // Merge into sources list (EventSources first, then RawEventItems for additional data)
+      for (const es of eventSources) {
+        const normalizedData = es.normalized_data as Record<string, any> | null;
+        const rawData = es.raw_data as Record<string, any> | null;
+        const fieldsPreview = normalizedData ? Object.keys(normalizedData).filter(k => normalizedData[k] !== null && normalizedData[k] !== '') : [];
+        
+        sources.push({
+          id: es.id,
+          source_name: es.source?.name || 'Unbekannt',
+          source_type: es.source?.type || 'unknown',
+          source_url: es.source_url,
+          fetched_at: es.fetched_at.toISOString(),
+          field_count: fieldsPreview.length,
+          fields_preview: fieldsPreview.slice(0, 15),
+          ...(includeRaw ? { raw_payload: rawData, normalized_data: normalizedData } : {}),
+        });
+      }
+      
+      // Add RawEventItems that have additional data
+      for (const ri of rawItems) {
+        const extractedFields = ri.extracted_fields as Record<string, any> | null;
+        const fieldsPreview = extractedFields ? Object.keys(extractedFields).filter(k => extractedFields[k] !== null && extractedFields[k] !== '') : [];
+        
+        // Check if we already have this source (by source_url match)
+        const existingSource = sources.find(s => s.source_url === ri.source_url);
+        if (existingSource) {
+          // Merge extracted_fields into existing source
+          if (includeRaw) {
+            existingSource.extracted_fields = extractedFields;
+            existingSource.raw_payload = existingSource.raw_payload || ri.raw_payload;
+          }
+          existingSource.field_count = Math.max(existingSource.field_count, fieldsPreview.length);
+        } else {
+          sources.push({
+            id: ri.id,
+            source_name: ri.source?.name || 'Unbekannt',
+            source_type: ri.source?.type || 'unknown',
+            source_url: ri.source_url,
+            fetched_at: ri.fetched_at.toISOString(),
+            field_count: fieldsPreview.length,
+            fields_preview: fieldsPreview.slice(0, 15),
+            ...(includeRaw ? { raw_payload: ri.raw_payload, extracted_fields: extractedFields } : {}),
+          });
+        }
+      }
+    }
+
+    // Build field conflicts by comparing source values
+    const fieldConflicts: Record<string, FieldConflict> = {};
+    if (include.includes('conflicts') && sources.length > 1) {
+      const fieldValues: Record<string, { source_type: string; source_name: string; value: any; fetched_at: string }[]> = {};
+      
+      for (const src of sources) {
+        const data = src.normalized_data || src.extracted_fields || {};
+        if (!data || typeof data !== 'object') continue;
+        
+        for (const [field, value] of Object.entries(data as Record<string, any>)) {
+          if (value === null || value === undefined || value === '') continue;
+          if (!fieldValues[field]) fieldValues[field] = [];
+          fieldValues[field].push({
+            source_type: src.source_type as any,
+            source_name: src.source_name,
+            value,
+            fetched_at: src.fetched_at,
+          });
+        }
+      }
+      
+      for (const [field, values] of Object.entries(fieldValues)) {
+        if (values.length < 2) continue;
+        const uniqueValues = new Set(values.map(v => JSON.stringify(v.value)));
+        if (uniqueValues.size > 1) {
+          const provenance = (event.field_provenance as Record<string, any>) || {};
+          fieldConflicts[field] = {
+            field,
+            values: values as FieldConflict['values'],
+            current_winner: provenance[field]?.source || values[0].source_type,
+            auto_resolved: !!provenance[field],
+          };
+        }
+      }
+    }
+
+    // Build validation checks
+    let validationChecks: ValidationCheck[] | undefined;
+    if (include.includes('validation')) {
+      validationChecks = calculateValidationChecks(event);
+    }
+
+    // Build duplicate candidates
+    let duplicateCandidates: DuplicateCandidate[] | undefined;
+    if (include.includes('duplicates')) {
+      const dupCandidates = await prisma.dupCandidate.findMany({
+        where: {
+          OR: [{ event_a_id: id }, { event_b_id: id }],
+        },
+        include: {
+          event_a: { select: { id: true, title: true, start_datetime: true, location_address: true } },
+          event_b: { select: { id: true, title: true, start_datetime: true, location_address: true } },
+        },
+        take: 20,
+      });
+      
+      duplicateCandidates = dupCandidates.map(dc => {
+        const otherEvent = dc.event_a_id === id ? dc.event_b : dc.event_a;
+        return {
+          event_id: otherEvent.id,
+          event_title: otherEvent.title,
+          event_date: otherEvent.start_datetime?.toISOString() || null,
+          event_location: otherEvent.location_address,
+          matching_score: dc.score ? Number(dc.score) : 0,
+          confidence: dc.confidence,
+          resolution: dc.resolution,
+        };
+      });
+    }
+
+    // Build AI run history from EventRevisions
+    let aiRuns: AIRunEntry[] | undefined;
+    if (include.includes('ai_runs')) {
+      const revisions = await prisma.eventRevision.findMany({
+        where: { event_id: id },
+        orderBy: { created_at: 'desc' },
+        take: 20,
+        select: {
+          id: true,
+          changeset: true,
+          created_at: true,
+          status: true,
+        }
+      });
+      
+      aiRuns = revisions
+        .filter(r => {
+          const cs = r.changeset as any;
+          return cs?.source === 'ai_batch' || cs?.source === 'ai_manual';
+        })
+        .map(r => {
+          const cs = r.changeset as any;
+          return {
+            id: r.id,
+            event_id: id,
+            timestamp: r.created_at.toISOString(),
+            prompt_version: cs.prompt_version || 'v1',
+            model: cs.model || 'gpt-4o-mini',
+            input_hash: cs.input_hash || '',
+            tokens_input: cs.tokens_input || 0,
+            tokens_output: cs.tokens_output || 0,
+            cost_usd: cs.cost_usd || 0,
+            processing_time_ms: cs.processing_time_ms || 0,
+            result_snapshot: cs.changes || null,
+            triggered_by: cs.source === 'ai_batch' ? 'batch' as const : 'manual' as const,
+          };
+        });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        canonical_event: {
+          id: event.id,
+          title: event.title,
+          description_short: event.description_short,
+          description_long: event.description_long,
+          start_datetime: event.start_datetime?.toISOString() || null,
+          end_datetime: event.end_datetime?.toISOString() || null,
+          is_all_day: event.is_all_day,
+          location_address: event.location_address,
+          location_district: event.location_district,
+          venue_name: event.venue_name,
+          city: event.city,
+          postal_code: event.postal_code,
+          country_code: event.country_code,
+          price_type: event.price_type,
+          price_min: event.price_min ? Number(event.price_min) : null,
+          price_max: event.price_max ? Number(event.price_max) : null,
+          price_details: event.price_details,
+          age_min: event.age_min,
+          age_max: event.age_max,
+          age_rating: event.age_rating,
+          is_indoor: event.is_indoor,
+          is_outdoor: event.is_outdoor,
+          booking_url: event.booking_url,
+          image_urls: event.image_urls,
+          availability_status: event.availability_status,
+          recurrence_rule: event.recurrence_rule,
+          ai_summary_short: event.ai_summary_short,
+          status: event.status,
+          completeness_score: event.completeness_score,
+          categories: event.categories.map(c => c.category.slug),
+          scores: event.scores,
+          created_at: event.created_at.toISOString(),
+          updated_at: event.updated_at.toISOString(),
+        },
+        sources,
+        field_provenance: (event.field_provenance as Record<string, any>) || {},
+        field_fill_status: (event.field_fill_status as Record<string, any>) || {},
+        ...(Object.keys(fieldConflicts).length > 0 ? { field_conflicts: fieldConflicts } : {}),
+        ...(validationChecks ? { validation_checks: validationChecks } : {}),
+        ...(duplicateCandidates ? { duplicate_candidates: duplicateCandidates } : {}),
+        ...(aiRuns ? { ai_runs: aiRuns } : {}),
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PATCH /api/admin/events/:id/fields - Manual field override with provenance tracking
+router.patch('/events/:id/fields', requireAuth, requireAdmin, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { field, value, reason } = req.body;
+    const userId = req.user?.sub;
+
+    if (!field || value === undefined) {
+      throw createError('field and value are required', 400, 'VALIDATION_ERROR');
+    }
+
+    // Allowed fields for manual override
+    const allowedFields = [
+      'title', 'description_short', 'description_long', 'start_datetime', 'end_datetime',
+      'location_address', 'location_district', 'venue_name', 'city', 'postal_code',
+      'price_type', 'price_min', 'price_max', 'age_min', 'age_max', 'age_rating',
+      'is_indoor', 'is_outdoor', 'booking_url', 'availability_status',
+    ];
+
+    if (!allowedFields.includes(field)) {
+      throw createError(`Field "${field}" cannot be manually overridden`, 400, 'VALIDATION_ERROR');
+    }
+
+    const event = await prisma.canonicalEvent.findUnique({ where: { id } });
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const oldValue = (event as any)[field];
+    
+    // Parse value for special types
+    let parsedValue = value;
+    if (field === 'start_datetime' || field === 'end_datetime') {
+      parsedValue = value ? new Date(value) : null;
+    } else if (field === 'price_min' || field === 'price_max') {
+      parsedValue = value !== null && value !== '' ? Number(value) : null;
+    } else if (field === 'age_min' || field === 'age_max') {
+      parsedValue = value !== null && value !== '' ? Number(value) : null;
+    } else if (field === 'is_indoor' || field === 'is_outdoor') {
+      parsedValue = Boolean(value);
+    }
+
+    // Update field_provenance
+    const existingProvenance = (event.field_provenance as Record<string, any>) || {};
+    existingProvenance[field] = {
+      source: 'manual',
+      userId,
+      at: new Date().toISOString(),
+      reason: reason || null,
+      previous_value: oldValue,
+      previous_source: existingProvenance[field]?.source || null,
+    };
+
+    // Update the event
+    await prisma.canonicalEvent.update({
+      where: { id },
+      data: {
+        [field]: parsedValue,
+        field_provenance: existingProvenance,
+      }
+    });
+
+    // Create audit log entry via EventRevision
+    await prisma.eventRevision.create({
+      data: {
+        event_id: id,
+        changeset: {
+          source: 'manual_override',
+          user_id: userId,
+          field,
+          old_value: oldValue,
+          new_value: parsedValue,
+          reason: reason || null,
+        },
+        status: 'approved',
+      }
+    });
+
+    logger.info(`Manual override on event ${id}: ${field} by user ${userId}`);
+
+    res.json({
+      success: true,
+      data: {
+        field,
+        old_value: oldValue,
+        new_value: parsedValue,
+        provenance: existingProvenance[field],
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Field fill status: per-field status for missing data and crawl/AI attempts
 type FieldFillStatusValue = {
   status: 'filled' | 'missing' | 'crawl_pending' | 'crawl_failed' | 'ai_pending' | 'ai_failed';
@@ -1659,21 +2003,128 @@ function determineStatusFromAIScores(familyFitScore: number, confidence: number)
 // AI JOB STATUS TYPES & HELPERS
 // ============================================
 
+// ============================================
+// VALIDATION & SUGGESTION TYPES
+// ============================================
+
+interface ValidationCheck {
+  id: string;
+  label: string;
+  status: 'pass' | 'warn' | 'fail';
+  message: string;
+  category: 'plausibility' | 'completeness' | 'reachability';
+}
+
+interface SuggestedAction {
+  id: string;
+  label: string;
+  description: string;
+  action_type: 'crawl' | 'ai_rerun' | 'manual_edit' | 'confirm';
+  field?: string;
+}
+
+interface FieldConflict {
+  field: string;
+  values: {
+    source_type: 'feed' | 'crawl' | 'ai' | 'manual';
+    source_name: string;
+    value: any;
+    confidence?: number;
+    fetched_at: string;
+  }[];
+  current_winner: string;
+  auto_resolved: boolean;
+}
+
+interface CrawlDiagnostics {
+  http_status: number | null;
+  content_type: string | null;
+  load_time_ms: number | null;
+  structured_data_found: string[];
+  extractor_used: string | null;
+  robots_blocked: boolean;
+  error: string | null;
+}
+
+interface AIRunEntry {
+  id: string;
+  event_id: string;
+  timestamp: string;
+  prompt_version: string;
+  model: string;
+  input_hash: string;
+  tokens_input: number;
+  tokens_output: number;
+  cost_usd: number;
+  processing_time_ms: number;
+  result_snapshot: any;
+  triggered_by: 'batch' | 'manual' | 'auto';
+}
+
+interface DuplicateCandidate {
+  event_id: string;
+  event_title: string;
+  event_date: string | null;
+  event_location: string | null;
+  matching_score: number;
+  confidence: string;
+  resolution: string | null;
+}
+
+interface SourceMeta {
+  id: string;
+  source_name: string;
+  source_type: string;
+  source_url: string | null;
+  fetched_at: string;
+  field_count: number;
+  fields_preview: string[];
+  raw_payload?: any;
+  extracted_fields?: any;
+  normalized_data?: any;
+  crawl_diagnostics?: CrawlDiagnostics;
+}
+
 // Compact snapshot of existing fields (known at start)
 interface EventSnapshot {
+  // Core fields
+  title: string | null;
   description_short: string | null;
+  description_long: string | null;
   start_datetime: string | null;
   end_datetime: string | null;
+  is_all_day: boolean;
+  // Location
   location_address: string | null;
   location_district: string | null;
+  venue_name: string | null;
+  city: string | null;
+  postal_code: string | null;
+  country_code: string | null;
+  // Pricing
+  price_type: string | null;
   price_min: number | null;
   price_max: number | null;
+  price_details: any;
+  // Age
   age_min: number | null;
   age_max: number | null;
+  age_rating: string | null;
+  // Details
   is_indoor: boolean;
   is_outdoor: boolean;
+  booking_url: string | null;
+  image_urls: any;
+  availability_status: string | null;
+  recurrence_rule: string | null;
+  // AI
+  ai_summary_short: string | null;
+  // Meta
   categories: string[];
   completeness_score: number | null;
+  // Provenance (new)
+  field_provenance: Record<string, any>;
+  field_fill_status: Record<string, any>;
 }
 
 // AI proposal after processing
@@ -1751,6 +2202,13 @@ interface AIJobEventDetail {
   missing_fields: string[];
   needs_review: boolean;
   error: AIProcessingError | null;
+  // New fields for transparency
+  source_type: string | null;
+  crawl_url: string | null;
+  has_been_crawled: boolean;
+  event_sources_count: number;
+  validation_checks: ValidationCheck[];
+  suggested_actions: SuggestedAction[];
 }
 
 // Main status (stored in Redis)
@@ -1843,6 +2301,105 @@ function calculateFieldDiff(
   if (proposed.stressfree_score !== null) addDiff('stressfree_score', null, proposed.stressfree_score);
   
   return diff;
+}
+
+// Helper: Calculate validation checks for an event
+function calculateValidationChecks(event: {
+  title?: string | null;
+  start_datetime?: Date | null;
+  end_datetime?: Date | null;
+  location_address?: string | null;
+  location_lat?: any;
+  location_lng?: any;
+  price_min?: any;
+  price_max?: any;
+  age_min?: number | null;
+  age_max?: number | null;
+  description_short?: string | null;
+  booking_url?: string | null;
+  image_urls?: any;
+}): ValidationCheck[] {
+  const checks: ValidationCheck[] = [];
+
+  // Completeness checks
+  if (!event.title) {
+    checks.push({ id: 'title_missing', label: 'Titel fehlt', status: 'fail', message: 'Event hat keinen Titel', category: 'completeness' });
+  }
+  if (!event.start_datetime) {
+    checks.push({ id: 'date_missing', label: 'Datum fehlt', status: 'fail', message: 'Kein Startdatum vorhanden', category: 'completeness' });
+  }
+  if (!event.location_address) {
+    checks.push({ id: 'address_missing', label: 'Adresse fehlt', status: 'warn', message: 'Keine Adresse vorhanden', category: 'completeness' });
+  }
+  if (!event.description_short || event.description_short.length < 30) {
+    checks.push({ id: 'desc_short', label: 'Beschreibung zu kurz', status: 'warn', message: event.description_short ? `Nur ${event.description_short.length} Zeichen` : 'Keine Beschreibung', category: 'completeness' });
+  }
+  if (event.price_min === null && event.price_max === null) {
+    checks.push({ id: 'price_missing', label: 'Preis fehlt', status: 'warn', message: 'Keine Preisinformation', category: 'completeness' });
+  }
+  const imgUrls = Array.isArray(event.image_urls) ? event.image_urls : [];
+  if (imgUrls.length === 0) {
+    checks.push({ id: 'image_missing', label: 'Bild fehlt', status: 'warn', message: 'Kein Bild vorhanden', category: 'completeness' });
+  }
+
+  // Plausibility checks
+  if (event.start_datetime && new Date(event.start_datetime) < new Date()) {
+    checks.push({ id: 'date_past', label: 'Datum in Vergangenheit', status: 'fail', message: 'Startdatum liegt in der Vergangenheit', category: 'plausibility' });
+  }
+  if (event.age_min != null && event.age_max != null && event.age_min > event.age_max) {
+    checks.push({ id: 'age_invalid', label: 'Alter ungueltig', status: 'fail', message: `age_min (${event.age_min}) > age_max (${event.age_max})`, category: 'plausibility' });
+  }
+  const priceMin = event.price_min !== null && event.price_min !== undefined ? Number(event.price_min) : null;
+  const priceMax = event.price_max !== null && event.price_max !== undefined ? Number(event.price_max) : null;
+  if (priceMin !== null && priceMax !== null && priceMin > priceMax) {
+    checks.push({ id: 'price_invalid', label: 'Preis ungueltig', status: 'fail', message: `price_min (${priceMin}) > price_max (${priceMax})`, category: 'plausibility' });
+  }
+
+  // Reachability checks
+  if (event.location_address && (!event.location_lat || !event.location_lng)) {
+    checks.push({ id: 'geocode_missing', label: 'Geocode fehlt', status: 'warn', message: 'Adresse vorhanden aber kein Geocode', category: 'reachability' });
+  }
+
+  // If no issues found, add a pass
+  if (checks.length === 0) {
+    checks.push({ id: 'all_ok', label: 'Alle Checks bestanden', status: 'pass', message: 'Keine Probleme gefunden', category: 'completeness' });
+  }
+
+  return checks;
+}
+
+// Helper: Calculate suggested next actions for an event
+function calculateSuggestedActions(event: {
+  location_address?: string | null;
+  start_datetime?: Date | null;
+  description_short?: string | null;
+  image_urls?: any;
+  location_lat?: any;
+  ai_summary_short?: string | null;
+}, crawlUrl: string | null, hasCrawled: boolean): SuggestedAction[] {
+  const actions: SuggestedAction[] = [];
+
+  if (!event.location_address && crawlUrl && !hasCrawled) {
+    actions.push({ id: 'crawl_address', label: 'Website crawlen fuer Adresse', description: 'Adresse fehlt - Website koennte sie enthalten', action_type: 'crawl', field: 'location_address' });
+  }
+  if (!event.start_datetime) {
+    actions.push({ id: 'ai_datetime', label: 'AI Extraktion fuer Datum', description: 'Startzeit fehlt - AI kann sie aus dem Text extrahieren', action_type: 'ai_rerun', field: 'start_datetime' });
+  }
+  if (!event.description_short || event.description_short.length < 50) {
+    actions.push({ id: 'ai_summary', label: 'AI Summary generieren', description: 'Beschreibung sehr kurz - AI kann eine Zusammenfassung erstellen', action_type: 'ai_rerun', field: 'ai_summary_short' });
+  }
+  const imgUrls = Array.isArray(event.image_urls) ? event.image_urls : [];
+  if (imgUrls.length === 0 && crawlUrl && !hasCrawled) {
+    actions.push({ id: 'crawl_images', label: 'Website crawlen fuer Bilder', description: 'Kein Bild vorhanden - Website koennte Bilder enthalten', action_type: 'crawl', field: 'image_urls' });
+  }
+  if (event.location_address && !event.location_lat) {
+    actions.push({ id: 'confirm_geocode', label: 'Adresse manuell bestaetigen', description: 'Geocode fehlt oder low confidence', action_type: 'confirm', field: 'location_address' });
+  }
+  if (!event.ai_summary_short) {
+    actions.push({ id: 'generate_summary', label: 'AI Zusammenfassung erstellen', description: 'Keine AI-Zusammenfassung vorhanden', action_type: 'ai_rerun', field: 'ai_summary_short' });
+  }
+
+  return actions;
 }
 
 const AI_JOB_PREFIX = 'ai-job:';
@@ -1951,6 +2508,21 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
         is_outdoor: true,
         completeness_score: true,
         field_provenance: true,
+        field_fill_status: true,
+        venue_name: true,
+        city: true,
+        postal_code: true,
+        country_code: true,
+        price_details: true,
+        booking_url: true,
+        image_urls: true,
+        availability_status: true,
+        recurrence_rule: true,
+        age_rating: true,
+        is_all_day: true,
+        ai_summary_short: true,
+        location_lat: true,
+        location_lng: true,
         categories: {
           select: {
             category: {
@@ -1959,12 +2531,13 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           }
         },
         event_sources: {
-          take: 1,
-          orderBy: { updated_at: 'desc' },
+          orderBy: { updated_at: 'desc' as const },
           select: {
+            id: true,
             source_url: true,
+            fetched_at: true,
             source: {
-              select: { name: true }
+              select: { id: true, name: true, type: true, url: true }
             }
           }
         },
@@ -2010,23 +2583,45 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
     // Build event details with existing snapshot
     const eventDetails: AIJobEventDetail[] = pendingEvents.map(event => {
       const existingCategories = event.categories.map(c => c.category.slug);
-      const sourceInfo = event.event_sources[0];
       
       const existing: EventSnapshot = {
+        title: event.title,
         description_short: event.description_short,
+        description_long: event.description_long,
         start_datetime: event.start_datetime?.toISOString() || null,
         end_datetime: event.end_datetime?.toISOString() || null,
+        is_all_day: event.is_all_day,
         location_address: event.location_address,
         location_district: event.location_district,
+        venue_name: event.venue_name,
+        city: event.city,
+        postal_code: event.postal_code,
+        country_code: event.country_code,
+        price_type: event.price_type,
         price_min: event.price_min ? Number(event.price_min) : null,
         price_max: event.price_max ? Number(event.price_max) : null,
+        price_details: event.price_details,
         age_min: event.age_min,
         age_max: event.age_max,
+        age_rating: event.age_rating,
         is_indoor: event.is_indoor,
         is_outdoor: event.is_outdoor,
+        booking_url: event.booking_url,
+        image_urls: event.image_urls,
+        availability_status: event.availability_status,
+        recurrence_rule: event.recurrence_rule,
+        ai_summary_short: event.ai_summary_short,
         categories: existingCategories,
         completeness_score: event.completeness_score,
+        field_provenance: (event.field_provenance as Record<string, any>) || {},
+        field_fill_status: (event.field_fill_status as Record<string, any>) || {},
       };
+      
+      // Determine crawl URL and status
+      const allSources = event.event_sources;
+      const sourceInfo = allSources[0];
+      const crawlUrl = event.booking_url || sourceInfo?.source_url || null;
+      const hasCrawled = allSources.length > 1 || ((event.field_fill_status as any)?.location_address?.source === 'crawl');
       
       return {
         id: event.id,
@@ -2042,6 +2637,13 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
         missing_fields: calculateMissingFields(event),
         needs_review: false,
         error: null,
+        // New transparency fields
+        source_type: sourceInfo?.source?.type || null,
+        crawl_url: crawlUrl,
+        has_been_crawled: hasCrawled,
+        event_sources_count: allSources.length,
+        validation_checks: calculateValidationChecks(event),
+        suggested_actions: calculateSuggestedActions(event, crawlUrl, hasCrawled),
       };
     });
     
@@ -3248,6 +3850,110 @@ router.delete('/events/bulk', async (req: AuthRequest, res: Response, next: Next
         deleted_count: existingIds.length,
         deleted_ids: existingIds,
         not_found_ids: notFoundIds,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/admin/events/bulk-action - Perform bulk actions on multiple events
+router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { event_ids, action, params } = req.body;
+    const userId = req.user?.sub;
+
+    if (!event_ids || !Array.isArray(event_ids) || event_ids.length === 0) {
+      throw createError('event_ids required', 400, 'VALIDATION_ERROR');
+    }
+    if (event_ids.length > 200) {
+      throw createError('Maximum 200 events per bulk action', 400, 'VALIDATION_ERROR');
+    }
+    if (!['crawl', 'ai_rerun', 'reject', 'publish'].includes(action)) {
+      throw createError('Invalid action. Must be: crawl, ai_rerun, reject, publish', 400, 'VALIDATION_ERROR');
+    }
+
+    const events = await prisma.canonicalEvent.findMany({
+      where: { id: { in: event_ids } },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        booking_url: true,
+        event_sources: {
+          take: 1,
+          orderBy: { updated_at: 'desc' },
+          select: { source_url: true },
+        },
+      },
+    });
+
+    const results: { id: string; success: boolean; message: string }[] = [];
+
+    if (action === 'reject') {
+      const threshold = params?.threshold;
+      for (const event of events) {
+        await prisma.canonicalEvent.update({
+          where: { id: event.id },
+          data: {
+            status: 'rejected',
+            rejection_reason: threshold ? `Bulk reject: score < ${threshold}` : 'Bulk reject by admin',
+          }
+        });
+        results.push({ id: event.id, success: true, message: 'Rejected' });
+      }
+    } else if (action === 'publish') {
+      for (const event of events) {
+        if (event.status === 'rejected') {
+          results.push({ id: event.id, success: false, message: 'Already rejected' });
+          continue;
+        }
+        await prisma.canonicalEvent.update({
+          where: { id: event.id },
+          data: { status: 'published' }
+        });
+        results.push({ id: event.id, success: true, message: 'Published' });
+      }
+    } else if (action === 'crawl') {
+      for (const event of events) {
+        const url = event.booking_url || event.event_sources[0]?.source_url;
+        if (!url) {
+          results.push({ id: event.id, success: false, message: 'Keine URL vorhanden' });
+          continue;
+        }
+        try {
+          const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, fields_needed: ['location_address', 'start_datetime', 'image_url'] }),
+            signal: AbortSignal.timeout(20000),
+          });
+          const crawlResult = await crawlRes.json() as any;
+          results.push({ id: event.id, success: crawlResult.success, message: crawlResult.success ? `${Object.keys(crawlResult.fields_found || {}).length} Felder gefunden` : (crawlResult.error || 'Crawl failed') });
+        } catch (e: any) {
+          results.push({ id: event.id, success: false, message: e?.message || 'Crawl error' });
+        }
+      }
+    } else if (action === 'ai_rerun') {
+      // Set events back to pending_ai so next batch picks them up
+      await prisma.canonicalEvent.updateMany({
+        where: { id: { in: event_ids } },
+        data: { status: 'pending_ai' }
+      });
+      results.push(...events.map(e => ({ id: e.id, success: true, message: 'Set to pending_ai' })));
+    }
+
+    logger.info(`Bulk action "${action}" on ${events.length} events by admin ${userId}`);
+
+    res.json({
+      success: true,
+      data: {
+        action,
+        total: event_ids.length,
+        processed: results.length,
+        succeeded: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+        results,
       }
     });
   } catch (error) {
