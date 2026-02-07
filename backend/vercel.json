@@ -1,16 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.ts",
-      "use": "@vercel/node"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    }
-  ]
+  "installCommand": "cd ../.. && npm install",
+  "builds": [{"src": "api/index.ts", "use": "@vercel/node"}],
+  "rewrites": [{"source": "/api/(.*)", "destination": "/api"}]
 }
