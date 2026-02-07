@@ -183,6 +183,26 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                   </div>
                 </div>
 
+                <!-- Daten fuer AI-Worker (Eingabedaten-Uebersicht) -->
+                <div id="section-input-data" class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                  <h4 class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    <span>&#x1F4DD;</span> Daten fuer AI-Worker
+                    <span class="text-xs font-normal text-slate-500">(Eingabe pro Event)</span>
+                  </h4>
+                  <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div><span class="text-slate-500">Titel:</span> <span id="input-data-title" class="font-medium text-slate-800 truncate block">--</span></div>
+                    <div><span class="text-slate-500">Adresse:</span> <span id="input-data-address" class="text-slate-800 truncate block">--</span></div>
+                    <div><span class="text-slate-500">Start:</span> <span id="input-data-start" class="text-slate-800">--</span></div>
+                    <div><span class="text-slate-500">Ende:</span> <span id="input-data-end" class="text-slate-800">--</span></div>
+                    <div><span class="text-slate-500">Preis:</span> <span id="input-data-price" class="text-slate-800">--</span></div>
+                    <div><span class="text-slate-500">Indoor/Outdoor:</span> <span id="input-data-indoor-outdoor" class="text-slate-800">--</span></div>
+                    <div class="col-span-2">
+                      <span class="text-slate-500">Beschreibung (Auszug):</span>
+                      <p id="input-data-description" class="text-slate-800 text-xs mt-1 line-clamp-3 max-h-16 overflow-hidden">--</p>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Validation Checks (Ampel) -->
                 <div id="section-checks" class="hidden">
                   <div class="flex items-center gap-2 mb-2">
@@ -1149,6 +1169,30 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     if (isProcessing) return;
 
     const limit = el.batchSlider.value;
+
+    // Pruefen ob AI Worker erreichbar ist – sonst Hinweis anzeigen
+    try {
+      const healthRes = await fetch(`${API_URL}/api/admin/ai-worker/health`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const healthData = healthRes.ok ? await healthRes.json() : null;
+      const workerOk = healthData?.success && healthData?.data?.status === 'healthy';
+      if (!workerOk) {
+        const goAnyway = confirm(
+          'AI Worker ist nicht erreichbar (Offline oder falsche AI_WORKER_URL).\n\n' +
+          'Der Batch wuerde bei jedem Event fehlschlagen.\n\n' +
+          'Bitte starten Sie den AI Worker zuerst (z.B. ai-worker/start.bat oder Deployment pruefen).\n\n' +
+          'Trotzdem starten?'
+        );
+        if (!goAnyway) return;
+      }
+    } catch (e) {
+      const goAnyway = confirm(
+        'AI Worker-Status konnte nicht geprueft werden.\n\nTrotzdem Batch starten?'
+      );
+      if (!goAnyway) return;
+    }
+
     isProcessing = true;
     isHistoryMode = false;
     el.startBatchBtn.disabled = true;
@@ -1397,6 +1441,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
     // Suggested actions
     renderSuggestedActions(event);
+
+    // Daten fuer AI-Worker (Eingabedaten-Uebersicht)
+    renderInputDataOverview(event);
     
     // Validation checks  
     renderValidationChecks(event);
@@ -1719,6 +1766,25 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         }
       });
     });
+  }
+
+  function renderInputDataOverview(event) {
+    const existing = event.existing || {};
+    const desc = existing.description_long || existing.description_short || '';
+    const descSnippet = desc ? (desc.length > 250 ? desc.slice(0, 250) + '…' : desc) : '--';
+    document.getElementById('input-data-title').textContent = existing.title || '--';
+    document.getElementById('input-data-address').textContent = existing.location_address || '--';
+    document.getElementById('input-data-start').textContent = existing.start_datetime ? formatDateTime(existing.start_datetime) : '--';
+    document.getElementById('input-data-end').textContent = existing.end_datetime ? formatDateTime(existing.end_datetime) : '--';
+    const priceStr = existing.price_min != null || existing.price_max != null
+      ? [existing.price_min != null ? `${existing.price_min}€` : '', existing.price_max != null ? `${existing.price_max}€` : ''].filter(Boolean).join(' – ') || (existing.price_type === 'free' ? 'Kostenlos' : '--')
+      : (existing.price_type === 'free' ? 'Kostenlos' : '--');
+    document.getElementById('input-data-price').textContent = priceStr;
+    const io = [];
+    if (existing.is_indoor) io.push('Indoor');
+    if (existing.is_outdoor) io.push('Outdoor');
+    document.getElementById('input-data-indoor-outdoor').textContent = io.length ? io.join(', ') : '--';
+    document.getElementById('input-data-description').textContent = descSnippet;
   }
 
   function renderValidationChecks(event) {

@@ -12,6 +12,14 @@ import { redis, isRedisAvailable } from '../lib/redis.js';
 
 const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 
+/** User-friendly message when AI Worker returns 404 (wrong URL or not deployed). */
+function normalizeAIWorker404Message(rawMessage: string): string {
+  if (String(rawMessage).includes('404') && (String(rawMessage).includes('Application not found') || String(rawMessage).includes('Not Found'))) {
+    return 'AI Worker nicht erreichbar (404). Bitte AI_WORKER_URL prüfen und AI Worker starten (z.B. ai-worker/start.bat oder Deployment auf Railway).';
+  }
+  return rawMessage;
+}
+
 // #region agent log
 const _debugLog = (data: Record<string, unknown>) => {
   const payload = { ...data, timestamp: Date.now(), sessionId: 'debug-session' };
@@ -883,11 +891,14 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
       });
       if (!classifyRes.ok) {
         const errText = await classifyRes.text();
-        throw new Error(`Classification: ${classifyRes.status} - ${errText}`);
+        const friendlyMsg = classifyRes.status === 404
+          ? normalizeAIWorker404Message(errText)
+          : `Classification: ${classifyRes.status} - ${errText}`;
+        throw new Error(friendlyMsg);
       }
       classification = await classifyRes.json();
     } catch (e: any) {
-      const errMsg = e?.message || String(e);
+      const errMsg = normalizeAIWorker404Message(e?.message || String(e));
       ['ai_summary_short', 'location_address', 'start_datetime', 'end_datetime'].forEach(f => {
         existingFieldFillStatus[f] = { status: 'ai_failed', error: errMsg, last_attempt: nowIso, source: 'ai' };
         failedFields.push({ field: f, reason: `AI fehlgeschlagen: ${errMsg}` });
@@ -918,11 +929,14 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
       });
       if (!scoreRes.ok) {
         const errText = await scoreRes.text();
-        throw new Error(`Scoring: ${scoreRes.status} - ${errText}`);
+        const friendlyMsg = scoreRes.status === 404
+          ? normalizeAIWorker404Message(errText)
+          : `Scoring: ${scoreRes.status} - ${errText}`;
+        throw new Error(friendlyMsg);
       }
       scores = await scoreRes.json();
     } catch (e: any) {
-      const errMsg = e?.message || String(e);
+      const errMsg = normalizeAIWorker404Message(e?.message || String(e));
       existingFieldFillStatus['ai_summary_short'] = { status: 'ai_failed', error: errMsg, last_attempt: nowIso, source: 'ai' };
       failedFields.push({ field: 'scores', reason: `Scoring fehlgeschlagen: ${errMsg}` });
     }
@@ -2982,9 +2996,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           _debugLog({ location: 'admin.ts:catch', message: 'event processing error', hypothesisId: 'H1,H3,H5', data: { jobId, eventIndex: i, eventId: event.id, errName: err?.name, errCode: err?.code, errStep: err?.step, errMessage: (err?.message || '').slice(0, 200) } });
           // #endregion
           const isAbort = err?.name === 'AbortError' || err?.code === 'ABORT_ERR';
-          const errorMessage = isAbort
+          let errorMessage = isAbort
             ? 'AI Worker Timeout (90s) – Worker nicht erreichbar oder zu langsam'
-            : (err?.message || (err instanceof Error ? err.message : 'Unknown error'));
+            : normalizeAIWorker404Message(err?.message || (err instanceof Error ? err.message : 'Unknown error'));
           const errorStep = err?.step || (isAbort ? 'timeout' : 'unknown');
           summary.failed++;
           
