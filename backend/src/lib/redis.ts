@@ -1,8 +1,9 @@
 /**
  * Redis Client Setup
- * 
+ *
  * - In production: REDIS_URL is required, fails fast if not set
  * - In development: Falls back to null (features gracefully degrade)
+ * - REDIS_URL in Vercel: use Railway TCP Proxy URL for production
  */
 
 import Redis from 'ioredis';
