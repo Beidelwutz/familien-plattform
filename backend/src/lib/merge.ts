@@ -3,6 +3,7 @@
  * Implements Option A: Backend makes all final merge decisions.
  */
 
+import { EventStatus } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { SOURCE_PRIORITY, computeFingerprint } from './idempotency.js';
 import { calculateCompleteness, determineInitialStatus, determineStatusFromAI, type AIScoreInput } from './eventCompleteness.js';
@@ -71,6 +72,15 @@ export interface CanonicalCandidate {
     contact_phone?: string;
     is_indoor?: boolean;
     is_outdoor?: boolean;
+    // Extended AI/worker fields (optional)
+    age_recommendation_text?: string | null;
+    sibling_friendly?: boolean | null;
+    language?: string | null;
+    complexity_level?: string | number | null;
+    noise_level?: string | number | null;
+    has_seating?: boolean | null;
+    typical_wait_minutes?: number | null;
+    food_drink_allowed?: boolean | null;
   };
   
   ai?: {
@@ -577,7 +587,7 @@ export async function processSingleCandidate(
   const newEvent = await prisma.canonicalEvent.create({
     data: {
       ...eventData,
-      status: initialStatus,
+      status: initialStatus as EventStatus,
       is_complete: completeness.isComplete,
       completeness_score: completeness.score,
       field_provenance: initialProvenance,

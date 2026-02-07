@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { query, body, validationResult } from 'express-validator';
+import { Prisma, EventStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { 
@@ -899,7 +900,7 @@ router.post('/ingest', validateIngestPayload, async (req: Request, res: Response
       const newEvent = await prisma.canonicalEvent.create({
         data: {
           ...eventData,
-          status: initialStatus,
+          status: initialStatus as EventStatus,
           is_complete: completeness.isComplete,
           completeness_score: completeness.score,
         }
@@ -1128,7 +1129,7 @@ router.post('/:id/reschedule', async (req: Request, res: Response, next: NextFun
         booking_url: originalEvent.booking_url,
         contact_email: originalEvent.contact_email,
         contact_phone: originalEvent.contact_phone,
-        image_urls: originalEvent.image_urls,
+        image_urls: originalEvent.image_urls === null ? Prisma.JsonNull : originalEvent.image_urls,
         provider_id: originalEvent.provider_id,
         status: 'pending_review',
         is_complete: originalEvent.is_complete,
@@ -1339,9 +1340,8 @@ router.put('/:id', requireAuth, validateEventUpdate, async (req: AuthRequest, re
 
 // PATCH /api/events/:id - Partial update (alias for PUT)
 router.patch('/:id', requireAuth, validateEventUpdate, async (req: AuthRequest, res: Response, next: NextFunction) => {
-  // Delegate to PUT handler
   req.method = 'PUT';
-  router.handle(req, res, next);
+  (router as unknown as { handle: (req: Request, res: Response, next: NextFunction) => void }).handle(req, res, next);
 });
 
 // GET /api/events/:id - Get single event by ID

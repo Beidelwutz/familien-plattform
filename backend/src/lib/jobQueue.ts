@@ -11,6 +11,7 @@
  * locking or a proper job queue like BullMQ.
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 
 // JobStatus enum matches Prisma schema
@@ -213,7 +214,7 @@ export async function retryJob(jobId: string) {
       started_at: null,
       completed_at: null,
       error_message: null,
-      result: null,
+      result: Prisma.JsonNull,
     },
   });
 }

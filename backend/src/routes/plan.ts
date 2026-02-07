@@ -164,8 +164,9 @@ router.post('/generate', validatePlanRequest, async (req: Request, res: Response
     });
 
     // Select events for the plan
-    let selectedEvents: any[];
-    let planBEvents: any[];
+    type EventItem = (typeof availableEvents)[number];
+    let selectedEvents: EventItem[] = [];
+    let planBEvents: EventItem[] = [];
     let aiUsed = false;
 
     // Try AI-based selection if requested and available
@@ -202,14 +203,14 @@ router.post('/generate', validatePlanRequest, async (req: Request, res: Response
         });
 
         if (aiResponse.ok) {
-          const aiResult = await aiResponse.json();
+          const aiResult = await aiResponse.json() as { selected_events?: string[]; plan_b_events?: string[] };
           if (aiResult.selected_events && aiResult.plan_b_events) {
-            selectedEvents = aiResult.selected_events.map((id: string) => 
+            selectedEvents = aiResult.selected_events.map((id: string) =>
               availableEvents.find(e => e.id === id)
-            ).filter(Boolean);
-            planBEvents = aiResult.plan_b_events.map((id: string) => 
+            ).filter((e): e is EventItem => Boolean(e));
+            planBEvents = aiResult.plan_b_events.map((id: string) =>
               availableEvents.find(e => e.id === id)
-            ).filter(Boolean);
+            ).filter((e): e is EventItem => Boolean(e));
             aiUsed = true;
           }
         }

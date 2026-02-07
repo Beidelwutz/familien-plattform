@@ -72,12 +72,12 @@ async function wouldCreateCycle(
       return true; // Would create cycle
     }
 
-    const parent = await prisma.category.findUnique({
+    const parent: { parent_id: string | null } | null = await prisma.category.findUnique({
       where: { id: currentId },
       select: { parent_id: true },
     });
 
-    currentId = parent?.parent_id || null;
+    currentId = parent?.parent_id ?? null;
   }
 
   return false;

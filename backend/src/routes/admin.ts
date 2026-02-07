@@ -447,7 +447,7 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
       if (!event.location_address) fieldsNeeded.push('location_address');
       if (!event.start_datetime) fieldsNeeded.push('start_datetime');
       if (!event.end_datetime) fieldsNeeded.push('end_datetime');
-      if (!event.image_urls?.length) fieldsNeeded.push('image_url');
+      if (!Array.isArray(event.image_urls) || !event.image_urls.length) fieldsNeeded.push('image_url');
 
       if (fieldsNeeded.length > 0) {
         try {
@@ -2486,7 +2486,10 @@ router.get('/ai-job-status/:jobId', async (req: Request, res: Response, next: Ne
     
     // 2. Check for stale job
     dbJob = await checkAndMarkStale(dbJob);
-    
+    if (!dbJob) {
+      return res.status(500).json({ success: false, error: 'Job state invalid' });
+    }
+
     // 3. Get event details from Redis (optional, graceful degradation)
     let events: AIJobEventDetail[] = [];
     let redisAvailable = false;
@@ -2666,7 +2669,9 @@ router.get('/ai-jobs/active', async (_req: Request, res: Response, next: NextFun
     
     // Check if stale
     activeJob = await checkAndMarkStale(activeJob);
-    
+    if (!activeJob) {
+      return res.json({ success: true, data: null, message: 'No active job' });
+    }
     // If stale, return null (no active job)
     if (activeJob.status === 'stale') {
       return res.json({
@@ -2762,7 +2767,10 @@ router.get('/ai-jobs/:id', async (req: Request, res: Response, next: NextFunctio
     
     // Check if stale
     job = await checkAndMarkStale(job);
-    
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+
     // Get event details from Redis
     let events: AIJobEventDetail[] = [];
     if (redis && isRedisAvailable()) {

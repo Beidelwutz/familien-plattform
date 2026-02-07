@@ -20,6 +20,9 @@ export interface CompletenessResult {
 
 const COMPLETENESS_THRESHOLD = 70;
 
+/** Numeric value from DB (number or Prisma Decimal or any object with toNumber) */
+type Numeric = number | null | { toNumber?: () => number } | object;
+
 interface EventData {
   title?: string | null;
   description_short?: string | null;
@@ -27,16 +30,24 @@ interface EventData {
   start_datetime?: Date | string | null;
   end_datetime?: Date | string | null;
   location_address?: string | null;
-  location_lat?: number | null;
-  location_lng?: number | null;
+  location_lat?: Numeric;
+  location_lng?: Numeric;
   price_type?: string | null;
-  price_min?: number | null;
+  price_min?: Numeric;
+  price_max?: Numeric;
   age_min?: number | null;
   age_max?: number | null;
   booking_url?: string | null;
   contact_email?: string | null;
   contact_phone?: string | null;
   categories?: any[] | null;
+}
+
+function toNum(v: Numeric | undefined): number | null {
+  if (v == null || v === undefined) return null;
+  if (typeof v === 'number') return v;
+  if (typeof (v as { toNumber?: () => number }).toNumber === 'function') return (v as { toNumber: () => number }).toNumber();
+  return Number(v);
 }
 
 export function calculateCompleteness(event: EventData): CompletenessResult {
@@ -74,7 +85,7 @@ export function calculateCompleteness(event: EventData): CompletenessResult {
   
   // Location (20%)
   const hasAddress = event.location_address && event.location_address.length >= 10;
-  const hasCoords = event.location_lat != null && event.location_lng != null;
+  const hasCoords = toNum(event.location_lat) != null && toNum(event.location_lng) != null;
   
   if (hasAddress && hasCoords) {
     score += 20;
@@ -87,7 +98,7 @@ export function calculateCompleteness(event: EventData): CompletenessResult {
   // Price (10%)
   if (event.price_type && event.price_type !== 'unknown') {
     score += 7;
-    if (event.price_type === 'paid' && event.price_min != null) {
+    if (event.price_type === 'paid' && toNum(event.price_min) != null) {
       score += 3;
     } else if (event.price_type === 'free') {
       score += 3;

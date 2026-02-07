@@ -11,6 +11,33 @@ const router = Router();
 const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 const CRON_SECRET = process.env.CRON_SECRET || '';
 
+interface WorkerErrorResponse { detail?: string }
+interface AIClassificationResponse {
+  confidence?: number;
+  extracted_start_datetime?: string;
+  extracted_end_datetime?: string;
+  extracted_location_address?: string;
+  extracted_location_district?: string;
+  datetime_confidence?: number;
+  location_confidence?: number;
+  age_min?: number;
+  age_max?: number;
+  is_indoor?: boolean;
+  is_outdoor?: boolean;
+  ai_summary_short?: string;
+  ai_fit_blurb?: string;
+  ai_summary_highlights?: unknown;
+  summary_confidence?: number;
+  categories?: string[];
+  age_fit_buckets?: Record<string, number>;
+}
+interface AIScoresResponse {
+  family_fit_score?: number;
+  relevance_score?: number;
+  quality_score?: number;
+  stressfree_score?: number;
+}
+
 // GET /api/sources - List all sources (admin)
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -89,7 +116,7 @@ router.post('/detect', requireAuth, requireAdmin, async (req: Request, res: Resp
       body: JSON.stringify({ url: url.trim() }),
       signal: AbortSignal.timeout(20000),
     });
-    const data = await workerRes.json().catch(() => ({}));
+    const data = await workerRes.json().catch(() => ({})) as WorkerErrorResponse & Record<string, unknown>;
     if (!workerRes.ok) {
       throw createError(data.detail || `AI-Worker error: ${workerRes.status}`, workerRes.status, 'WORKER_ERROR');
     }
@@ -179,7 +206,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(120000), // 2 min for dry-run (runs sync)
         });
-        const workerData = await workerResponse.json().catch(() => ({}));
+        const workerData = await workerResponse.json().catch(() => ({})) as WorkerErrorResponse;
         if (!workerResponse.ok) {
           throw createError(workerData.detail || `AI-Worker error: ${workerResponse.status}`, workerResponse.status, 'WORKER_ERROR');
         }
@@ -925,7 +952,7 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
         if (!classifyRes.ok) {
           throw new Error(`Classification failed: ${classifyRes.status}`);
         }
-        const classification = await classifyRes.json();
+        const classification = await classifyRes.json() as AIClassificationResponse;
         
         // Scoring
         const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
@@ -941,12 +968,12 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
         if (!scoreRes.ok) {
           throw new Error(`Scoring failed: ${scoreRes.status}`);
         }
-        const scores = await scoreRes.json();
+        const scores = await scoreRes.json() as AIScoresResponse;
         
         // Determine new status
         let newStatus = determineStatusFromAIScores(
-          scores.family_fit_score,
-          classification.confidence
+          scores.family_fit_score ?? 0,
+          classification.confidence ?? 0
         );
         
         // Extract AI-extracted datetime/location
@@ -1048,9 +1075,10 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
         });
         
         // Add categories
-        if (classification.categories?.length > 0) {
+        const classificationCategories = classification.categories;
+        if (classificationCategories && classificationCategories.length > 0) {
           const categories = await prisma.category.findMany({
-            where: { slug: { in: classification.categories } }
+            where: { slug: { in: classificationCategories } }
           });
           for (const cat of categories) {
             await prisma.eventCategory.upsert({

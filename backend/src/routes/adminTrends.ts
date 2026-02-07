@@ -202,7 +202,7 @@ router.post('/overrides', [
         startsAt: req.body.startsAt ? new Date(req.body.startsAt) : null,
         endsAt: req.body.endsAt ? new Date(req.body.endsAt) : null,
         priority: req.body.priority || 0,
-        createdById: (req as AuthRequest).user?.id
+        createdById: (req as AuthRequest).user?.sub
       }
     });
 

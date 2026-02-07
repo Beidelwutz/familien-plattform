@@ -151,7 +151,7 @@ router.get('/detailed', async (_req: Request, res: Response) => {
     healthcheck.metrics = {
       eventsTotal: eventsCount,
       sourcesActive: sourcesCount,
-      lastTrendCompute: lastTrend?.computedAt?.toISOString() || null,
+      lastTrendCompute: lastTrend?.computedAt?.toISOString() ?? undefined,
     };
   } catch (error) {
     // Metrics are optional

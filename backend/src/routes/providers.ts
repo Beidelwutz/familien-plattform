@@ -35,7 +35,6 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           id: true,
           name: true,
           type: true,
-          description: true,
           logo_url: true,
           website: true,
           _count: {
@@ -74,7 +73,6 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         id: true,
         name: true,
         type: true,
-        description: true,
         logo_url: true,
         website: true,
         phone: true,
@@ -180,7 +178,6 @@ router.post('/', requireAuth, [
     const {
       name,
       type,
-      description,
       website,
       phone,
       email,
@@ -192,7 +189,6 @@ router.post('/', requireAuth, [
         user_id: userId,
         name,
         type,
-        description: description || null,
         website: website || null,
         phone: phone || null,
         email: email || req.user!.email,

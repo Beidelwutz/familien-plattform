@@ -1,51 +1,9 @@
 /**
- * Re-export shared types for use throughout the backend
- * This allows easy imports and provides a single source of truth
+ * Backend types and re-exports.
+ * Shared types are imported directly from @prisma/client or where needed.
  */
 
-// Re-export all types from the shared package
-export type {
-  // Enums
-  EventStatus,
-  PriceType,
-  SourceType,
-  HealthStatus,
-  ProviderType,
-  SubscriptionTier,
-  UserRole,
-  SlotType,
-  
-  // Core types
-  Event,
-  EventScores,
-  CategoryRef,
-  Category,
-  AmenityRef,
-  Amenity,
-  ProviderRef,
-  
-  // Source types
-  Source,
-  SourceFetchLog,
-  
-  // User types
-  User,
-  FamilyProfile,
-  ChildInfo,
-  
-  // Plan types
-  Plan,
-  PlanSlot,
-  
-  // API types
-  ApiResponse,
-  ApiError,
-  PaginatedResponse,
-  
-  // Search/Filter types
-  EventSearchParams,
-  PlanRequest,
-} from '../../shared/types/index.js';
+export type { UserRole } from '@prisma/client';
 
 // Re-export JwtPayload from auth middleware for convenience
 export type { JwtPayload } from '../middleware/auth.js';

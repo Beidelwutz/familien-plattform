@@ -82,7 +82,7 @@ async function geocodeWithNominatim(address: string): Promise<GeocodingResult | 
       return null;
     }
 
-    const results: NominatimResponse[] = await response.json();
+    const results = await response.json() as NominatimResponse[];
     
     if (results.length === 0) {
       logger.info('No geocoding results', { address });
