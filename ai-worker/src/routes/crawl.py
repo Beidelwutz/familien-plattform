@@ -344,6 +344,7 @@ class SingleEventCrawlRequest(BaseModel):
     """Request to crawl a single event page URL for missing fields."""
     url: str
     fields_needed: Optional[list[str]] = None  # e.g. ["location_address", "end_datetime", "image_url"]
+    use_ai: bool = True  # Use AI as fallback when structured/heuristic extraction is incomplete
 
 
 class SingleEventCrawlResponse(BaseModel):
@@ -351,14 +352,59 @@ class SingleEventCrawlResponse(BaseModel):
     success: bool = True
     fields_found: dict = {}  # field name -> value (serializable)
     fields_missing: list[str] = []
+    extraction_method: Optional[str] = None  # "json_ld", "microdata", "heuristic", "ai", "heuristic+ai"
     error: Optional[str] = None
+
+
+def _extract_visible_text(html: str, max_length: int = 5000) -> str:
+    """Extract visible text from HTML for AI processing, removing noise."""
+    soup = BeautifulSoup(html, 'lxml')
+    # Remove noisy elements
+    for tag_name in ('script', 'style', 'nav', 'footer', 'aside', 'noscript',
+                     'iframe', 'svg', 'form'):
+        for el in soup.find_all(tag_name):
+            el.decompose()
+    # Remove cookie/banner elements
+    for el in soup.find_all(True, attrs={
+        'class': re.compile(r'cookie|consent|banner|popup|modal|gdpr', re.I),
+    }):
+        el.decompose()
+    for el in soup.find_all(True, attrs={
+        'id': re.compile(r'cookie|consent|banner|popup|modal|gdpr', re.I),
+    }):
+        el.decompose()
+    text = soup.get_text(separator='\n', strip=True)
+    # Collapse excessive whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text[:max_length]
+
+
+def _guess_title_from_html(html: str) -> str:
+    """Try to extract a title from HTML for AI fallback."""
+    soup = BeautifulSoup(html, 'lxml')
+    h1 = soup.find('h1')
+    if h1:
+        text = h1.get_text(strip=True)
+        if text:
+            return text
+    og = soup.find('meta', property='og:title')
+    if og and og.get('content'):
+        return og['content'].strip()
+    title_tag = soup.find('title')
+    if title_tag:
+        return title_tag.get_text(strip=True)
+    return "Unbekannt"
 
 
 @router.post("/single-event", response_model=SingleEventCrawlResponse)
 async def crawl_single_event(request: SingleEventCrawlRequest):
     """
-    Crawl a single event page URL to extract structured data (JSON-LD/Microdata).
-    Used when an event has missing fields and we want to try filling them from the detail page.
+    Crawl a single event page URL to extract event data.
+
+    Extraction pipeline:
+    1. Structured data (JSON-LD / Microdata)
+    2. Heuristic HTML text extraction (German dates, addresses)
+    3. AI extraction as fallback (sends visible page text to LLM)
     """
     if not request.url or not request.url.strip().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Valid URL required")
@@ -384,41 +430,98 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
                     error=f"HTTP {response.status_code}"
                 )
             html = response.text
+
+            # --- Step 1+2: Structured data + heuristic extraction ---
             from src.crawlers.structured_data import StructuredDataExtractor
             extractor = StructuredDataExtractor()
             extracted_list = extractor.extract(html)
-            if not extracted_list:
-                return SingleEventCrawlResponse(
-                    success=True,
-                    fields_found={},
-                    fields_missing=fields_needed,
-                    error="Keine strukturierten Event-Daten (JSON-LD/Microdata) auf der Seite gefunden"
-                )
-            # Use first extracted event
-            e = extracted_list[0]
-            fields_found = {}
-            field_map = {
-                "location_address": ("location_address", e.location_address),
-                "location_name": ("location_name", e.location_name),
-                "start_datetime": ("start_datetime", e.start_datetime.isoformat() if e.start_datetime else None),
-                "end_datetime": ("end_datetime", e.end_datetime.isoformat() if e.end_datetime else None),
-                "image_url": ("image_url", e.image_url),
-                "description": ("description", e.description),
-                "price": ("price", e.price),
-                "organizer_name": ("organizer_name", e.organizer_name),
-                "lat": ("lat", e.lat),
-                "lng": ("lng", e.lng),
-            }
-            for name in fields_needed:
-                if name in field_map:
-                    _key, val = field_map[name]
-                    if val is not None and val != "":
-                        fields_found[name] = val
+
+            fields_found: dict = {}
+            extraction_method: Optional[str] = None
+
+            if extracted_list:
+                e = extracted_list[0]
+                extraction_method = "structured"  # Could be json_ld, microdata, or heuristic
+                field_map = {
+                    "location_address": e.location_address,
+                    "location_name": e.location_name,
+                    "start_datetime": e.start_datetime.isoformat() if e.start_datetime else None,
+                    "end_datetime": e.end_datetime.isoformat() if e.end_datetime else None,
+                    "image_url": e.image_url,
+                    "description": e.description,
+                    "price": e.price,
+                    "organizer_name": e.organizer_name,
+                    "lat": e.lat,
+                    "lng": e.lng,
+                }
+                for name in fields_needed:
+                    if name in field_map:
+                        val = field_map[name]
+                        if val is not None and val != "":
+                            fields_found[name] = val
+
+            # --- Step 3: AI fallback for still-missing fields ---
             fields_missing = [f for f in fields_needed if f not in fields_found]
+
+            if fields_missing and request.use_ai:
+                try:
+                    from src.classifiers.event_classifier import EventClassifier
+                    from src.config import get_settings
+                    ai_settings = get_settings()
+
+                    if ai_settings.enable_ai and (ai_settings.openai_api_key or ai_settings.anthropic_api_key):
+                        visible_text = _extract_visible_text(html)
+                        title_guess = _guess_title_from_html(html)
+
+                        classifier = EventClassifier()
+                        event_data = {
+                            "title": title_guess,
+                            "description": visible_text,
+                            "location_address": fields_found.get("location_address", ""),
+                        }
+                        ai_result = await classifier.classify(event_data)
+
+                        # Map AI-extracted fields to the fields we need
+                        ai_field_map = {
+                            "location_address": ai_result.extracted_location_address,
+                            "location_name": ai_result.extracted_venue_name,
+                            "start_datetime": ai_result.extracted_start_datetime,
+                            "end_datetime": ai_result.extracted_end_datetime,
+                            "description": ai_result.ai_summary_short,
+                        }
+
+                        ai_filled = False
+                        for name in list(fields_missing):
+                            if name in ai_field_map:
+                                val = ai_field_map[name]
+                                if val is not None and val != "":
+                                    fields_found[name] = val
+                                    ai_filled = True
+
+                        if ai_filled:
+                            extraction_method = (
+                                f"{extraction_method}+ai" if extraction_method else "ai"
+                            )
+
+                        logger.info(
+                            f"AI fallback for {url}: filled {sum(1 for f in fields_missing if f in fields_found)} additional fields"
+                        )
+                except Exception as ai_err:
+                    logger.warning(f"AI fallback failed for {url}: {ai_err}")
+
+            # Final missing fields
+            fields_missing = [f for f in fields_needed if f not in fields_found]
+
+            error_msg = None
+            if not fields_found:
+                error_msg = "Keine Event-Daten auf der Seite gefunden (weder strukturiert noch per Heuristik/AI)"
+
             return SingleEventCrawlResponse(
                 success=True,
                 fields_found=fields_found,
                 fields_missing=fields_missing,
+                extraction_method=extraction_method,
+                error=error_msg,
             )
     except httpx.TimeoutException as e:
         return SingleEventCrawlResponse(
