@@ -792,8 +792,9 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
     const updatedFields: string[] = [];
     const failedFields: Array<{ field: string; reason: string }> = [];
 
-    // Optional: crawl single event URL for missing fields
+    // Optional: crawl single event URL for missing fields (raw response kept for UI)
     const crawlUrl = event.booking_url || event.event_sources?.[0]?.source_url || null;
+    let crawl_raw: { url: string; fields_found: Record<string, unknown>; fields_missing: string[]; extraction_method?: string; error?: string } | null = null;
     if (forceCrawl && crawlUrl) {
       const fieldsNeeded: string[] = [];
       if (!event.location_address) fieldsNeeded.push('location_address');
@@ -809,7 +810,14 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
             body: JSON.stringify({ url: crawlUrl, fields_needed: fieldsNeeded }),
             signal: AbortSignal.timeout(20000),
           });
-          const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; fields_missing: string[]; error?: string };
+          const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; fields_missing: string[]; extraction_method?: string; error?: string };
+          crawl_raw = {
+            url: crawlUrl,
+            fields_found: crawlResult.fields_found || {},
+            fields_missing: crawlResult.fields_missing || [],
+            extraction_method: crawlResult.extraction_method,
+            error: crawlResult.error,
+          };
           if (!crawlRes.ok || !crawlResult.success) {
             const errMsg = crawlResult.error || `HTTP ${crawlRes.status}`;
             for (const f of fieldsNeeded) {
@@ -1026,12 +1034,14 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
       });
     }
 
-    return res.json({
+    const responsePayload: Record<string, unknown> = {
       success: true,
       updated_fields: updatedFields,
       failed_fields: failedFields,
       field_fill_status: existingFieldFillStatus,
-    });
+    };
+    if (crawl_raw) responsePayload.crawl_raw = crawl_raw;
+    return res.json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -3438,11 +3448,13 @@ router.get('/ai-worker/health', async (_req: Request, res: Response, next: NextF
     }
     
     const data = await response.json() as any;
+    const workerStatus = data?.status;
+    const isHealthy = workerStatus === 'healthy' || workerStatus === 'ok';
     
     res.json({
       success: true,
       data: {
-        status: 'healthy',
+        status: isHealthy ? 'healthy' : (workerStatus || 'unknown'),
         ...data
       }
     });

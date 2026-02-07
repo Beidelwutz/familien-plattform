@@ -240,6 +240,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                       </button>
                       <span id="detail-trigger-ai-status" class="text-sm text-gray-500 hidden"></span>
                     </div>
+                    <!-- Gecrawlte Rohdaten (ausklappbar) -->
+                    <details id="crawl-raw-details" class="hidden mt-3">
+                      <summary class="text-sm font-medium text-gray-700 cursor-pointer hover:text-gray-900">
+                        Gecrawlte Rohdaten (Eingabe fuer AI-Worker)
+                      </summary>
+                      <div id="crawl-raw-content" class="mt-2 p-3 bg-white border border-gray-200 rounded text-xs space-y-2"></div>
+                    </details>
                     <!-- Crawl Diagnostics (collapsible) -->
                     <details id="crawl-diagnostics" class="hidden mt-3">
                       <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Crawl Diagnostics</summary>
@@ -827,6 +834,35 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           resultHtml += data.failed_fields.map(f => `<p class="text-red-500">&#x274C; ${f.field}: ${escapeHtml(f.reason)}</p>`).join('');
         }
         resultEl.innerHTML = resultHtml || '<p class="text-gray-400">Keine Ergebnisse</p>';
+
+        // Gecrawlte Rohdaten: ausklappbar anzeigen
+        const rawDetails = document.getElementById('crawl-raw-details');
+        const rawContent = document.getElementById('crawl-raw-content');
+        if (data.crawl_raw && rawDetails && rawContent) {
+          rawDetails.classList.remove('hidden');
+          const raw = data.crawl_raw;
+          let rawHtml = '';
+          if (raw.url) rawHtml += `<p><span class="text-gray-500 font-medium">URL:</span> <a href="${escapeHtml(raw.url)}" target="_blank" rel="noopener" class="text-primary-600 hover:underline break-all">${escapeHtml(raw.url)}</a></p>`;
+          if (raw.extraction_method) rawHtml += `<p><span class="text-gray-500 font-medium">Extraktion:</span> <span class="font-mono">${escapeHtml(raw.extraction_method)}</span></p>`;
+          if (raw.error) rawHtml += `<p class="text-amber-600"><span class="font-medium">Hinweis:</span> ${escapeHtml(raw.error)}</p>`;
+          rawHtml += '<p class="text-gray-500 font-medium mt-2">Gefundene Felder (Rohdaten):</p><dl class="mt-1 space-y-1 pl-2 border-l-2 border-gray-200">';
+          const found = raw.fields_found || {};
+          if (Object.keys(found).length === 0) {
+            rawHtml += '<dd class="text-gray-400">Keine</dd>';
+          } else {
+            for (const [k, v] of Object.entries(found)) {
+              const val = v == null ? '—' : (typeof v === 'string' ? v : JSON.stringify(v));
+              rawHtml += `<dt class="text-gray-600 font-medium">${escapeHtml(k)}</dt><dd class="text-gray-800 break-words mb-1">${escapeHtml(String(val))}</dd>`;
+            }
+          }
+          rawHtml += '</dl>';
+          if (raw.fields_missing && raw.fields_missing.length > 0) {
+            rawHtml += `<p class="text-gray-500 font-medium mt-2">Fehlend:</p><p class="text-gray-600">${raw.fields_missing.map(m => escapeHtml(m)).join(', ')}</p>`;
+          }
+          rawContent.innerHTML = rawHtml;
+        } else if (rawDetails) {
+          rawDetails.classList.add('hidden');
+        }
         
         // Update crawl status badge
         const statusBadge = document.getElementById('crawl-status-badge');
@@ -933,7 +969,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       // Update worker health
       if (healthRes && healthRes.ok) {
         const healthData = await healthRes.json();
-        if (healthData.success && healthData.data?.status === 'healthy') {
+        const healthStatus = healthData?.data?.status;
+        if (healthData.success && (healthStatus === 'healthy' || healthStatus === 'ok')) {
           setHealthStatus('ok');
         } else {
           setHealthStatus('degraded');
@@ -1176,7 +1213,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         headers: { Authorization: `Bearer ${token}` }
       });
       const healthData = healthRes.ok ? await healthRes.json() : null;
-      const workerOk = healthData?.success && healthData?.data?.status === 'healthy';
+      const status = healthData?.data?.status;
+      const workerOk = healthData?.success && (status === 'healthy' || status === 'ok');
       if (!workerOk) {
         const goAnyway = confirm(
           'AI Worker ist nicht erreichbar (Offline oder falsche AI_WORKER_URL).\n\n' +
@@ -1865,6 +1903,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     // Hide diagnostics by default
     document.getElementById('crawl-diagnostics').classList.add('hidden');
     document.getElementById('crawl-result').classList.add('hidden');
+    document.getElementById('crawl-raw-details').classList.add('hidden');
   }
 
   function renderSourceDetails(eventId, data) {
