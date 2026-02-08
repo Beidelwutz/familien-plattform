@@ -4253,8 +4253,8 @@ router.post('/test-selectors', requireAuth, requireAdmin, async (req: AuthReques
       data: crawlResult,
     });
   } catch (error: unknown) {
-    logger.error('test-selectors failed:', error);
     const message = error instanceof Error ? error.message : 'Test fehlgeschlagen';
+    logger.error('test-selectors failed', { error: message });
     res.status(500).json({ success: false, error: message });
   }
 });
