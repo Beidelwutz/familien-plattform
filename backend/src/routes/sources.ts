@@ -11,6 +11,92 @@ const router = Router();
 const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 const CRON_SECRET = process.env.CRON_SECRET || '';
 
+// ── detail_page_config types & helpers ──────────────────────────────
+
+const VALID_ATTR_VALUES = ['text', 'datetime', 'src', 'href', 'content'] as const;
+
+interface SelectorEntry { css?: string[]; attr?: string }
+interface DetailPageConfig {
+  selectors?: Record<string, SelectorEntry>;
+  parsing?: { timezone?: string; date_formats?: string[] };
+  notes?: string;
+}
+
+/** Validate detail_page_config structure. Throws on invalid data. */
+function validateDetailPageConfig(cfg: unknown): cfg is DetailPageConfig {
+  if (cfg === null || cfg === undefined) return true; // null = clear
+  if (typeof cfg !== 'object' || Array.isArray(cfg)) {
+    throw createError('detail_page_config must be an object', 400, 'VALIDATION_ERROR');
+  }
+  const c = cfg as Record<string, unknown>;
+  if (c.selectors !== undefined) {
+    if (typeof c.selectors !== 'object' || Array.isArray(c.selectors) || c.selectors === null) {
+      throw createError('detail_page_config.selectors must be an object', 400, 'VALIDATION_ERROR');
+    }
+    for (const [field, entry] of Object.entries(c.selectors as Record<string, unknown>)) {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        throw createError(`selectors.${field} must be {css:[], attr}`, 400, 'VALIDATION_ERROR');
+      }
+      const e = entry as Record<string, unknown>;
+      if (e.css !== undefined) {
+        if (!Array.isArray(e.css) || !e.css.every((s: unknown) => typeof s === 'string' && s.trim().length > 0)) {
+          throw createError(`selectors.${field}.css must be an array of non-empty strings`, 400, 'VALIDATION_ERROR');
+        }
+      }
+      if (e.attr !== undefined) {
+        if (typeof e.attr !== 'string' || !(VALID_ATTR_VALUES as readonly string[]).includes(e.attr)) {
+          throw createError(`selectors.${field}.attr must be one of: ${VALID_ATTR_VALUES.join(', ')}`, 400, 'VALIDATION_ERROR');
+        }
+      }
+    }
+  }
+  if (c.parsing !== undefined) {
+    if (typeof c.parsing !== 'object' || c.parsing === null || Array.isArray(c.parsing)) {
+      throw createError('detail_page_config.parsing must be an object', 400, 'VALIDATION_ERROR');
+    }
+    const p = c.parsing as Record<string, unknown>;
+    if (p.date_formats !== undefined) {
+      if (!Array.isArray(p.date_formats) || !p.date_formats.every((f: unknown) => typeof f === 'string')) {
+        throw createError('parsing.date_formats must be an array of strings', 400, 'VALIDATION_ERROR');
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Per-field deep-merge for detail_page_config.
+ * - selectors: per-field merge (incoming title only touches title, not description)
+ * - within a field: css/attr replaced only when present in incoming
+ * - parsing: timezone/date_formats replaced only when present
+ * - notes: replaced when present
+ */
+function mergeDetailPageConfig(
+  existing: DetailPageConfig | null | undefined,
+  incoming: DetailPageConfig,
+  mode: 'replace' | 'merge' = 'merge'
+): DetailPageConfig {
+  if (mode === 'replace' || !existing) return incoming;
+
+  const mergedSelectors: Record<string, SelectorEntry> = { ...(existing.selectors || {}) };
+  for (const [field, incomingSel] of Object.entries(incoming.selectors || {})) {
+    const existingSel = mergedSelectors[field] || {};
+    mergedSelectors[field] = {
+      css:  incomingSel.css  ?? existingSel.css,
+      attr: incomingSel.attr ?? existingSel.attr,
+    };
+  }
+
+  return {
+    selectors: mergedSelectors,
+    parsing: {
+      timezone:     incoming.parsing?.timezone     ?? existing.parsing?.timezone     ?? 'Europe/Berlin',
+      date_formats: incoming.parsing?.date_formats ?? existing.parsing?.date_formats ?? [],
+    },
+    notes: incoming.notes ?? existing.notes,
+  };
+}
+
 interface WorkerErrorResponse { detail?: string }
 interface AIClassificationResponse {
   confidence?: number;
@@ -554,6 +640,21 @@ router.put('/:id', requireAuth, requireAdmin, async (req: Request, res: Response
       }
     }
 
+    // Handle detail_page_config with deep-merge
+    if (req.body.detail_page_config !== undefined) {
+      validateDetailPageConfig(req.body.detail_page_config);
+      const mode = (req.body.detail_page_config_mode as 'replace' | 'merge') || 'merge';
+      if (req.body.detail_page_config === null) {
+        updateData.detail_page_config = null;
+      } else {
+        updateData.detail_page_config = mergeDetailPageConfig(
+          source.detail_page_config as DetailPageConfig | null,
+          req.body.detail_page_config,
+          mode,
+        );
+      }
+    }
+
     if (Object.keys(updateData).length === 0) {
       throw createError('No fields to update', 400, 'VALIDATION_ERROR');
     }
@@ -593,6 +694,21 @@ router.patch('/:id', requireAuth, requireAdmin, async (req: Request, res: Respon
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
         updateData[field] = req.body[field];
+      }
+    }
+
+    // Handle detail_page_config with deep-merge
+    if (req.body.detail_page_config !== undefined) {
+      validateDetailPageConfig(req.body.detail_page_config);
+      const mode = (req.body.detail_page_config_mode as 'replace' | 'merge') || 'merge';
+      if (req.body.detail_page_config === null) {
+        updateData.detail_page_config = null;
+      } else {
+        updateData.detail_page_config = mergeDetailPageConfig(
+          source.detail_page_config as DetailPageConfig | null,
+          req.body.detail_page_config,
+          mode,
+        );
       }
     }
 

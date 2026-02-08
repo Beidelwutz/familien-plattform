@@ -337,6 +337,62 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           />
           <label for="edit-active" class="text-sm font-medium text-gray-700">Aktiv</label>
         </div>
+
+        <!-- Detail-Seiten Selektoren Accordion -->
+        <details id="detail-selectors-accordion" class="border border-gray-200 rounded-lg overflow-hidden">
+          <summary class="px-3 py-2 bg-gray-50 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 transition select-none flex items-center gap-2">
+            <svg class="w-4 h-4 text-gray-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            Detail-Seiten Selektoren
+            <span id="selector-count-badge" class="text-xs text-gray-400 ml-auto"></span>
+          </summary>
+          <div class="p-3 space-y-3 bg-white">
+            <p class="text-xs text-gray-500 mb-2">CSS-Selektoren fuer Event-Detail-Seiten dieser Quelle. Komma-getrennt = Fallback-Reihenfolge.</p>
+            
+            <div id="selector-fields" class="space-y-2">
+              <!-- Dynamically populated selector rows -->
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Datumsformate</label>
+                <input type="text" id="edit-date-formats" placeholder="DD.MM.YYYY HH:mm, DD.MM.YYYY" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Notizen</label>
+                <input type="text" id="edit-selector-notes" placeholder="Freitext-Notizen..." class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none" />
+              </div>
+            </div>
+
+            <!-- Test section -->
+            <div class="pt-2 border-t border-gray-100">
+              <div class="flex items-center gap-2 mb-2">
+                <label class="text-xs font-medium text-gray-600 whitespace-nowrap">Test-URL:</label>
+                <input type="url" id="edit-test-url" placeholder="https://example.com/event/123" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none" />
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="test-selectors-btn" class="px-3 py-1.5 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 transition disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  Selektoren testen
+                </button>
+                <div id="test-ampel" class="hidden flex items-center gap-1.5">
+                  <span id="test-ampel-dot" class="w-2.5 h-2.5 rounded-full"></span>
+                  <span id="test-ampel-label" class="text-xs font-medium"></span>
+                </div>
+              </div>
+              <div id="test-results" class="hidden mt-2 p-2 bg-gray-50 rounded text-xs space-y-1 max-h-48 overflow-y-auto"></div>
+            </div>
+
+            <!-- Suggestions banner -->
+            <div id="selector-suggestions-banner" class="hidden p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-medium text-blue-800">AI-Selektor-Vorschlaege verfuegbar</span>
+                <button type="button" id="apply-all-suggestions" class="px-2 py-0.5 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 transition">
+                  Alle uebernehmen
+                </button>
+              </div>
+              <div id="suggestion-details" class="space-y-0.5 text-blue-700"></div>
+            </div>
+          </div>
+        </details>
         
         <div class="flex gap-2 pt-4 border-t border-gray-200">
           <button 
@@ -1337,6 +1393,213 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   }
 
   // Open edit modal
+  // ── Detail-Seiten Selektoren (Accordion in Edit Modal) ──
+
+  const SELECTOR_FIELDS = [
+    { key: 'title',            label: 'Titel',           defaultAttr: 'text' },
+    { key: 'description',      label: 'Beschreibung',    defaultAttr: 'text' },
+    { key: 'start_datetime',   label: 'Startdatum',      defaultAttr: 'datetime' },
+    { key: 'end_datetime',     label: 'Enddatum',        defaultAttr: 'datetime' },
+    { key: 'location_name',    label: 'Ort (Name)',       defaultAttr: 'text' },
+    { key: 'location_address', label: 'Ort (Adresse)',    defaultAttr: 'text' },
+    { key: 'image',            label: 'Bild',             defaultAttr: 'src' },
+    { key: 'price',            label: 'Preis',            defaultAttr: 'text' },
+    { key: 'organizer',        label: 'Veranstalter',     defaultAttr: 'text' },
+  ];
+  const VALID_ATTRS = ['text', 'datetime', 'src', 'href', 'content'];
+  let currentSuggestions = null; // Stored suggestions from last test
+
+  function renderSelectorFields(config) {
+    const container = document.getElementById('selector-fields');
+    const selectors = config?.selectors || {};
+    container.innerHTML = SELECTOR_FIELDS.map(f => {
+      const sel = selectors[f.key] || {};
+      const cssVal = (sel.css || []).join(', ');
+      const attrVal = sel.attr || f.defaultAttr;
+      return `
+        <div class="grid grid-cols-[120px_1fr_90px_28px] gap-1.5 items-center" data-field="${f.key}">
+          <label class="text-xs text-gray-600 truncate" title="${f.key}">${f.label}</label>
+          <input type="text" data-css="${f.key}" value="${escapeAttr(cssVal)}" placeholder="CSS Selektoren..." class="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none" />
+          <select data-attr="${f.key}" class="px-1 py-1 border border-gray-300 rounded text-xs bg-white focus:ring-1 focus:ring-primary-500 focus:border-primary-500 outline-none">
+            ${VALID_ATTRS.map(a => `<option value="${a}" ${a === attrVal ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+          <span data-suggestion-badge="${f.key}" class="hidden w-5 h-5 flex items-center justify-center rounded-full bg-blue-100 text-blue-600 text-xs cursor-pointer hover:bg-blue-200 transition" title="AI-Vorschlag uebernehmen">A</span>
+        </div>`;
+    }).join('');
+
+    // Date formats & notes
+    const parsing = config?.parsing || {};
+    document.getElementById('edit-date-formats').value = (parsing.date_formats || []).join(', ');
+    document.getElementById('edit-selector-notes').value = config?.notes || '';
+
+    // Count configured selectors
+    const count = Object.values(selectors).filter(s => s?.css?.length > 0).length;
+    document.getElementById('selector-count-badge').textContent = count > 0 ? `${count} konfiguriert` : '';
+  }
+
+  function escapeAttr(val) {
+    return (val || '').replace(/"/g, '&quot;');
+  }
+
+  function collectDetailPageConfig() {
+    const selectors = {};
+    for (const f of SELECTOR_FIELDS) {
+      const cssInput = document.querySelector(`[data-css="${f.key}"]`);
+      const attrSelect = document.querySelector(`[data-attr="${f.key}"]`);
+      if (!cssInput || !attrSelect) continue;
+      const cssVal = cssInput.value.trim();
+      if (!cssVal) continue;
+      selectors[f.key] = {
+        css: cssVal.split(',').map(s => s.trim()).filter(Boolean),
+        attr: attrSelect.value,
+      };
+    }
+    const dateFormatsVal = document.getElementById('edit-date-formats').value.trim();
+    const notesVal = document.getElementById('edit-selector-notes').value.trim();
+
+    if (Object.keys(selectors).length === 0 && !dateFormatsVal && !notesVal) return null;
+
+    return {
+      selectors,
+      parsing: {
+        timezone: 'Europe/Berlin',
+        date_formats: dateFormatsVal ? dateFormatsVal.split(',').map(s => s.trim()).filter(Boolean) : [],
+      },
+      notes: notesVal || undefined,
+    };
+  }
+
+  // Test button handler
+  document.getElementById('test-selectors-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('test-selectors-btn');
+    const testUrl = document.getElementById('edit-test-url').value.trim()
+      || document.getElementById('edit-url').value.trim();
+    if (!testUrl) {
+      alert('Bitte eine Test-URL eingeben oder die Quell-URL verwenden.');
+      return;
+    }
+    const config = collectDetailPageConfig();
+    btn.disabled = true;
+    btn.textContent = 'Teste...';
+    const resultsEl = document.getElementById('test-results');
+    const ampelEl = document.getElementById('test-ampel');
+    resultsEl.classList.remove('hidden');
+    resultsEl.innerHTML = '<p class="text-gray-500">Crawle und extrahiere...</p>';
+    ampelEl.classList.add('hidden');
+
+    try {
+      const res = await apiFetch('/api/admin/test-selectors', {
+        method: 'POST',
+        body: JSON.stringify({ url: testUrl, detail_page_config: config }),
+      });
+      const data = res.data || res;
+
+      // Render results
+      const REQUIRED_FIELDS = ['title', 'start_datetime'];
+      const locationFields = ['location_name', 'location_address'];
+      let requiredFound = 0;
+      let locationFound = false;
+
+      let html = '';
+      for (const f of SELECTOR_FIELDS) {
+        const found = data.fields_found?.[f.key];
+        const prov = data.field_provenance?.[f.key];
+        const isMissing = !found;
+        const icon = isMissing ? '<span class="text-red-500">&#x2717;</span>' : '<span class="text-green-500">&#x2713;</span>';
+        const valueStr = found ? String(found).substring(0, 80) : '(fehlt)';
+        const provStr = prov ? `<span class="text-gray-400">[${prov.source}, ${(prov.confidence * 100).toFixed(0)}%]</span>` : '';
+        html += `<div class="flex items-start gap-1">${icon} <strong>${f.label}:</strong> ${escapeHtml(valueStr)} ${provStr}</div>`;
+        if (REQUIRED_FIELDS.includes(f.key) && found) requiredFound++;
+        if (locationFields.includes(f.key) && found) locationFound = true;
+      }
+      if (data.fields_missing?.length) {
+        html += `<div class="text-gray-400 mt-1">Fehlend: ${data.fields_missing.join(', ')}</div>`;
+      }
+      if (data.extraction_method) {
+        html += `<div class="text-gray-400">Methode: ${data.extraction_method}</div>`;
+      }
+      resultsEl.innerHTML = html;
+
+      // Ampel
+      const allRequired = requiredFound >= REQUIRED_FIELDS.length && locationFound;
+      const partial = requiredFound > 0 || locationFound;
+      const dotEl = document.getElementById('test-ampel-dot');
+      const labelEl = document.getElementById('test-ampel-label');
+      ampelEl.classList.remove('hidden');
+      if (allRequired) {
+        dotEl.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
+        labelEl.textContent = 'Ready';
+        labelEl.className = 'text-xs font-medium text-green-700';
+      } else if (partial) {
+        dotEl.className = 'w-2.5 h-2.5 rounded-full bg-yellow-500';
+        labelEl.textContent = 'Partial';
+        labelEl.className = 'text-xs font-medium text-yellow-700';
+      } else {
+        dotEl.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+        labelEl.textContent = 'Broken';
+        labelEl.className = 'text-xs font-medium text-red-700';
+      }
+
+      // Suggestions
+      if (data.suggested_selectors && Object.keys(data.suggested_selectors).length > 0) {
+        currentSuggestions = data.suggested_selectors;
+        showSuggestions(data.suggested_selectors);
+      } else {
+        currentSuggestions = null;
+        document.getElementById('selector-suggestions-banner').classList.add('hidden');
+      }
+    } catch (e) {
+      resultsEl.innerHTML = `<p class="text-red-600">Fehler: ${escapeHtml(e.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Selektoren testen';
+    }
+  });
+
+  function showSuggestions(suggestions) {
+    const banner = document.getElementById('selector-suggestions-banner');
+    const details = document.getElementById('suggestion-details');
+    banner.classList.remove('hidden');
+    details.innerHTML = Object.entries(suggestions).map(([field, sel]) => {
+      const label = SELECTOR_FIELDS.find(f => f.key === field)?.label || field;
+      return `<div><strong>${label}:</strong> ${(sel.css || []).join(', ')} (${sel.attr})</div>`;
+    }).join('');
+
+    // Show per-field badges
+    for (const [field, sel] of Object.entries(suggestions)) {
+      const badge = document.querySelector(`[data-suggestion-badge="${field}"]`);
+      if (badge) {
+        badge.classList.remove('hidden');
+        badge.classList.add('flex');
+        badge.onclick = () => applySuggestion(field, sel);
+      }
+    }
+  }
+
+  function applySuggestion(field, sel) {
+    const cssInput = document.querySelector(`[data-css="${field}"]`);
+    const attrSelect = document.querySelector(`[data-attr="${field}"]`);
+    if (cssInput && sel.css) cssInput.value = sel.css.join(', ');
+    if (attrSelect && sel.attr) attrSelect.value = sel.attr;
+    // Hide badge after applying
+    const badge = document.querySelector(`[data-suggestion-badge="${field}"]`);
+    if (badge) badge.classList.add('hidden');
+  }
+
+  document.getElementById('apply-all-suggestions').addEventListener('click', () => {
+    if (!currentSuggestions) return;
+    for (const [field, sel] of Object.entries(currentSuggestions)) {
+      applySuggestion(field, sel);
+    }
+    document.getElementById('selector-suggestions-banner').classList.add('hidden');
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
   function openEditModal(id) {
     const source = sources.find(s => s.id === id);
     if (!source && id !== 'new') return;
@@ -1353,6 +1616,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       document.getElementById('edit-priority').value = '5';
       document.getElementById('edit-interval').value = '60';
       document.getElementById('edit-active').checked = true;
+      renderSelectorFields(null);
     } else {
       title.textContent = 'Quelle bearbeiten';
       document.getElementById('edit-id').value = source.id;
@@ -1362,7 +1626,18 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       document.getElementById('edit-priority').value = source.priority || '';
       document.getElementById('edit-interval').value = source.fetch_interval_minutes || '';
       document.getElementById('edit-active').checked = source.is_active !== false;
+      renderSelectorFields(source.detail_page_config);
     }
+
+    // Reset test state
+    document.getElementById('test-results').classList.add('hidden');
+    document.getElementById('test-ampel').classList.add('hidden');
+    document.getElementById('selector-suggestions-banner').classList.add('hidden');
+    document.getElementById('edit-test-url').value = '';
+    currentSuggestions = null;
+
+    // Close accordion by default
+    document.getElementById('detail-selectors-accordion').removeAttribute('open');
 
     modal.classList.remove('hidden');
   }
@@ -1385,6 +1660,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       fetch_interval_minutes: parseInt(document.getElementById('edit-interval').value) || null,
       is_active: document.getElementById('edit-active').checked,
     };
+
+    // Include detail_page_config if any selectors are configured
+    const detailConfig = collectDetailPageConfig();
+    if (detailConfig !== null) {
+      data.detail_page_config = detailConfig;
+      data.detail_page_config_mode = 'replace'; // Full replace on manual save
+    }
 
     try {
       if (id) {

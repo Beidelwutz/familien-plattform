@@ -221,7 +221,7 @@ class PoliteScraper:
         
         # Try structured data first
         if "jsonld" in self.config.strategies or "microdata" in self.config.strategies:
-            extracted = self.structured_extractor.extract(html)
+            extracted = self.structured_extractor.extract(html, include_heuristic=True)
             if extracted:
                 events = [self._to_parsed_event(e) for e in extracted]
                 logger.info(f"Extracted {len(events)} events via structured data")
@@ -263,7 +263,7 @@ class PoliteScraper:
                 continue
             if "jsonld" not in self.config.strategies and "microdata" not in self.config.strategies:
                 continue
-            extracted = self.structured_extractor.extract(html)
+            extracted = self.structured_extractor.extract(html, include_heuristic=True)
             for e in extracted:
                 pe = self._to_parsed_event(e)
                 if pe.fingerprint not in seen_fingerprints:

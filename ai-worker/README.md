@@ -169,6 +169,7 @@ Basis-URL: `http://localhost:5000` (oder `PORT` aus `.env`).
 | Method | Pfad | Beschreibung |
 |--------|------|--------------|
 | `POST` | `/crawl/trigger` | Crawl für eine Quelle auslösen. Body: `CrawlRequest` (source_id, source_url optional, source_type `rss`\|`ics`, force, enable_ai, fetch_event_pages, ingest_run_id). Job wird in Redis eingereiht (oder bei Redis-Ausfall: synchron im Hintergrund). Response: job_id, source_id, status, message. |
+| `POST` | `/crawl/single-event` | **Einzelne Event-Detailseite** crawlen. Body: `url`, `fields_needed`, `use_ai`, optional `detail_page_config` (Quell-spezifische CSS-Selektoren), `source_id`. 4-Stufen-Pipeline: Custom Selectors → Structured Data (JSON-LD/Microdata) → Heuristik → AI-Fallback. Response: `fields_found`, `fields_missing`, `field_provenance`, `suggested_selectors`. Vor dem Abruf: SSRF-Guard (private IPs blockiert, max. Response-Größe). Siehe [docs/DETAIL_PAGE_CRAWL.md](../docs/DETAIL_PAGE_CRAWL.md). |
 | `GET` | `/crawl/status/{job_id}` | Status eines Crawl-Jobs. Response: job_id, source_id, status, started_at, finished_at, events_found, events_new, error. |
 | `GET` | `/crawl/queue-stats` | Queue-Längen (z. B. crawl). |
 | `POST` | `/crawl/process-feed` | Feed-URL direkt parsen (Query: feed_url, source_type=rss\|ics). Kein Speichern, nur Test; liefert Anzahl Events und Preview der ersten 10. |
@@ -276,7 +277,7 @@ Backend erhält `IngestBatchRequest` (run_id, source_id, candidates als Liste se
   - `src/main.py` – FastAPI-App, Router.  
   - `src/routes/` – health, classify, crawl, plan, metrics.  
   - `src/queue/` – job_queue (Redis), worker (process_crawl_job, process_classify_job, process_score_job).  
-  - `src/crawlers/` – feed_parser, rss_deep_fetch.  
+  - `src/crawlers/` – feed_parser, rss_deep_fetch, **custom_selector_extractor** (Detail-Page-Selektoren + SelectorSuggester), **heuristic_extractor** (Datums-/Adress-/Preis-Heuristik), **ssrf_guard** (URL-Validierung vor Fetch), structured_data (JSON-LD/Microdata).  
   - `src/classifiers/`, `src/scorers/`, `src/planner/` – AI-Logik.  
   - `src/ingestion/` – in_run_dedupe, normalizer.  
   - `src/models/candidate.py` – CanonicalCandidate, CandidateData, AISuggestions, IngestBatchRequest.

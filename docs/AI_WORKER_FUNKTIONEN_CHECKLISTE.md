@@ -67,6 +67,10 @@ Stand: Code-Analyse (Laufzeittests erfordern Python/Umgebung).
 | 4.2 | `GET /crawl/status/{job_id}` | Job-Status abfragen | 🔲 Redis für echte Statusdaten |
 | 4.3 | `GET /crawl/queue-stats` | Queue-Länge (crawl) | 🔲 Redis |
 | 4.4 | `POST /crawl/process-feed` | Feed-URL direkt parsen (RSS/ICS), nur Vorschau | ✅ (kein Redis nötig) |
+| 4.5 | `POST /crawl/single-event` | Einzelne Event-Detailseite crawlen (Custom Selectors → Structured → Heuristik → AI) | ✅ |
+| 4.5.1 | | SSRF-Guard vor Fetch (private IPs, Scheme, max. Response-Größe) | ✅ |
+| 4.5.2 | | Optional `detail_page_config` + `source_id` vom Backend; Pipeline wendet Selektoren zuerst an | ✅ |
+| 4.5.3 | | Response: `fields_found`, `field_provenance`, `suggested_selectors` | ✅ |
 
 **Worker-Pipeline (bei Sync/Queue):**  
 `process_crawl_job` → FeedParser → ggf. Deep-Fetch → Normalizer → In-Run-Dedupe → ggf. AI (Classifier+Scorer) → Batch an Backend `POST /api/sources/ingest/batch`.
@@ -118,6 +122,9 @@ Stand: Code-Analyse (Laufzeittests erfordern Python/Umgebung).
 | **queue.worker** | process_crawl_job, enrich_with_ai, Batch-Ingest an Backend | 🔲 |
 | **crawlers.feed_parser** | RSS/ICS parsen | ✅ |
 | **crawlers.rss_deep_fetch** | Optional Deep-Fetch | ✅ |
+| **crawlers.custom_selector_extractor** | CustomSelectorExtractor, SelectorSuggester (Detail-Page-Selektoren) | ✅ |
+| **crawlers.heuristic_extractor** | Heuristik aus HTML-Text (Datums-, Adress-, Preis-Muster) | ✅ |
+| **crawlers.ssrf_guard** | URL-Validierung vor Fetch (SSRF-Schutz) | ✅ |
 | **planner.plan_generator** | generate(), Wetter, AI-Pläne | 🔲 API-Key |
 | **monitoring.ai_cost_tracker** | Budget, Usage | ✅ |
 | **lib.pii_redactor** | PII vor AI | ✅ |
@@ -136,6 +143,8 @@ Stand: Code-Analyse (Laufzeittests erfordern Python/Umgebung).
 | GET /api/admin/ai-worker/stats | (eigene DB/Redis, nicht Worker) | – |
 | GET /api/admin/ai-worker/queue-stats | GET /crawl/queue-stats | 🔲 |
 | Crawl-Trigger (Sources) | POST /crawl/trigger | 🔲 |
+| POST /api/admin/events/:id/trigger-ai (mit force_crawl) | POST /crawl/single-event (inkl. detail_page_config, source per URL-Match) | 🔲 |
+| POST /api/admin/test-selectors | POST /crawl/single-event (Test-URL + Config) | 🔲 |
 | POST /api/plan/generate (mit use_ai) | POST /plan/optimize | 🔲 |
 
 ---

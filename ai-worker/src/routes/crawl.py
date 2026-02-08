@@ -282,7 +282,7 @@ async def _detect_source_type(url: str) -> dict:
                 # 3. Check for JSON-LD and Microdata events on page
                 from src.crawlers.structured_data import StructuredDataExtractor
                 extractor = StructuredDataExtractor()
-                extracted = extractor.extract(html)
+                extracted = extractor.extract(html, include_heuristic=True)
                 if extracted:
                     result["has_json_ld_events"] = True  # extractor uses jsonld first
                     result["sample_events"] = [
@@ -343,28 +343,30 @@ async def detect_source(request: DetectRequest):
 class SingleEventCrawlRequest(BaseModel):
     """Request to crawl a single event page URL for missing fields."""
     url: str
-    fields_needed: Optional[list[str]] = None  # e.g. ["location_address", "end_datetime", "image_url"]
-    use_ai: bool = True  # Use AI as fallback when structured/heuristic extraction is incomplete
+    fields_needed: Optional[list[str]] = None
+    use_ai: bool = True
+    detail_page_config: Optional[dict] = None   # Source-specific selectors
+    source_id: Optional[str] = None              # For provenance tracking
 
 
 class SingleEventCrawlResponse(BaseModel):
     """Response from single-event crawl."""
     success: bool = True
-    fields_found: dict = {}  # field name -> value (serializable)
-    fields_missing: list[str] = []
-    extraction_method: Optional[str] = None  # "json_ld", "microdata", "heuristic", "ai", "heuristic+ai"
+    fields_found: dict = {}             # Only final accepted fields
+    fields_missing: list[str] = []      # Exactly fields_needed - fields_found.keys()
+    extraction_method: Optional[str] = None
     error: Optional[str] = None
+    field_provenance: dict = {}         # Same key-set as fields_found
+    suggested_selectors: Optional[dict] = None  # Always {css:[], attr} format
 
 
 def _extract_visible_text(html: str, max_length: int = 5000) -> str:
     """Extract visible text from HTML for AI processing, removing noise."""
     soup = BeautifulSoup(html, 'lxml')
-    # Remove noisy elements
     for tag_name in ('script', 'style', 'nav', 'footer', 'aside', 'noscript',
                      'iframe', 'svg', 'form'):
         for el in soup.find_all(tag_name):
             el.decompose()
-    # Remove cookie/banner elements
     for el in soup.find_all(True, attrs={
         'class': re.compile(r'cookie|consent|banner|popup|modal|gdpr', re.I),
     }):
@@ -374,7 +376,6 @@ def _extract_visible_text(html: str, max_length: int = 5000) -> str:
     }):
         el.decompose()
     text = soup.get_text(separator='\n', strip=True)
-    # Collapse excessive whitespace
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text[:max_length]
 
@@ -401,20 +402,37 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
     """
     Crawl a single event page URL to extract event data.
 
-    Extraction pipeline:
-    1. Structured data (JSON-LD / Microdata)
-    2. Heuristic HTML text extraction (German dates, addresses)
-    3. AI extraction as fallback (sends visible page text to LLM)
+    Config-aware 4-stage extraction pipeline:
+    1. Custom Selectors   (from detail_page_config, if provided)
+    2. Structured Data     (JSON-LD / Microdata)
+    3. Heuristic           (German dates, addresses, price)
+    4. AI Fallback         (LLM extraction + heuristic selector suggestions)
+
+    Merge rule: earlier stage wins (per field). Later stages only fill missing fields.
+    Provenance is tracked per field throughout.
     """
     if not request.url or not request.url.strip().startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Valid URL required")
     url = request.url.strip()
+
+    # SSRF guard
+    from src.crawlers.ssrf_guard import validate_url_safe, MAX_RESPONSE_SIZE
+    try:
+        validate_url_safe(url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"URL blocked: {e}")
+
     fields_needed = request.fields_needed or [
         "location_address", "location_name", "start_datetime", "end_datetime",
         "image_url", "description", "price", "organizer_name"
     ]
+
+    from src.crawlers.custom_selector_extractor import CustomSelectorExtractor, ExtractionResult, SelectorSuggester
+    from src.crawlers.heuristic_extractor import HeuristicExtractor
+    from src.crawlers.structured_data import StructuredDataExtractor
+
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, max_redirects=5) as client:
             response = await client.get(
                 url,
                 headers={
@@ -429,41 +447,89 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
                     fields_missing=fields_needed,
                     error=f"HTTP {response.status_code}"
                 )
+
+            # Enforce max response size
+            if len(response.content) > MAX_RESPONSE_SIZE:
+                return SingleEventCrawlResponse(
+                    success=False,
+                    fields_found={},
+                    fields_missing=fields_needed,
+                    error=f"Response too large ({len(response.content)} bytes, max {MAX_RESPONSE_SIZE})"
+                )
+
             html = response.text
+            all_results: dict[str, ExtractionResult] = {}
+            methods_used: list[str] = []
+            fields_still_needed = list(fields_needed)
 
-            # --- Step 1+2: Structured data + heuristic extraction ---
-            from src.crawlers.structured_data import StructuredDataExtractor
-            extractor = StructuredDataExtractor()
-            extracted_list = extractor.extract(html)
+            # ── Stage 1: Custom Selectors (from detail_page_config) ──
+            if request.detail_page_config and request.detail_page_config.get("selectors"):
+                try:
+                    custom_extractor = CustomSelectorExtractor()
+                    custom_results = custom_extractor.extract(
+                        html, request.detail_page_config, fields_still_needed, base_url=url
+                    )
+                    all_results.update(custom_results)
+                    fields_still_needed = [f for f in fields_needed if f not in all_results]
+                    if custom_results:
+                        methods_used.append("custom_selector")
+                except Exception as e:
+                    logger.warning(f"Custom selector extraction failed: {e}")
 
-            fields_found: dict = {}
-            extraction_method: Optional[str] = None
+            # ── Stage 2: Structured Data (JSON-LD / Microdata) ──
+            if fields_still_needed:
+                try:
+                    structured_extractor = StructuredDataExtractor()
+                    extracted_list = structured_extractor.extract(html)  # No heuristic
 
-            if extracted_list:
-                e = extracted_list[0]
-                extraction_method = "structured"  # Could be json_ld, microdata, or heuristic
-                field_map = {
-                    "location_address": e.location_address,
-                    "location_name": e.location_name,
-                    "start_datetime": e.start_datetime.isoformat() if e.start_datetime else None,
-                    "end_datetime": e.end_datetime.isoformat() if e.end_datetime else None,
-                    "image_url": e.image_url,
-                    "description": e.description,
-                    "price": e.price,
-                    "organizer_name": e.organizer_name,
-                    "lat": e.lat,
-                    "lng": e.lng,
-                }
-                for name in fields_needed:
-                    if name in field_map:
-                        val = field_map[name]
-                        if val is not None and val != "":
-                            fields_found[name] = val
+                    if extracted_list:
+                        e = extracted_list[0]
+                        field_map = {
+                            "location_address": e.location_address,
+                            "location_name": e.location_name,
+                            "start_datetime": e.start_datetime.isoformat() if e.start_datetime else None,
+                            "end_datetime": e.end_datetime.isoformat() if e.end_datetime else None,
+                            "image_url": e.image_url,
+                            "image": e.image_url,
+                            "description": e.description,
+                            "price": e.price,
+                            "organizer_name": e.organizer_name,
+                            "organizer": e.organizer_name,
+                            "lat": e.lat,
+                            "lng": e.lng,
+                        }
+                        for name in fields_still_needed:
+                            val = field_map.get(name)
+                            if val is not None and str(val).strip() != "":
+                                all_results[name] = ExtractionResult(
+                                    value=val if not isinstance(val, float) else val,
+                                    confidence=0.90,
+                                    source="jsonld",
+                                    evidence="jsonld/microdata",
+                                )
+                        fields_still_needed = [f for f in fields_needed if f not in all_results]
+                        if any(n not in fields_still_needed for n in fields_needed):
+                            methods_used.append("structured")
+                except Exception as e:
+                    logger.warning(f"Structured data extraction failed: {e}")
 
-            # --- Step 3: AI fallback for still-missing fields ---
-            fields_missing = [f for f in fields_needed if f not in fields_found]
+            # ── Stage 3: Heuristic (German dates, addresses, price) ──
+            if fields_still_needed:
+                try:
+                    heuristic_extractor = HeuristicExtractor()
+                    heuristic_results = heuristic_extractor.extract(html, fields_still_needed)
+                    # Only add fields that are still needed
+                    for name in fields_still_needed:
+                        if name in heuristic_results:
+                            all_results[name] = heuristic_results[name]
+                    fields_still_needed = [f for f in fields_needed if f not in all_results]
+                    if heuristic_results:
+                        methods_used.append("heuristic")
+                except Exception as e:
+                    logger.warning(f"Heuristic extraction failed: {e}")
 
-            if fields_missing and request.use_ai:
+            # ── Stage 4: AI Fallback ──
+            if fields_still_needed and request.use_ai:
                 try:
                     from src.classifiers.event_classifier import EventClassifier
                     from src.config import get_settings
@@ -477,44 +543,74 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
                         event_data = {
                             "title": title_guess,
                             "description": visible_text,
-                            "location_address": fields_found.get("location_address", ""),
+                            "location_address": all_results["location_address"].value if "location_address" in all_results else "",
                         }
                         ai_result = await classifier.classify(event_data)
 
-                        # Map AI-extracted fields to the fields we need
+                        # Extended AI field mapping (more fields than before)
                         ai_field_map = {
                             "location_address": ai_result.extracted_location_address,
                             "location_name": ai_result.extracted_venue_name,
                             "start_datetime": ai_result.extracted_start_datetime,
                             "end_datetime": ai_result.extracted_end_datetime,
                             "description": ai_result.ai_summary_short,
+                            "price_type": getattr(ai_result, 'extracted_price_type', None),
+                            "price": getattr(ai_result, 'extracted_price_min', None),
+                            "price_min": getattr(ai_result, 'extracted_price_min', None),
+                            "price_max": getattr(ai_result, 'extracted_price_max', None),
+                            "postal_code": getattr(ai_result, 'extracted_postal_code', None),
+                            "city": getattr(ai_result, 'extracted_city', None),
                         }
 
-                        ai_filled = False
-                        for name in list(fields_missing):
-                            if name in ai_field_map:
-                                val = ai_field_map[name]
-                                if val is not None and val != "":
-                                    fields_found[name] = val
-                                    ai_filled = True
+                        for name in list(fields_still_needed):
+                            val = ai_field_map.get(name)
+                            if val is not None and str(val).strip() != "":
+                                all_results[name] = ExtractionResult(
+                                    value=val,
+                                    confidence=0.70,
+                                    source="ai",
+                                    evidence="event_classifier",
+                                )
 
-                        if ai_filled:
-                            extraction_method = (
-                                f"{extraction_method}+ai" if extraction_method else "ai"
-                            )
+                        fields_still_needed = [f for f in fields_needed if f not in all_results]
+                        if any(n not in fields_still_needed for n in fields_needed):
+                            methods_used.append("ai")
 
                         logger.info(
-                            f"AI fallback for {url}: filled {sum(1 for f in fields_missing if f in fields_found)} additional fields"
+                            f"AI fallback for {url}: {len(fields_needed) - len(fields_still_needed)} fields total"
                         )
                 except Exception as ai_err:
                     logger.warning(f"AI fallback failed for {url}: {ai_err}")
 
-            # Final missing fields
+            # ── Build consistent response (invariant: fields_found.keys() == field_provenance.keys()) ──
+            fields_found = {k: v.value for k, v in all_results.items()}
+            field_provenance = {
+                k: {"source": v.source, "confidence": v.confidence, "evidence": v.evidence}
+                for k, v in all_results.items()
+            }
             fields_missing = [f for f in fields_needed if f not in fields_found]
+
+            extraction_method = "+".join(methods_used) if methods_used else None
+
+            # ── Heuristic selector suggestions (for AI-extracted fields) ──
+            suggested_selectors: Optional[dict] = None
+            ai_extracted_values = {
+                k: v.value for k, v in all_results.items()
+                if v.source in ("ai", "heuristic") and isinstance(v.value, str)
+            }
+            if ai_extracted_values:
+                try:
+                    suggester = SelectorSuggester()
+                    soup = BeautifulSoup(html, 'lxml')
+                    suggested = suggester.suggest(soup, ai_extracted_values)
+                    if suggested:
+                        suggested_selectors = suggested
+                except Exception as e:
+                    logger.debug(f"Selector suggestion failed: {e}")
 
             error_msg = None
             if not fields_found:
-                error_msg = "Keine Event-Daten auf der Seite gefunden (weder strukturiert noch per Heuristik/AI)"
+                error_msg = "Keine Event-Daten auf der Seite gefunden (weder per Selektoren, strukturiert, Heuristik noch AI)"
 
             return SingleEventCrawlResponse(
                 success=True,
@@ -522,6 +618,8 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
                 fields_missing=fields_missing,
                 extraction_method=extraction_method,
                 error=error_msg,
+                field_provenance=field_provenance,
+                suggested_selectors=suggested_selectors,
             )
     except httpx.TimeoutException as e:
         return SingleEventCrawlResponse(

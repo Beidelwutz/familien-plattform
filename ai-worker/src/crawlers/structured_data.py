@@ -62,17 +62,22 @@ class StructuredDataExtractor:
         'CourseInstance',
     ]
     
-    def extract(self, html: str) -> list[ExtractedEvent]:
+    def extract(self, html: str, include_heuristic: bool = False) -> list[ExtractedEvent]:
         """
-        Extract events from HTML using all available methods.
+        Extract events from HTML using structured data methods.
         
         Priority:
         1. JSON-LD (most reliable)
         2. Microdata
-        3. HTML text heuristic (German dates, addresses from visible text)
+        3. HTML text heuristic (only if include_heuristic=True, for backward compat)
+        
+        Note: The heuristic extraction has been moved to heuristic_extractor.py.
+        The crawl pipeline calls it separately. Set include_heuristic=True only
+        for callers that still need the old behavior (e.g. deep-fetch).
         
         Args:
             html: HTML content of the page
+            include_heuristic: If True, fall back to heuristic extraction (backward compat)
             
         Returns:
             List of extracted events, empty if none found
@@ -91,14 +96,15 @@ class StructuredDataExtractor:
             logger.info(f"Extracted {len(events)} events from Microdata")
             return events
         
-        # 3. Try heuristic HTML text extraction (German dates, addresses)
-        events = self._extract_from_html_text(soup)
-        if events:
-            logger.info(f"Extracted {len(events)} events from HTML text (heuristic)")
-            return events
+        # 3. Heuristic fallback (only for backward compat callers)
+        if include_heuristic:
+            events = self._extract_from_html_text(soup)
+            if events:
+                logger.info(f"Extracted {len(events)} events from HTML text (heuristic)")
+                return events
         
-        # 4. No data found
-        logger.debug("No structured or heuristic data found on page")
+        # No data found
+        logger.debug("No structured data found on page")
         return []
     
     def _extract_jsonld(self, soup: BeautifulSoup) -> list[ExtractedEvent]:

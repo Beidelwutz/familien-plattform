@@ -9,6 +9,14 @@ und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/d
 
 ### Added
 
+- **Detail-Page Crawl-Regeln pro Quelle**
+  - Pro Source konfigurierbare CSS-Selektoren für Event-Detailseiten (`Source.detail_page_config`).
+  - Backend: PATCH/PUT `/api/sources/:id` mit per-Feld-Deep-Merge (`detail_page_config_mode: replace|merge`), strikte attr-Enum (`text`, `datetime`, `src`, `href`, `content`).
+  - Trigger-AI und Bulk-Crawl: Source wird per URL-Domain-Match ermittelt (nicht blind erste Event-Source); `detail_page_config` und `source_id` werden an den AI-Worker übergeben.
+  - AI-Worker: 4-Stufen-Pipeline (Custom Selectors → Structured Data → Heuristik → AI-Fallback), `field_provenance`, `suggested_selectors`; SSRF-Guard vor jedem Fetch; neue Module `custom_selector_extractor`, `heuristic_extractor`, `ssrf_guard`.
+  - Admin-UI: Accordion „Detail-Seiten Selektoren“ im Quellen-Edit-Modal, Test-URL + „Selektoren testen“, Ampel (Ready/Partial/Broken), Vorschläge übernehmen.
+  - Dokumentation: [docs/DETAIL_PAGE_CRAWL.md](docs/DETAIL_PAGE_CRAWL.md).
+
 - **Search Autocomplete System**
   - Suggestions basierend auf Suchanfragen und Kategorien
   - Trending-Begriffe mit 🔥 Badge

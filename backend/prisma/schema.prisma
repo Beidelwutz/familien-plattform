@@ -159,6 +159,7 @@ model Source {
   rate_limit_ms            Int               @default(5000)
   priority                 Int               @default(3)
   scraper_config           Json?
+  detail_page_config       Json?             // Selektoren/Regeln fuer Event-Detail-Seiten
   source_etag              String?           @db.VarChar(255)
   source_last_modified     DateTime?         @db.Timestamptz(6)
   notes                    String?

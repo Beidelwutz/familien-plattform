@@ -193,7 +193,7 @@ class SelectiveDeepFetcher:
                 return None
             
             html = response.text
-            events = self.extractor.extract(html)
+            events = self.extractor.extract(html, include_heuristic=True)
             
             if not events:
                 logger.debug(f"No structured data found on {url}")

@@ -782,7 +782,10 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
     const event = await prisma.canonicalEvent.findUnique({
       where: { id },
       include: {
-        event_sources: { take: 1, orderBy: { updated_at: 'desc' } }
+        event_sources: {
+          orderBy: { updated_at: 'desc' as const },
+          include: { source: { select: { id: true, detail_page_config: true, url: true } } }
+        }
       }
     });
     if (!event) {
@@ -795,8 +798,18 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
 
     // Optional: crawl single event URL for missing fields (raw response kept for UI)
     const crawlUrl = event.booking_url || event.event_sources?.[0]?.source_url || null;
-    let crawl_raw: { url: string; fields_found: Record<string, unknown>; fields_missing: string[]; extraction_method?: string; error?: string } | null = null;
+    let crawl_raw: { url: string; fields_found: Record<string, unknown>; fields_missing: string[]; extraction_method?: string; error?: string; field_provenance?: Record<string, unknown>; suggested_selectors?: Record<string, unknown> } | null = null;
     if (forceCrawl && crawlUrl) {
+      // Find source matching crawl URL domain (not blindly [0])
+      let matchedSource: { id: string; detail_page_config: unknown; url: string | null } | null = null;
+      try {
+        const crawlDomain = new URL(crawlUrl).hostname;
+        matchedSource = event.event_sources
+          .map(es => es.source)
+          .find(s => s?.url && new URL(s.url).hostname === crawlDomain) || null;
+      } catch { /* invalid URL, skip matching */ }
+      if (!matchedSource) matchedSource = event.event_sources[0]?.source || null;
+
       const fieldsNeeded: string[] = [];
       if (!event.location_address) fieldsNeeded.push('location_address');
       if (!event.start_datetime) fieldsNeeded.push('start_datetime');
@@ -808,16 +821,23 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
           const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: crawlUrl, fields_needed: fieldsNeeded }),
+            body: JSON.stringify({
+              url: crawlUrl,
+              fields_needed: fieldsNeeded,
+              detail_page_config: matchedSource?.detail_page_config || null,
+              source_id: matchedSource?.id || null,
+            }),
             signal: AbortSignal.timeout(20000),
           });
-          const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; fields_missing: string[]; extraction_method?: string; error?: string };
+          const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; fields_missing: string[]; extraction_method?: string; error?: string; field_provenance?: Record<string, unknown>; suggested_selectors?: Record<string, unknown> };
           crawl_raw = {
             url: crawlUrl,
             fields_found: crawlResult.fields_found || {},
             fields_missing: crawlResult.fields_missing || [],
             extraction_method: crawlResult.extraction_method,
             error: crawlResult.error,
+            field_provenance: crawlResult.field_provenance || undefined,
+            suggested_selectors: crawlResult.suggested_selectors || undefined,
           };
           if (!crawlRes.ok || !crawlResult.success) {
             const errMsg = crawlResult.error || `HTTP ${crawlRes.status}`;
@@ -2565,7 +2585,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             source_url: true,
             fetched_at: true,
             source: {
-              select: { id: true, name: true, type: true, url: true }
+              select: { id: true, name: true, type: true, url: true, detail_page_config: true }
             }
           }
         },
@@ -2598,6 +2618,17 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
       for (const event of pendingEvents) {
         const crawlUrl = event.booking_url || event.event_sources?.[0]?.source_url || null;
         if (!crawlUrl) continue;
+
+        // Find source matching crawl URL domain
+        let matchedSource: { id: string; detail_page_config: unknown; url: string | null } | null = null;
+        try {
+          const crawlDomain = new URL(crawlUrl).hostname;
+          matchedSource = event.event_sources
+            .map((es: any) => es.source)
+            .find((s: any) => s?.url && new URL(s.url).hostname === crawlDomain) || null;
+        } catch { /* skip */ }
+        if (!matchedSource) matchedSource = (event.event_sources[0] as any)?.source || null;
+
         const fieldsNeeded: string[] = [];
         if (!event.location_address || (typeof event.location_address === 'string' && !event.location_address.trim())) fieldsNeeded.push('location_address');
         if (!event.start_datetime) fieldsNeeded.push('start_datetime');
@@ -2608,7 +2639,12 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: crawlUrl, fields_needed: fieldsNeeded }),
+            body: JSON.stringify({
+              url: crawlUrl,
+              fields_needed: fieldsNeeded,
+              detail_page_config: matchedSource?.detail_page_config || null,
+              source_id: matchedSource?.id || null,
+            }),
             signal: AbortSignal.timeout(20000),
           });
           const crawlResult = await crawlRes.json() as { success: boolean; fields_found?: Record<string, unknown>; error?: string };
@@ -4030,9 +4066,11 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
           image_urls: true,
         } : {}),
         event_sources: {
-          take: 1,
-          orderBy: { updated_at: 'desc' },
-          select: { source_url: true },
+          orderBy: { updated_at: 'desc' as const },
+          select: {
+            source_url: true,
+            source: { select: { id: true, detail_page_config: true, url: true } },
+          },
         },
       },
     });
@@ -4071,6 +4109,17 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
           results.push({ id: event.id, success: false, message: 'Keine URL vorhanden' });
           continue;
         }
+
+        // Find source matching crawl URL domain
+        let matchedSource: { id: string; detail_page_config: unknown; url: string | null } | null = null;
+        try {
+          const crawlDomain = new URL(url).hostname;
+          matchedSource = event.event_sources
+            .map((es: any) => es.source)
+            .find((s: any) => s?.url && new URL(s.url).hostname === crawlDomain) || null;
+        } catch { /* skip */ }
+        if (!matchedSource) matchedSource = (event.event_sources[0] as any)?.source || null;
+
         const fieldsNeeded: string[] = [];
         if (!event.location_address || (typeof event.location_address === 'string' && !event.location_address.trim())) fieldsNeeded.push('location_address');
         if (!event.start_datetime) fieldsNeeded.push('start_datetime');
@@ -4085,7 +4134,12 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
           const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, fields_needed: fieldsNeeded }),
+            body: JSON.stringify({
+              url,
+              fields_needed: fieldsNeeded,
+              detail_page_config: matchedSource?.detail_page_config || null,
+              source_id: matchedSource?.id || null,
+            }),
             signal: AbortSignal.timeout(20000),
           });
           const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; error?: string };
@@ -4170,6 +4224,37 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// POST /api/admin/test-selectors - Test detail_page_config selectors against a URL
+// Used by the Admin "Selektoren testen" button on sources page
+router.post('/test-selectors', requireAuth, requireAdmin, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { url, detail_page_config } = req.body;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ success: false, error: 'url is required' });
+    }
+
+    const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        detail_page_config: detail_page_config || null,
+        use_ai: true,
+      }),
+      signal: AbortSignal.timeout(25000),
+    });
+    const crawlResult = await crawlRes.json();
+
+    res.json({
+      success: crawlResult.success ?? true,
+      data: crawlResult,
+    });
+  } catch (error: any) {
+    logger.error('test-selectors failed:', error);
+    res.status(500).json({ success: false, error: error?.message || 'Test fehlgeschlagen' });
   }
 });
 
