@@ -11,13 +11,28 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         <h1 class="text-2xl font-bold text-gray-900">AI Worker</h1>
         <p class="text-gray-500 text-sm mt-1">Pending-Events klassifizieren und Status setzen</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
         <div id="cost-badge" class="hidden px-3 py-1.5 rounded-full bg-purple-100 text-purple-700 text-sm font-medium">
           <span id="total-cost">$0.00</span>
         </div>
         <div id="health-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 text-gray-500 text-sm font-medium">
           <span id="health-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
           <span id="health-text">Pruefe...</span>
+        </div>
+        <!-- Diagnose inline: Worker, Redis, OpenAI -->
+        <div id="diagnostics-inline" class="flex items-center gap-2 flex-wrap">
+          <div id="diag-worker" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-xs">
+            <span id="diag-worker-dot" class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+            <span id="diag-worker-status">Worker …</span>
+          </div>
+          <div id="diag-redis" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-xs">
+            <span id="diag-redis-dot" class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+            <span id="diag-redis-status">Redis …</span>
+          </div>
+          <div id="diag-openai" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-xs">
+            <span id="diag-openai-dot" class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+            <span id="diag-openai-status">OpenAI …</span>
+          </div>
         </div>
       </div>
     </header>
@@ -146,8 +161,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         </div>
       </div>
 
-      <!-- Event Pipeline (Split-View) -->
-      <div id="pipeline-section" class="hidden">
+      <!-- Event Pipeline (Split-View) – dauerhaft sichtbar; beim Start Batch gehen Events hier rein -->
+      <div id="pipeline-section">
         <div class="flex gap-4 h-[600px]">
           <!-- Left: Event List -->
           <div class="w-80 flex-shrink-0 bg-white rounded-2xl shadow-card flex flex-col">
@@ -413,51 +428,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </div>
         </div>
       </div>
-
-      <!-- Diagnostics Section (collapsed by default) -->
-      <details class="bg-white rounded-2xl shadow-card">
-        <summary class="p-4 cursor-pointer font-semibold text-gray-900 hover:bg-gray-50 rounded-2xl">
-          &#x1F50D; Diagnose
-        </summary>
-        <div class="px-6 pb-6">
-          <div id="diagnostics-loading" class="text-center py-4">
-            <div class="animate-spin inline-block w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full"></div>
-          </div>
-          <div id="diagnostics-content" class="hidden">
-            <div class="grid grid-cols-3 gap-3 mb-4">
-              <div id="diag-worker" class="p-3 rounded-xl bg-gray-50">
-                <div class="flex items-center gap-2 mb-1">
-                  <span id="diag-worker-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-                  <span class="text-sm font-medium text-gray-700">AI-Worker</span>
-                </div>
-                <span id="diag-worker-status" class="text-xs text-gray-500">Pruefe...</span>
-              </div>
-              <div id="diag-redis" class="p-3 rounded-xl bg-gray-50">
-                <div class="flex items-center gap-2 mb-1">
-                  <span id="diag-redis-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-                  <span class="text-sm font-medium text-gray-700">Redis</span>
-                </div>
-                <span id="diag-redis-status" class="text-xs text-gray-500">Pruefe...</span>
-              </div>
-              <div id="diag-openai" class="p-3 rounded-xl bg-gray-50">
-                <div class="flex items-center gap-2 mb-1">
-                  <span id="diag-openai-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-                  <span class="text-sm font-medium text-gray-700">OpenAI API</span>
-                </div>
-                <span id="diag-openai-status" class="text-xs text-gray-500">Pruefe...</span>
-              </div>
-            </div>
-            <div class="text-xs text-gray-400 flex flex-wrap gap-4">
-              <span>Worker: <span id="diag-worker-url" class="font-mono">--</span></span>
-              <span>Version: <span id="diag-version" class="font-mono">--</span></span>
-              <span>Budget: <span id="diag-budget" class="font-mono">--</span></span>
-            </div>
-          </div>
-          <div id="diagnostics-error" class="hidden text-center py-4">
-            <p class="text-red-500 text-sm">AI-Worker nicht erreichbar</p>
-          </div>
-        </div>
-      </details>
 
       <!-- Quick Links -->
       <div class="flex flex-wrap gap-3">
@@ -1173,6 +1143,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         console.warn('Restore job failed:', restoreErr);
         try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
       }
+      // Pipeline ist dauerhaft sichtbar: Leerzustand anzeigen, falls noch keine Events
+      renderEventList();
     } catch (e) {
       console.error('Load error:', e);
       el.loadingState.classList.add('hidden');
@@ -1392,7 +1364,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   function showPipeline() {
     el.progressSection.classList.remove('hidden');
-    el.pipelineSection.classList.remove('hidden');
+    // pipelineSection ist dauerhaft sichtbar
     el.progressBar.style.width = '0%';
     el.progressText.textContent = `0 / ${events.length}`;
     el.progressPercent.textContent = '0%';
@@ -1416,7 +1388,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   function renderEventList() {
     el.eventList.innerHTML = '';
-    
+    if (events.length === 0) {
+      el.eventList.innerHTML = '<div class="p-4 text-center text-sm text-gray-500">Starte einen Batch, damit hier Events erscheinen.</div>';
+      if (el.listCount) el.listCount.textContent = '0';
+      return;
+    }
+    if (el.listCount) el.listCount.textContent = events.length;
     events.forEach((event, index) => {
       const item = document.createElement('div');
       item.id = `event-item-${event.id}`;
@@ -2537,7 +2514,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     stopElapsedTimer();
     try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
     el.progressSection.classList.add('hidden');
-    el.pipelineSection.classList.add('hidden');
+    // Pipeline-Bereich bleibt sichtbar; Events bleiben in der Liste
     resetButton();
     reloadPendingCount();
   }
@@ -2580,13 +2557,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   // DIAGNOSTICS
   // ========================================
   async function loadDiagnostics() {
-    const diagLoading = document.getElementById('diagnostics-loading');
-    const diagContent = document.getElementById('diagnostics-content');
-    const diagError = document.getElementById('diagnostics-error');
-    
-    diagLoading.classList.remove('hidden');
-    diagContent.classList.add('hidden');
-    diagError.classList.add('hidden');
+    const workerDot = document.getElementById('diag-worker-dot');
+    const workerStatus = document.getElementById('diag-worker-status');
+    const workerEl = document.getElementById('diag-worker');
+    const redisDot = document.getElementById('diag-redis-dot');
+    const redisStatus = document.getElementById('diag-redis-status');
+    const redisEl = document.getElementById('diag-redis');
+    const openaiDot = document.getElementById('diag-openai-dot');
+    const openaiStatus = document.getElementById('diag-openai-status');
+    const openaiEl = document.getElementById('diag-openai');
 
     try {
       const res = await fetch(`${API_URL}/api/admin/ai-worker/diagnostics`, {
@@ -2601,54 +2580,39 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         throw new Error('AI-Worker nicht erreichbar');
       }
 
-      // Update worker status
-      const workerDot = document.getElementById('diag-worker-dot');
-      const workerStatus = document.getElementById('diag-worker-status');
-      if (data.reachable) {
-        workerDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
-        workerStatus.textContent = 'Verbunden';
-        document.getElementById('diag-worker').className = 'p-3 rounded-xl bg-green-50';
-      }
+      // Worker (inline in Header)
+      if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500';
+      if (workerStatus) workerStatus.textContent = 'Ok';
+      if (workerEl) workerEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-xs';
 
-      // Update Redis status
-      const redisDot = document.getElementById('diag-redis-dot');
-      const redisStatus = document.getElementById('diag-redis-status');
+      // Redis (inline)
       const redisCheck = data.checks?.redis;
       if (redisCheck?.status === 'ok') {
-        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
-        redisStatus.textContent = 'Verbunden';
-        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-green-50';
+        if (redisDot) redisDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500';
+        if (redisStatus) redisStatus.textContent = 'Ok';
+        if (redisEl) redisEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-xs';
       } else {
-        redisDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
-        redisStatus.textContent = 'Nicht verfuegbar';
-        document.getElementById('diag-redis').className = 'p-3 rounded-xl bg-amber-50';
+        if (redisDot) redisDot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500';
+        if (redisStatus) redisStatus.textContent = '–';
+        if (redisEl) redisEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-xs';
       }
 
-      // Update OpenAI status
-      const openaiDot = document.getElementById('diag-openai-dot');
-      const openaiStatus = document.getElementById('diag-openai-status');
+      // OpenAI (inline)
       const openaiCheck = data.checks?.openai;
       if (openaiCheck?.status === 'ok') {
-        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-green-500';
-        openaiStatus.textContent = 'Erreichbar';
-        document.getElementById('diag-openai').className = 'p-3 rounded-xl bg-green-50';
+        if (openaiDot) openaiDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500';
+        if (openaiStatus) openaiStatus.textContent = 'Ok';
+        if (openaiEl) openaiEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-xs';
       } else {
-        openaiDot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
-        openaiStatus.textContent = 'Nicht konfiguriert';
+        if (openaiDot) openaiDot.className = 'w-1.5 h-1.5 rounded-full bg-gray-400';
+        if (openaiStatus) openaiStatus.textContent = '–';
+        if (openaiEl) openaiEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-xs';
       }
-
-      // Config info
-      document.getElementById('diag-worker-url').textContent = data.worker_url || '--';
-      document.getElementById('diag-version').textContent = data.basic?.version || '--';
-      document.getElementById('diag-budget').textContent = data.metrics?.budget_status || '--';
-      
-      diagLoading.classList.add('hidden');
-      diagContent.classList.remove('hidden');
-      
     } catch (e) {
       console.error('Diagnostics error:', e);
-      diagLoading.classList.add('hidden');
-      diagError.classList.remove('hidden');
+      if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500';
+      if (workerStatus) workerStatus.textContent = 'Fehler';
+      if (workerEl) workerEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-xs';
     }
   }
 
