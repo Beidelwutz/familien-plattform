@@ -422,10 +422,15 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"URL blocked: {e}")
 
-    fields_needed = request.fields_needed or [
+    fields_needed = list(request.fields_needed) if request.fields_needed else [
         "location_address", "location_name", "start_datetime", "end_datetime",
         "image_url", "description", "price", "organizer_name"
     ]
+    # When detail_page_config has selectors, request those fields too (e.g. title, image, organizer)
+    if request.detail_page_config and request.detail_page_config.get("selectors"):
+        for key in request.detail_page_config["selectors"].keys():
+            if key not in fields_needed:
+                fields_needed.append(key)
 
     from src.crawlers.custom_selector_extractor import CustomSelectorExtractor, ExtractionResult, SelectorSuggester
     from src.crawlers.heuristic_extractor import HeuristicExtractor

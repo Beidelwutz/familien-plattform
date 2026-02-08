@@ -150,6 +150,8 @@ class CustomSelectorExtractor:
         selectors_config = config.get("selectors", {})
         parsing_config = config.get("parsing", {})
         date_formats = parsing_config.get("date_formats", [])
+        # Aliases: UI may save as "image"/"organizer", pipeline may request "image_url"/"organizer_name"
+        _ALIASES = {"image_url": "image", "organizer_name": "organizer"}
 
         if not selectors_config:
             return {}
@@ -158,7 +160,9 @@ class CustomSelectorExtractor:
         results: dict[str, ExtractionResult] = {}
 
         for field in fields_needed:
-            field_config = selectors_config.get(field)
+            field_config = selectors_config.get(field) or (
+                selectors_config.get(_ALIASES[field]) if field in _ALIASES else None
+            )
             if not field_config:
                 continue
 
@@ -205,7 +209,7 @@ class CustomSelectorExtractor:
                     continue
                 value = parsed_dt.isoformat()
 
-            elif field == "image" and base_url:
+            elif field in ("image", "image_url") and base_url:
                 value = urljoin(base_url, value)
 
             elif field in ("price",):

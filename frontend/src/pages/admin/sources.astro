@@ -1962,18 +1962,35 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const found = d.events_found ?? 0;
       const unique = d.events_unique ?? found;
       const candidates = d.candidates || [];
-      let html = `
-        <p class="font-medium text-gray-900">${found} Events gefunden</p>
-        <p class="text-gray-500 mt-1">${unique} eindeutig (nach Dedupe)</p>
-        <p class="text-gray-500 text-xs mt-2">Es wurde nichts in die Datenbank geschrieben.</p>
-      `;
-      if (candidates.length > 0) {
-        html += '<p class="font-medium text-gray-700 mt-4 mb-2">Beispiele (bis zu 5):</p><ul class="list-disc list-inside space-y-1 text-gray-600">';
-        candidates.slice(0, 5).forEach(c => {
-          const title = c?.data?.title || c?.title || 'Ohne Titel';
-          html += `<li>${title}</li>`;
-        });
-        html += '</ul>';
+      const hasError = !!d.error;
+      const mismatch = !!d.content_type_mismatch;
+      const mismatchMsg = d.content_type_message || 'Die angegebene Quelle passt nicht zum abgerufenen Inhalt.';
+
+      let html = '';
+      if (mismatch) {
+        html += `<div class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <strong>Quelle passt nicht:</strong> ${mismatchMsg}
+        </div>`;
+      }
+      if (hasError) {
+        html += `<p class="text-red-600 font-medium">Fehler beim Abruf:</p><p class="text-red-700 mt-1 text-sm">${d.error}</p>`;
+        if (!mismatch) {
+          html += '<p class="text-gray-500 text-xs mt-2">Bitte URL und Quellentyp (RSS/ICS/Scraper) prüfen.</p>';
+        }
+      } else {
+        html += `
+          <p class="font-medium text-gray-900">${found} Events gefunden</p>
+          <p class="text-gray-500 mt-1">${unique} eindeutig (nach Dedupe)</p>
+          <p class="text-gray-500 text-xs mt-2">Es wurde nichts in die Datenbank geschrieben.</p>
+        `;
+        if (candidates.length > 0) {
+          html += '<p class="font-medium text-gray-700 mt-4 mb-2">Beispiele (bis zu 5):</p><ul class="list-disc list-inside space-y-1 text-gray-600">';
+          candidates.slice(0, 5).forEach(c => {
+            const title = c?.data?.title || c?.title || 'Ohne Titel';
+            html += `<li>${title}</li>`;
+          });
+          html += '</ul>';
+        }
       }
       content.innerHTML = html;
     } catch (e) {

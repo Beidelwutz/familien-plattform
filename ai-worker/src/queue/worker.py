@@ -16,6 +16,7 @@ import httpx
 from .job_queue import job_queue, QUEUE_CRAWL, QUEUE_CLASSIFY, QUEUE_SCORE
 from src.crawlers.feed_parser import FeedParser, ParsedEvent
 from src.crawlers.rss_deep_fetch import selective_deep_fetch, DeepFetchConfig
+from src.crawlers.content_type_detector import fetch_and_detect, get_mismatch_message
 from src.classifiers.event_classifier import EventClassifier
 from src.scorers.event_scorer import EventScorer
 from src.ingestion.in_run_dedupe import create_parsed_event_deduplicator
@@ -449,7 +450,26 @@ async def process_crawl_job(payload: dict) -> dict:
         if ingest_run_id:
             await update_ingest_run(ingest_run_id, "failed", error_message=error_msg)
         raise ValueError(error_msg)
-    
+
+    # Content-type detection (show mismatch when source type does not match what URL returns)
+    content_type_detected = "unknown"
+    try:
+        detection = await fetch_and_detect(source_url)
+        content_type_detected = detection.get("content_type_detected", "unknown")
+    except Exception as e:
+        logger.warning(f"Content-type detection failed for {source_url}: {e}")
+    content_type_configured = source_type
+    content_type_message = get_mismatch_message(content_type_detected, content_type_configured)
+    content_type_mismatch = bool(content_type_message)
+
+    def _content_type_result(base: dict) -> dict:
+        base["content_type_detected"] = content_type_detected
+        base["content_type_configured"] = content_type_configured
+        base["content_type_mismatch"] = content_type_mismatch
+        if content_type_message:
+            base["content_type_message"] = content_type_message
+        return base
+
     # Step 1: Crawl/Parse (RSS/ICS return (events, etag, last_modified, was_modified); scraper returns list)
     try:
         if source_type == "rss":
@@ -468,6 +488,14 @@ async def process_crawl_job(payload: dict) -> dict:
     except Exception as e:
         error_msg = f"Feed parsing failed: {str(e)}"
         logger.error(error_msg)
+        if dry_run:
+            return _content_type_result({
+                "source_id": source_id,
+                "dry_run": True,
+                "error": error_msg,
+                "events_found": 0,
+                "candidates": [],
+            })
         if ingest_run_id:
             await update_ingest_run(ingest_run_id, "failed", error_message=error_msg)
         raise
@@ -489,7 +517,7 @@ async def process_crawl_job(payload: dict) -> dict:
         if dry_run:
             result["dry_run"] = True
             result["candidates"] = []
-        return result
+        return _content_type_result(result)
     
     # Progress: tell backend how many events we found (so UI can show "X Events gefunden")
     if ingest_run_id:
@@ -544,14 +572,14 @@ async def process_crawl_job(payload: dict) -> dict:
     # Step 5: Dry-run → return candidates without ingesting
     if dry_run:
         logger.info("Dry-run: skipping batch ingest, returning candidates")
-        return {
+        return _content_type_result({
             "source_id": source_id,
             "dry_run": True,
             "events_found": len(parsed_events),
             "events_unique": len(unique_events),
             "duplicates_in_run": deduplicator.stats.duplicates_removed,
             "candidates": [c.to_dict() for c in candidates],
-        }
+        })
     
     # Step 5 (normal): Batch Ingest to Backend
     result = await send_batch_to_backend(source_id, candidates, ingest_run_id)
@@ -568,7 +596,7 @@ async def process_crawl_job(payload: dict) -> dict:
             )
         raise RuntimeError(f"Backend batch ingest failed: {err}")
 
-    return {
+    return _content_type_result({
         "source_id": source_id,
         "events_found": len(parsed_events),
         "events_unique": len(unique_events),
@@ -578,7 +606,7 @@ async def process_crawl_job(payload: dict) -> dict:
         "events_unchanged": summary.get("unchanged", 0),
         "events_ignored": summary.get("ignored", 0),
         "run_id": result.get("run_id"),
-    }
+    })
 
 
 async def process_classify_job(payload: dict) -> dict:

@@ -225,12 +225,17 @@ class FeedParser:
         if not fetch_result.was_modified:
             return [], fetch_result.etag, fetch_result.last_modified, False
         
-        # icalendar chokes on empty or invalid lines ("Content line could not be parsed into parts: ''")
         raw = fetch_result.content or ""
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8", errors="replace")
+        # Reject HTML (e.g. TYPO3/Kalender page instead of ICS URL)
+        sample = raw.lstrip()[:2000].lower()
+        if "<!doctype" in sample or "<html" in sample or "<!--" in sample or "<script" in sample:
+            raise ValueError(
+                "URL returned HTML, not an ICS calendar. Use the actual ICS feed URL (e.g. .ics or feed endpoint)."
+            )
         raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-        # Keep only lines that look valid: have "name:value" (contain ":") or are folding continuation (start with space/tab)
+        # Drop empty lines; keep valid property lines (contain ":") or folding continuation (start with space/tab)
         lines = [
             line for line in raw.splitlines()
             if line.strip() and (":" in line or line.startswith((" ", "\t")))
