@@ -66,6 +66,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               >
                 <option value="">Alle Quellen</option>
               </select>
+              <p id="batch-source-count" class="text-sm text-gray-500 mt-1 hidden"></p>
             </div>
             <div class="flex-1">
               <div class="flex items-center justify-between mb-2">
@@ -75,10 +76,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               <input 
                 type="range" 
                 id="batch-slider" 
-                min="10" 
+                min="1" 
                 max="100" 
                 value="25" 
-                step="5"
+                step="1"
                 class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
               />
             </div>
@@ -741,6 +742,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   let events = [];
   let selectedEventId = null;
   let sourceDetailsCache = {}; // Cache source-details per event ID
+  let pendingAiCountBySource = {}; // sourceId -> count (Pending AI)
   let selectedBulkIds = new Set(); // For bulk selection
   let startTime = null;
   let elapsedInterval = null;
@@ -816,7 +818,24 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   el.batchSlider.addEventListener('input', (e) => {
     el.sliderValue.textContent = e.target.value;
   });
-  
+
+  function updateBatchSourceCountDisplay() {
+    const sourceSelect = document.getElementById('batch-source-select');
+    const countEl = document.getElementById('batch-source-count');
+    if (!sourceSelect || !countEl) return;
+    const sourceId = sourceSelect.value;
+    if (!sourceId) {
+      countEl.classList.add('hidden');
+      countEl.textContent = '';
+      return;
+    }
+    const n = pendingAiCountBySource[sourceId] ?? 0;
+    countEl.textContent = n + ' Event(s) mit Status Pending AI';
+    countEl.classList.remove('hidden');
+  }
+
+  document.getElementById('batch-source-select')?.addEventListener('change', updateBatchSourceCountDisplay);
+
   el.startBatchBtn.addEventListener('click', startBatch);
   el.cancelBtn.addEventListener('click', cancelProcessing);
 
@@ -952,7 +971,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     el.errorState.classList.add('hidden');
 
     try {
-      const [pendingRes, healthRes, statsRes, sourcesRes] = await Promise.all([
+      const [pendingRes, healthRes, statsRes, sourcesRes, pendingBySourceRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/pending-ai-count`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
@@ -963,6 +982,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           headers: { Authorization: `Bearer ${token}` }
         }).catch(() => null),
         fetch(`${API_URL}/api/sources`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => null),
+        fetch(`${API_URL}/api/sources/pending-ai-counts`, {
           headers: { Authorization: `Bearer ${token}` }
         }).catch(() => null),
       ]);
@@ -1013,13 +1035,24 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       updateButtonState(pendingCount);
 
-      // Quellen-Dropdown fuellen (fuer Batch-Filter)
+      // Pending-AI-Counts pro Quelle (fuer Dropdown und Anzeige)
+      if (pendingBySourceRes && pendingBySourceRes.ok) {
+        const countsData = await pendingBySourceRes.json();
+        pendingAiCountBySource = countsData.data || {};
+      }
+
+      // Quellen-Dropdown fuellen (mit Pending-AI-Anzahl pro Quelle)
       const sourceSelect = document.getElementById('batch-source-select');
       if (sourceSelect && sourcesRes && sourcesRes.ok) {
         const sourcesData = await sourcesRes.json();
         const sourcesList = sourcesData.data || [];
-        sourceSelect.innerHTML = '<option value="">Alle Quellen</option>' +
-          sourcesList.map(s => `<option value="${s.id}">${escapeHtml(s.name || s.id)}</option>`).join('');
+        const totalPending = Object.values(pendingAiCountBySource).reduce((a, b) => a + b, 0);
+        sourceSelect.innerHTML = '<option value="">Alle Quellen (' + totalPending + ' Pending AI)</option>' +
+          sourcesList.map(s => {
+            const n = pendingAiCountBySource[s.id] ?? 0;
+            return `<option value="${s.id}">${escapeHtml(s.name || s.id)} (${n})</option>`;
+          }).join('');
+        updateBatchSourceCountDisplay();
       }
 
       el.loadingState.classList.add('hidden');
