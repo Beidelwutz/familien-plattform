@@ -4246,15 +4246,16 @@ router.post('/test-selectors', requireAuth, requireAdmin, async (req: AuthReques
       }),
       signal: AbortSignal.timeout(25000),
     });
-    const crawlResult = await crawlRes.json();
+    const crawlResult = await crawlRes.json() as { success?: boolean; fields_found?: Record<string, unknown>; fields_missing?: string[]; field_provenance?: Record<string, unknown>; suggested_selectors?: Record<string, unknown>; extraction_method?: string; error?: string };
 
     res.json({
       success: crawlResult.success ?? true,
       data: crawlResult,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('test-selectors failed:', error);
-    res.status(500).json({ success: false, error: error?.message || 'Test fehlgeschlagen' });
+    const message = error instanceof Error ? error.message : 'Test fehlgeschlagen';
+    res.status(500).json({ success: false, error: message });
   }
 });
 
