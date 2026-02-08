@@ -225,8 +225,17 @@ class FeedParser:
         if not fetch_result.was_modified:
             return [], fetch_result.etag, fetch_result.last_modified, False
         
-        # icalendar chokes on empty lines ("Content line could not be parsed into parts: ''")
-        content = "\n".join(line for line in fetch_result.content.splitlines() if line.strip())
+        # icalendar chokes on empty or invalid lines ("Content line could not be parsed into parts: ''")
+        raw = fetch_result.content or ""
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="replace")
+        raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+        # Keep only lines that look valid: have "name:value" (contain ":") or are folding continuation (start with space/tab)
+        lines = [
+            line for line in raw.splitlines()
+            if line.strip() and (":" in line or line.startswith((" ", "\t")))
+        ]
+        content = "\n".join(lines)
         cal = Calendar.from_ical(content)
         events = []
         
