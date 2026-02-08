@@ -71,14 +71,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             <div class="flex-1">
               <div class="flex items-center justify-between mb-2">
                 <label for="batch-slider" class="text-sm font-medium text-gray-700">Batch-Groesse</label>
-                <span id="slider-value" class="text-sm font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">25</span>
+                <span id="slider-value" class="text-sm font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">1</span>
               </div>
               <input 
                 type="range" 
                 id="batch-slider" 
                 min="1" 
                 max="100" 
-                value="25" 
+                value="1" 
                 step="1"
                 class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
               />
@@ -1037,8 +1037,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       // Pending-AI-Counts pro Quelle (fuer Dropdown und Anzeige)
       if (pendingBySourceRes && pendingBySourceRes.ok) {
-        const countsData = await pendingBySourceRes.json();
-        pendingAiCountBySource = countsData.data || {};
+        try {
+          const countsData = await pendingBySourceRes.json();
+          if (countsData && typeof countsData.data === 'object' && countsData.data !== null) {
+            pendingAiCountBySource = countsData.data;
+          }
+        } catch (_) { /* ignore */ }
       }
 
       // Quellen-Dropdown fuellen (mit Pending-AI-Anzahl pro Quelle)
@@ -1046,7 +1050,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       if (sourceSelect && sourcesRes && sourcesRes.ok) {
         const sourcesData = await sourcesRes.json();
         const sourcesList = sourcesData.data || [];
-        const totalPending = Object.values(pendingAiCountBySource).reduce((a, b) => a + b, 0);
+        const sumBySource = Object.values(pendingAiCountBySource).reduce((a, b) => a + b, 0);
+        const totalPending = sumBySource > 0 ? sumBySource : pendingCount;
         sourceSelect.innerHTML = '<option value="">Alle Quellen (' + totalPending + ' Pending AI)</option>' +
           sourcesList.map(s => {
             const n = pendingAiCountBySource[s.id] ?? 0;
