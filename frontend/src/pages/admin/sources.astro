@@ -171,6 +171,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Typ</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Letzter Fetch</th>
             <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Events</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pending AI</th>
             <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Aktionen</th>
           </tr>
         </thead>
@@ -373,6 +374,23 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     </div>
   </div>
 
+  <!-- Bulk Pending-AI Action Modal (preview + confirm) -->
+  <div id="bulk-pending-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+      <div class="p-4 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">Bulk-Aktion bestätigen</h3>
+      </div>
+      <div class="p-4 space-y-2">
+        <p id="bulk-pending-message" class="text-sm text-gray-700"></p>
+        <p class="text-xs text-gray-500">Maximal 200 Events pro Aufruf. Bei mehr werden nur die ersten 200 verarbeitet.</p>
+      </div>
+      <div class="p-4 border-t border-gray-200 flex gap-2 justify-end">
+        <button id="bulk-pending-cancel" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">Abbrechen</button>
+        <button id="bulk-pending-confirm" class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm font-medium">Ausführen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Delete Confirmation Modal -->
   <div id="delete-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-sm">
@@ -458,12 +476,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 <script is:inline define:vars={{ API_URL }}>
   let sources = [];
   let filteredSources = [];
+  let pendingAiCounts = {}; // sourceId -> count
   let expandedRows = new Set();
   let activePolling = {};
   let deleteSourceId = null;
   let activeRunsBySource = {}; // Maps source_id -> active run data
   let globalStatusInterval = null;
+  let bulkPendingState = null; // { sourceId, sourceName, action, eventIds }
   const token = localStorage.getItem('auth_token');
+  const BULK_LIMIT = 200;
 
   // Status config
   const statusConfig = {
@@ -533,8 +554,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     document.getElementById('empty-state').classList.add('hidden');
 
     try {
-      const data = await apiFetch('/api/sources');
-      sources = data.data || [];
+      const [sourcesRes, countsRes] = await Promise.all([
+        apiFetch('/api/sources'),
+        apiFetch('/api/sources/pending-ai-counts').catch(() => ({ data: {} })),
+      ]);
+      sources = sourcesRes.data || [];
+      pendingAiCounts = countsRes.data || {};
       
       // Count by status
       const counts = { healthy: 0, degraded: 0, failing: 0, dead: 0, unknown: 0 };
@@ -794,6 +819,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           <td class="px-4 py-3">${fetchStatusHtml}</td>
           <td class="px-4 py-3 text-sm text-gray-600">${avgEvents}</td>
           <td class="px-4 py-3">
+            <span class="pending-ai-count text-sm font-medium ${(pendingAiCounts[source.id] || 0) > 0 ? 'text-amber-600' : 'text-gray-400'}" data-source-id="${source.id}">${pendingAiCounts[source.id] ?? '–'}</span>
+          </td>
+          <td class="px-4 py-3">
             <div class="flex items-center justify-end gap-2">
               ${isRunning ? `
                 <button 
@@ -821,7 +849,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           </td>
         </tr>
         <tr class="expanded-content bg-gray-50 ${isExpanded ? '' : 'hidden'}" data-expanded-for="${source.id}">
-          <td colspan="7" class="px-4 py-4">
+          <td colspan="8" class="px-4 py-4">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <!-- Left Column: Details -->
               <div class="space-y-4">
@@ -861,9 +889,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
               </div>
               
               <!-- Right Column: Actions -->
-              <div>
-                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Aktionen</h4>
-                <div class="bg-white rounded-lg border border-gray-200 p-3 space-y-3">
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Aktionen</h4>
+                  <div class="bg-white rounded-lg border border-gray-200 p-3 space-y-3">
+                  ${(pendingAiCounts[source.id] || 0) > 0 ? `
+                  <div class="pb-2 border-b border-gray-100">
+                    <p class="text-xs font-medium text-gray-600 mb-2">Pending AI (${pendingAiCounts[source.id]}) – Bulk-Aktionen</p>
+                    <div id="pending-stats-${source.id}" class="text-xs text-gray-500 mb-2 min-h-[1rem]">Lade Statistik…</div>
+                    <div class="flex flex-wrap gap-2">
+                      <button type="button" class="bulk-pending-btn px-3 py-1.5 text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 rounded-lg transition" data-source-id="${source.id}" data-source-name="${source.name}" data-action="crawl">Website crawlen</button>
+                      <button type="button" class="bulk-pending-btn px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 rounded-lg transition" data-source-id="${source.id}" data-source-name="${source.name}" data-action="ai_rerun">AI erneut ausführen</button>
+                    </div>
+                  </div>
+                  ` : ''}
                   <!-- Import Status -->
                   <div id="import-status-${source.id}" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                     <div class="flex items-center gap-2">
@@ -1011,6 +1049,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       });
     });
 
+    // Bulk Pending AI buttons
+    document.querySelectorAll('.bulk-pending-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openBulkPendingModal(btn.dataset.sourceId, btn.dataset.sourceName, btn.dataset.action);
+      });
+    });
+
     // Toggle active switches
     document.querySelectorAll('.toggle-active').forEach(toggle => {
       toggle.addEventListener('change', (e) => {
@@ -1034,6 +1080,28 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       row?.classList.add('expanded');
       expandedRow?.classList.remove('hidden');
       loadFetchHistory(id);
+      if ((pendingAiCounts[id] || 0) > 0) loadPendingStats(id);
+    }
+  }
+
+  // Load pending-AI stats (missing fields, suggestions) for a source
+  async function loadPendingStats(sourceId) {
+    const el = document.getElementById(`pending-stats-${sourceId}`);
+    if (!el) return;
+    try {
+      const res = await apiFetch(`/api/sources/${sourceId}/pending-ai-stats`);
+      const data = res.data || {};
+      const missing = data.missing || {};
+      const suggested = data.suggested_actions || [];
+      const parts = [];
+      if (missing.location > 0) parts.push(`${missing.location} ohne Adresse`);
+      if (missing.end_datetime > 0) parts.push(`${missing.end_datetime} ohne Enddatum`);
+      if (missing.image > 0) parts.push(`${missing.image} ohne Bild`);
+      const tip = suggested.find(s => s.key === 'crawl_all');
+      if (parts.length) el.textContent = parts.join(', ');
+      if (tip) el.innerHTML = (parts.length ? parts.join(', ') + '. ' : '') + 'Empfohlen: ' + tip.why;
+    } catch {
+      el.textContent = '';
     }
   }
 
@@ -1337,6 +1405,57 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
   }
 
+  // Bulk Pending AI: fetch event IDs and show confirm modal
+  async function openBulkPendingModal(sourceId, sourceName, action) {
+    const actionLabels = { crawl: 'Website crawlen', ai_rerun: 'AI erneut ausführen' };
+    try {
+      const res = await apiFetch(`/api/sources/${sourceId}/events?status=pending_ai`);
+      const events = res.data || [];
+      const eventIds = events.map(e => e.id);
+      if (eventIds.length === 0) {
+        alert('Keine Events mit Status "Pending AI" für diese Quelle.');
+        return;
+      }
+      const toProcess = eventIds.slice(0, BULK_LIMIT);
+      bulkPendingState = { sourceId, sourceName, action, eventIds: toProcess, total: eventIds.length };
+      const msg = document.getElementById('bulk-pending-message');
+      msg.textContent = `Du verarbeitest ${toProcess.length} Event(s) von Quelle "${sourceName}". Aktion: ${actionLabels[action] || action}.${eventIds.length > BULK_LIMIT ? ` (Es gibt ${eventIds.length} insgesamt; nur die ersten ${BULK_LIMIT} werden ausgeführt.)` : ''}`;
+      document.getElementById('bulk-pending-modal').classList.remove('hidden');
+    } catch (e) {
+      alert('Fehler beim Laden der Event-IDs: ' + e.message);
+    }
+  }
+
+  function closeBulkPendingModal() {
+    bulkPendingState = null;
+    document.getElementById('bulk-pending-modal').classList.add('hidden');
+  }
+
+  async function runBulkPendingAction() {
+    if (!bulkPendingState) return;
+    const { sourceId, action, eventIds } = bulkPendingState;
+    const confirmBtn = document.getElementById('bulk-pending-confirm');
+    confirmBtn.disabled = true;
+    try {
+      const res = await apiFetch('/api/admin/events/bulk-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          event_ids: eventIds,
+          action,
+          params: { source_id: sourceId },
+        }),
+      });
+      const d = res.data || res;
+      closeBulkPendingModal();
+      alert(`Fertig: ${d.succeeded || 0} erfolgreich, ${d.failed || 0} fehlgeschlagen.`);
+      loadSources();
+    } catch (e) {
+      alert('Fehler: ' + e.message);
+    } finally {
+      confirmBtn.disabled = false;
+    }
+  }
+
   // Open delete modal
   function openDeleteModal(id, name) {
     deleteSourceId = id;
@@ -1421,6 +1540,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('edit-form').addEventListener('submit', saveSource);
   document.getElementById('delete-cancel').addEventListener('click', closeDeleteModal);
   document.getElementById('delete-confirm').addEventListener('click', confirmDelete);
+  document.getElementById('bulk-pending-cancel').addEventListener('click', closeBulkPendingModal);
+  document.getElementById('bulk-pending-confirm').addEventListener('click', runBulkPendingAction);
 
   // Close modals on backdrop click
   document.getElementById('edit-modal').addEventListener('click', (e) => {
@@ -1435,6 +1556,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('delete-modal').addEventListener('click', (e) => {
     if (e.target.id === 'delete-modal') closeDeleteModal();
   });
+  document.getElementById('bulk-pending-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'bulk-pending-modal') closeBulkPendingModal();
+  });
 
   // Close modals on Escape
   document.addEventListener('keydown', (e) => {
@@ -1442,6 +1566,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       closeEditModal();
       closeWizard();
       closeDeleteModal();
+      closeBulkPendingModal();
     }
   });
 

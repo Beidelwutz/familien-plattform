@@ -56,29 +56,44 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       <!-- Batch Processing Controls -->
       <div class="bg-white rounded-2xl shadow-card p-6">
-        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div class="flex-1">
-            <div class="flex items-center justify-between mb-2">
-              <label for="batch-slider" class="text-sm font-medium text-gray-700">Batch-Groesse</label>
-              <span id="slider-value" class="text-sm font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">25</span>
+        <div class="flex flex-col gap-4">
+          <div class="flex flex-col sm:flex-row sm:items-end gap-4 flex-wrap">
+            <div class="flex-1 min-w-[180px]">
+              <label for="batch-source-select" class="block text-sm font-medium text-gray-700 mb-1">Quelle</label>
+              <select 
+                id="batch-source-select" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-sm bg-white"
+              >
+                <option value="">Alle Quellen</option>
+              </select>
             </div>
-            <input 
-              type="range" 
-              id="batch-slider" 
-              min="10" 
-              max="100" 
-              value="25" 
-              step="5"
-              class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
-            />
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-2">
+                <label for="batch-slider" class="text-sm font-medium text-gray-700">Batch-Groesse</label>
+                <span id="slider-value" class="text-sm font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded">25</span>
+              </div>
+              <input 
+                type="range" 
+                id="batch-slider" 
+                min="10" 
+                max="100" 
+                value="25" 
+                step="5"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-thumb"
+              />
+            </div>
+            <button 
+              id="start-batch-btn" 
+              class="px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center gap-2"
+            >
+              <span id="btn-icon">&#x1F680;</span>
+              <span id="btn-text">Start Batch</span>
+            </button>
           </div>
-          <button 
-            id="start-batch-btn" 
-            class="px-6 py-3 bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center gap-2"
-          >
-            <span id="btn-icon">&#x1F680;</span>
-            <span id="btn-text">Start Batch</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="batch-force-crawl-first" class="w-4 h-4 text-primary-500 border-gray-300 rounded focus:ring-primary-500" />
+            <label for="batch-force-crawl-first" class="text-sm text-gray-700">Vorher Website crawlen (fehlende Felder auffuellen, dann AI)</label>
+          </div>
         </div>
         <p id="btn-hint" class="text-sm text-gray-500 mt-2 hidden"></p>
         <div id="no-pending-hint" class="hidden mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
@@ -937,7 +952,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     el.errorState.classList.add('hidden');
 
     try {
-      const [pendingRes, healthRes, statsRes] = await Promise.all([
+      const [pendingRes, healthRes, statsRes, sourcesRes] = await Promise.all([
         fetch(`${API_URL}/api/admin/pending-ai-count`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
@@ -945,6 +960,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
           headers: { Authorization: `Bearer ${token}` }
         }).catch(() => null),
         fetch(`${API_URL}/api/admin/ai-worker/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => null),
+        fetch(`${API_URL}/api/sources`, {
           headers: { Authorization: `Bearer ${token}` }
         }).catch(() => null),
       ]);
@@ -994,6 +1012,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       }
 
       updateButtonState(pendingCount);
+
+      // Quellen-Dropdown fuellen (fuer Batch-Filter)
+      const sourceSelect = document.getElementById('batch-source-select');
+      if (sourceSelect && sourcesRes && sourcesRes.ok) {
+        const sourcesData = await sourcesRes.json();
+        const sourcesList = sourcesData.data || [];
+        sourceSelect.innerHTML = '<option value="">Alle Quellen</option>' +
+          sourcesList.map(s => `<option value="${s.id}">${escapeHtml(s.name || s.id)}</option>`).join('');
+      }
 
       el.loadingState.classList.add('hidden');
       el.content.classList.remove('hidden');
@@ -1206,6 +1233,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     if (isProcessing) return;
 
     const limit = el.batchSlider.value;
+    const sourceSelect = document.getElementById('batch-source-select');
+    const sourceId = sourceSelect ? sourceSelect.value : '';
+    const forceCrawlFirst = document.getElementById('batch-force-crawl-first')?.checked === true;
 
     // Pruefen ob AI Worker erreichbar ist – sonst Hinweis anzeigen
     try {
@@ -1239,7 +1269,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     el.btnHint.classList.add('hidden');
 
     try {
-      const res = await fetch(`${API_URL}/api/admin/process-pending-ai?limit=${limit}`, {
+      const params = new URLSearchParams();
+      params.set('limit', String(limit));
+      if (sourceId) params.set('source_id', sourceId);
+      if (forceCrawlFirst) params.set('force_crawl_first', 'true');
+      const res = await fetch(`${API_URL}/api/admin/process-pending-ai?${params.toString()}`, {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`,

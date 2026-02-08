@@ -9,6 +9,7 @@ import { AI_THRESHOLDS, calculateCompleteness } from '../lib/eventCompleteness.j
 import { canPublish } from '../lib/eventQuery.js';
 import { logger } from '../lib/logger.js';
 import { redis, isRedisAvailable } from '../lib/redis.js';
+import { logAdminAction, AuditAction } from '../lib/adminAudit.js';
 
 const AI_WORKER_URL = process.env.AI_WORKER_URL || 'http://localhost:5000';
 
@@ -2474,7 +2475,9 @@ async function getAIJobStatus(jobId: string): Promise<AIJobStatus | null> {
 // POST /api/admin/process-pending-ai - Process events with pending_ai status through AI Worker
 router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const { limit = 50 } = req.query;
+    const limit = Number(req.query.limit) || 50;
+    const sourceId = typeof req.query.source_id === 'string' ? req.query.source_id : undefined;
+    const forceCrawlFirst = req.query.force_crawl_first === 'true' || req.query.force_crawl_first === true;
     const userId = req.user?.sub;
 
     // Stale-Jobs aufräumen: ältesten "running" Job prüfen und ggf. als stale markieren
@@ -2507,12 +2510,13 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
     // #region agent log
     _debugLog({ location: 'admin.ts:process-pending-ai:before-find', message: 'before findMany pending_ai', hypothesisId: 'H4', data: { limit: Number(req.query.limit || 50) } });
     // #endregion
-    // Get events with pending_ai status - include more fields for the dashboard
-    const pendingEvents = await prisma.canonicalEvent.findMany({
-      where: { 
+    // Get events with pending_ai status - optionally filter by source_id
+    let pendingEvents = await prisma.canonicalEvent.findMany({
+      where: {
         status: 'pending_ai',
+        ...(sourceId ? { event_sources: { some: { source_id: sourceId } } } : {}),
       },
-      take: Number(limit),
+      take: limit,
       orderBy: { created_at: 'asc' },
       select: {
         id: true,
@@ -2587,7 +2591,118 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
         summary: { published: 0, pending_review: 0, rejected: 0, failed: 0, incomplete: 0, archived: 0 }
       });
     }
-    
+
+    // Optional: crawl + merge for each event before AI (so classify/score get fresh data)
+    if (forceCrawlFirst) {
+      const nowIso = new Date().toISOString();
+      for (const event of pendingEvents) {
+        const crawlUrl = event.booking_url || event.event_sources?.[0]?.source_url || null;
+        if (!crawlUrl) continue;
+        const fieldsNeeded: string[] = [];
+        if (!event.location_address || (typeof event.location_address === 'string' && !event.location_address.trim())) fieldsNeeded.push('location_address');
+        if (!event.start_datetime) fieldsNeeded.push('start_datetime');
+        if (!event.end_datetime) fieldsNeeded.push('end_datetime');
+        if (!Array.isArray(event.image_urls) || event.image_urls.length === 0) fieldsNeeded.push('image_url');
+        if (fieldsNeeded.length === 0) continue;
+        try {
+          const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: crawlUrl, fields_needed: fieldsNeeded }),
+            signal: AbortSignal.timeout(20000),
+          });
+          const crawlResult = await crawlRes.json() as { success: boolean; fields_found?: Record<string, unknown>; error?: string };
+          if (!crawlRes.ok || !crawlResult.success) continue;
+          const existingFieldFillStatus = (event.field_fill_status as Record<string, FieldFillStatusValue>) || {};
+          const eventUpdate: Record<string, unknown> = {};
+          if (crawlResult.fields_found?.location_address) {
+            eventUpdate.location_address = crawlResult.fields_found.location_address;
+            existingFieldFillStatus['location_address'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+          }
+          if (crawlResult.fields_found?.start_datetime) {
+            try {
+              eventUpdate.start_datetime = new Date(crawlResult.fields_found.start_datetime as string);
+              existingFieldFillStatus['start_datetime'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+            } catch { /* ignore */ }
+          }
+          if (crawlResult.fields_found?.end_datetime) {
+            try {
+              eventUpdate.end_datetime = new Date(crawlResult.fields_found.end_datetime as string);
+              existingFieldFillStatus['end_datetime'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+            } catch { /* ignore */ }
+          }
+          if (Object.keys(eventUpdate).length > 0) {
+            await prisma.canonicalEvent.update({
+              where: { id: event.id },
+              data: { ...eventUpdate, field_fill_status: existingFieldFillStatus },
+            });
+          }
+        } catch {
+          // Skip failed crawl and continue with next event
+        }
+      }
+      // Re-fetch events so background job uses updated data
+      pendingEvents = await prisma.canonicalEvent.findMany({
+        where: { id: { in: pendingEvents.map(e => e.id) } },
+        orderBy: { created_at: 'asc' },
+        select: {
+          id: true,
+          title: true,
+          description_short: true,
+          description_long: true,
+          location_address: true,
+          location_district: true,
+          start_datetime: true,
+          end_datetime: true,
+          price_min: true,
+          price_max: true,
+          price_type: true,
+          age_min: true,
+          age_max: true,
+          is_indoor: true,
+          is_outdoor: true,
+          completeness_score: true,
+          field_provenance: true,
+          field_fill_status: true,
+          venue_name: true,
+          city: true,
+          postal_code: true,
+          country_code: true,
+          price_details: true,
+          booking_url: true,
+          image_urls: true,
+          availability_status: true,
+          recurrence_rule: true,
+          age_rating: true,
+          is_all_day: true,
+          ai_summary_short: true,
+          location_lat: true,
+          location_lng: true,
+          categories: {
+            select: {
+              category: {
+                select: { slug: true }
+              }
+            }
+          },
+          event_sources: {
+            orderBy: { updated_at: 'desc' as const },
+            select: {
+              id: true,
+              source_url: true,
+              fetched_at: true,
+              source: {
+                select: { id: true, name: true, type: true, url: true }
+              }
+            }
+          },
+          provider: {
+            select: { name: true }
+          }
+        }
+      });
+    }
+
     // Create job in database for persistent tracking
     const dbJob = await prisma.aiJob.create({
       data: {
@@ -3899,6 +4014,7 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
       throw createError('Invalid action. Must be: crawl, ai_rerun, reject, publish', 400, 'VALIDATION_ERROR');
     }
 
+    const needCrawlFields = action === 'crawl';
     const events = await prisma.canonicalEvent.findMany({
       where: { id: { in: event_ids } },
       select: {
@@ -3906,6 +4022,13 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
         title: true,
         status: true,
         booking_url: true,
+        ...(needCrawlFields ? {
+          field_fill_status: true,
+          location_address: true,
+          start_datetime: true,
+          end_datetime: true,
+          image_urls: true,
+        } : {}),
         event_sources: {
           take: 1,
           orderBy: { updated_at: 'desc' },
@@ -3941,27 +4064,67 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
         results.push({ id: event.id, success: true, message: 'Published' });
       }
     } else if (action === 'crawl') {
+      const nowIso = new Date().toISOString();
       for (const event of events) {
         const url = event.booking_url || event.event_sources[0]?.source_url;
         if (!url) {
           results.push({ id: event.id, success: false, message: 'Keine URL vorhanden' });
           continue;
         }
+        const fieldsNeeded: string[] = [];
+        if (!event.location_address || (typeof event.location_address === 'string' && !event.location_address.trim())) fieldsNeeded.push('location_address');
+        if (!event.start_datetime) fieldsNeeded.push('start_datetime');
+        if (!event.end_datetime) fieldsNeeded.push('end_datetime');
+        if (!Array.isArray(event.image_urls) || event.image_urls.length === 0) fieldsNeeded.push('image_url');
+
+        if (fieldsNeeded.length === 0) {
+          results.push({ id: event.id, success: true, message: 'Keine fehlenden Felder' });
+          continue;
+        }
         try {
           const crawlRes = await fetch(`${AI_WORKER_URL}/crawl/single-event`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, fields_needed: ['location_address', 'start_datetime', 'image_url'] }),
+            body: JSON.stringify({ url, fields_needed: fieldsNeeded }),
             signal: AbortSignal.timeout(20000),
           });
-          const crawlResult = await crawlRes.json() as any;
-          results.push({ id: event.id, success: crawlResult.success, message: crawlResult.success ? `${Object.keys(crawlResult.fields_found || {}).length} Felder gefunden` : (crawlResult.error || 'Crawl failed') });
-        } catch (e: any) {
-          results.push({ id: event.id, success: false, message: e?.message || 'Crawl error' });
+          const crawlResult = await crawlRes.json() as { success: boolean; fields_found: Record<string, unknown>; error?: string };
+          if (!crawlRes.ok || !crawlResult.success) {
+            results.push({ id: event.id, success: false, message: crawlResult.error || 'Crawl failed' });
+            continue;
+          }
+          const existingFieldFillStatus = (event.field_fill_status as Record<string, FieldFillStatusValue>) || {};
+          const eventUpdate: Record<string, unknown> = {};
+          if (crawlResult.fields_found?.location_address) {
+            eventUpdate.location_address = crawlResult.fields_found.location_address;
+            existingFieldFillStatus['location_address'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+          }
+          if (crawlResult.fields_found?.start_datetime) {
+            try {
+              eventUpdate.start_datetime = new Date(crawlResult.fields_found.start_datetime as string);
+              existingFieldFillStatus['start_datetime'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+            } catch { /* ignore */ }
+          }
+          if (crawlResult.fields_found?.end_datetime) {
+            try {
+              eventUpdate.end_datetime = new Date(crawlResult.fields_found.end_datetime as string);
+              existingFieldFillStatus['end_datetime'] = { status: 'filled', source: 'crawl', last_attempt: nowIso };
+            } catch { /* ignore */ }
+          }
+          if (Object.keys(eventUpdate).length > 0) {
+            await prisma.canonicalEvent.update({
+              where: { id: event.id },
+              data: { ...eventUpdate, field_fill_status: existingFieldFillStatus },
+            });
+          }
+          const updatedCount = Object.keys(eventUpdate).length;
+          results.push({ id: event.id, success: true, message: updatedCount ? `${updatedCount} Felder in DB übernommen` : `${Object.keys(crawlResult.fields_found || {}).length} Felder gefunden (keine neuen)` });
+        } catch (e: unknown) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          results.push({ id: event.id, success: false, message: errMsg || 'Crawl error' });
         }
       }
     } else if (action === 'ai_rerun') {
-      // Set events back to pending_ai so next batch picks them up
       await prisma.canonicalEvent.updateMany({
         where: { id: { in: event_ids } },
         data: { status: 'pending_ai' }
@@ -3969,7 +4132,30 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
       results.push(...events.map(e => ({ id: e.id, success: true, message: 'Set to pending_ai' })));
     }
 
+    const succeeded = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
     logger.info(`Bulk action "${action}" on ${events.length} events by admin ${userId}`);
+
+    if (userId) {
+      try {
+        await logAdminAction({
+          userId,
+          action: AuditAction.UPDATE,
+          entityType: 'bulk_events',
+          entityId: (params?.source_id as string) || 'global',
+          entityName: `Bulk ${action}`,
+          metadata: {
+            action,
+            event_count: events.length,
+            source_id: params?.source_id ?? null,
+            result_summary: { succeeded, failed },
+          },
+          req,
+        });
+      } catch (auditErr) {
+        logger.warn('Bulk action audit log failed', auditErr);
+      }
+    }
 
     res.json({
       success: true,
@@ -3977,8 +4163,8 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
         action,
         total: event_ids.length,
         processed: results.length,
-        succeeded: results.filter(r => r.success).length,
-        failed: results.filter(r => !r.success).length,
+        succeeded,
+        failed,
         results,
       }
     });

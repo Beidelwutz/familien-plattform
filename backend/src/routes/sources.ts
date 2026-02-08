@@ -130,6 +130,113 @@ router.post('/detect', requireAuth, requireAdmin, async (req: Request, res: Resp
   }
 });
 
+// GET /api/sources/pending-ai-counts - Pending AI count per source (admin)
+router.get('/pending-ai-counts', requireAuth, requireAdmin, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const counts = await prisma.$queryRaw<Array<{ source_id: string; count: bigint }>>`
+      SELECT es.source_id, COUNT(DISTINCT es.canonical_event_id)::bigint AS count
+      FROM event_sources es
+      INNER JOIN canonical_events ce ON ce.id = es.canonical_event_id
+      WHERE ce.status = 'pending_ai'
+      GROUP BY es.source_id
+    `;
+    const bySource: Record<string, number> = {};
+    for (const row of counts) {
+      bySource[row.source_id] = Number(row.count);
+    }
+    res.json({ success: true, data: bySource });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/sources/:id/events - Event IDs for this source (optional status=pending_ai)
+router.get('/:id/events', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const statusFilter = req.query.status === 'pending_ai' ? 'pending_ai' : undefined;
+
+    const events = await prisma.canonicalEvent.findMany({
+      where: {
+        event_sources: { some: { source_id: id } },
+        ...(statusFilter ? { status: statusFilter } : {}),
+      },
+      select: { id: true, title: true },
+      take: 500,
+      orderBy: { created_at: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: events.map((e) => ({ id: e.id, title: e.title })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/sources/:id/pending-ai-stats - Stats and suggested actions for pending_ai of this source
+router.get('/:id/pending-ai-stats', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const events = await prisma.canonicalEvent.findMany({
+      where: {
+        status: 'pending_ai',
+        event_sources: { some: { source_id: id } },
+      },
+      select: {
+        id: true,
+        location_address: true,
+        start_datetime: true,
+        end_datetime: true,
+        image_urls: true,
+        field_fill_status: true,
+      },
+      take: 1000,
+    });
+
+    const total = events.length;
+    const missing = {
+      location: events.filter((e) => !e.location_address || (typeof e.location_address === 'string' && !e.location_address.trim())).length,
+      start_datetime: events.filter((e) => !e.start_datetime).length,
+      end_datetime: events.filter((e) => !e.end_datetime).length,
+      image: events.filter((e) => !Array.isArray(e.image_urls) || e.image_urls.length === 0).length,
+    };
+
+    const suggested_actions: Array<{ key: string; why: string; impact: string }> = [];
+    if (total > 0) {
+      if (missing.location / total > 0.35 || missing.start_datetime / total > 0.25 || missing.image / total > 0.4) {
+        suggested_actions.push({
+          key: 'crawl_all',
+          why: [
+            missing.location / total > 0.35 && `${Math.round((missing.location / total) * 100)}% ohne Adresse`,
+            missing.start_datetime / total > 0.25 && `${Math.round((missing.start_datetime / total) * 100)}% ohne Startdatum`,
+            missing.image / total > 0.4 && `${Math.round((missing.image / total) * 100)}% ohne Bild`,
+          ].filter(Boolean).join(', ') || 'Viele fehlende Felder',
+          impact: 'Adresse, Zeiten und Bilder aus der Website auffüllen',
+        });
+      }
+      suggested_actions.push({
+        key: 'ai_rerun',
+        why: 'AI-Klassifikation und Scoring erneut ausführen',
+        impact: 'Events werden erneut durch den AI-Worker verarbeitet',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        total_pending_ai: total,
+        missing,
+        suggested_actions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/sources/:id - Get single source with recent fetches
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
