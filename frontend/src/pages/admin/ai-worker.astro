@@ -163,7 +163,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       <!-- Event Pipeline (Split-View) – dauerhaft sichtbar; beim Start Batch gehen Events hier rein -->
       <div id="pipeline-section">
-        <div class="flex gap-4 h-[600px]">
+        <div class="flex gap-4 min-h-[75vh]">
           <!-- Left: Event List -->
           <div class="w-80 flex-shrink-0 bg-white rounded-2xl shadow-card flex flex-col">
             <div class="p-4 border-b border-gray-100">
@@ -211,46 +211,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                   <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <p class="text-sm font-semibold text-blue-800 mb-2">Empfohlene naechste Schritte</p>
                     <div id="actions-list" class="flex flex-wrap gap-2"></div>
-                  </div>
-                </div>
-
-                <!-- Daten fuer AI-Worker (Eingabedaten-Uebersicht) -->
-                <div id="section-input-data" class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                  <h4 class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                    <span>&#x1F4DD;</span> Daten fuer AI-Worker
-                    <span class="text-xs font-normal text-slate-500">(Eingabe pro Event)</span>
-                  </h4>
-                  <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div><span class="text-slate-500">Titel:</span> <span id="input-data-title" class="font-medium text-slate-800 truncate block">--</span></div>
-                    <div><span class="text-slate-500">Adresse:</span> <span id="input-data-address" class="text-slate-800 truncate block">--</span></div>
-                    <div><span class="text-slate-500">Start:</span> <span id="input-data-start" class="text-slate-800">--</span></div>
-                    <div><span class="text-slate-500">Ende:</span> <span id="input-data-end" class="text-slate-800">--</span></div>
-                    <div><span class="text-slate-500">Preis:</span> <span id="input-data-price" class="text-slate-800">--</span></div>
-                    <div><span class="text-slate-500">Indoor/Outdoor:</span> <span id="input-data-indoor-outdoor" class="text-slate-800">--</span></div>
-                    <div class="col-span-2">
-                      <span class="text-slate-500">Beschreibung (Auszug):</span>
-                      <p id="input-data-description" class="text-slate-800 text-xs mt-1 line-clamp-3 max-h-16 overflow-hidden">--</p>
-                    </div>
-                  </div>
-                  <!-- Daten nach Herkunft (RSS / Crawl / AI) -->
-                  <div id="input-data-by-source" class="mt-4 pt-4 border-t border-slate-200 space-y-4">
-                    <h5 class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Daten nach Herkunft</h5>
-                    <div id="input-data-from-feed" class="hidden">
-                      <p class="text-xs font-medium text-slate-600 mb-1">Daten von RSS/Feed</p>
-                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-feed-fields"></div>
-                    </div>
-                    <div id="input-data-from-crawl" class="hidden">
-                      <p class="text-xs font-medium text-slate-600 mb-1">Daten vom Website-Crawl</p>
-                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-crawl-fields"></div>
-                    </div>
-                    <div id="input-data-from-ai" class="hidden">
-                      <p class="text-xs font-medium text-slate-600 mb-1">Daten von AI</p>
-                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-ai-fields"></div>
-                    </div>
-                    <div id="input-data-from-manual" class="hidden">
-                      <p class="text-xs font-medium text-slate-600 mb-1">Manuell</p>
-                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-manual-fields"></div>
-                    </div>
                   </div>
                 </div>
 
@@ -422,6 +382,46 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                     <summary class="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900">Aenderungsverlauf</summary>
                     <div id="audit-list" class="mt-3 space-y-2 text-xs"></div>
                   </details>
+                </div>
+
+                <!-- Daten fuer AI-Worker (Eingabedaten-Uebersicht) – weiter unten -->
+                <div id="section-input-data" class="p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                  <h4 class="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                    <span>&#x1F4DD;</span> Daten fuer AI-Worker
+                    <span class="text-xs font-normal text-slate-500">(Eingabe pro Event)</span>
+                  </h4>
+                  <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div><span class="text-slate-500">Titel:</span> <span id="input-data-title" class="font-medium text-slate-800 truncate block">--</span></div>
+                    <div><span class="text-slate-500">Adresse:</span> <span id="input-data-address" class="text-slate-800 truncate block">--</span></div>
+                    <div><span class="text-slate-500">Start:</span> <span id="input-data-start" class="text-slate-800">--</span></div>
+                    <div><span class="text-slate-500">Ende:</span> <span id="input-data-end" class="text-slate-800">--</span></div>
+                    <div><span class="text-slate-500">Preis:</span> <span id="input-data-price" class="text-slate-800">--</span></div>
+                    <div><span class="text-slate-500">Indoor/Outdoor:</span> <span id="input-data-indoor-outdoor" class="text-slate-800">--</span></div>
+                    <div class="col-span-2">
+                      <span class="text-slate-500">Beschreibung (Auszug):</span>
+                      <p id="input-data-description" class="text-slate-800 text-xs mt-1 line-clamp-3 max-h-16 overflow-hidden">--</p>
+                    </div>
+                  </div>
+                  <!-- Daten nach Herkunft (RSS / Crawl / AI) -->
+                  <div id="input-data-by-source" class="mt-4 pt-4 border-t border-slate-200 space-y-4">
+                    <h5 class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Daten nach Herkunft</h5>
+                    <div id="input-data-from-feed" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Daten von RSS/Feed</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-feed-fields"></div>
+                    </div>
+                    <div id="input-data-from-crawl" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Daten vom Website-Crawl</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-crawl-fields"></div>
+                    </div>
+                    <div id="input-data-from-ai" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Daten von AI</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-ai-fields"></div>
+                    </div>
+                    <div id="input-data-from-manual" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Manuell</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-manual-fields"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
