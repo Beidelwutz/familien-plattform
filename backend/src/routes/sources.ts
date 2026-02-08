@@ -131,19 +131,24 @@ router.post('/detect', requireAuth, requireAdmin, async (req: Request, res: Resp
 });
 
 // GET /api/sources/pending-ai-counts - Pending AI count per source (admin)
+// Uses Prisma relation event_sources so every event linked to a source is counted correctly
 router.get('/pending-ai-counts', requireAuth, requireAdmin, async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const counts = await prisma.$queryRaw<Array<{ source_id: string; count: bigint }>>`
-      SELECT es.source_id, COUNT(DISTINCT es.canonical_event_id)::bigint AS count
-      FROM event_sources es
-      INNER JOIN canonical_events ce ON ce.id = es.canonical_event_id
-      WHERE ce.status = 'pending_ai'
-      GROUP BY es.source_id
-    `;
+    const sources = await prisma.source.findMany({
+      select: { id: true },
+    });
     const bySource: Record<string, number> = {};
-    for (const row of counts) {
-      bySource[row.source_id] = Number(row.count);
-    }
+    await Promise.all(
+      sources.map(async (s) => {
+        const count = await prisma.canonicalEvent.count({
+          where: {
+            status: 'pending_ai',
+            event_sources: { some: { source_id: s.id } },
+          },
+        });
+        bySource[s.id] = count;
+      })
+    );
     res.json({ success: true, data: bySource });
   } catch (error) {
     next(error);

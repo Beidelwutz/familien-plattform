@@ -756,8 +756,8 @@ export async function processSingleCandidate(
     }
   });
   
-  // Create EventSource
-  await prisma.eventSource.create({
+  // Create EventSource (Verbindung Quelle <-> Event für Pending-AI-Zählung pro Quelle)
+  const eventSource = await prisma.eventSource.create({
     data: {
       canonical_event_id: newEvent.id,
       source_id: sourceId,
@@ -767,6 +767,11 @@ export async function processSingleCandidate(
       raw_data: candidate.data as any,
       normalized_data: candidate.data as any,
     }
+  });
+
+  await prisma.canonicalEvent.update({
+    where: { id: newEvent.id },
+    data: { primary_source_id: eventSource.id },
   });
   
   // Update RawEventItem
