@@ -131,31 +131,31 @@ router.post('/detect', requireAuth, requireAdmin, async (req: Request, res: Resp
 });
 
 // GET /api/sources/pending-ai-counts - Pending AI count per source (admin)
-// Loads all pending_ai events with event_sources + primary_source, aggregates in memory
+// Uses raw_event_items (reliably populated during every ingest) to link pending_ai events to sources
 router.get('/pending-ai-counts', requireAuth, requireAdmin, async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const events = await prisma.canonicalEvent.findMany({
-      where: { status: 'pending_ai' },
+    // raw_event_items always has source_id + canonical_event_id set during ingest
+    const rows = await prisma.rawEventItem.findMany({
+      where: {
+        canonical_event_id: { not: null },
+        canonical_event: { status: 'pending_ai' },
+      },
       select: {
-        id: true,
-        event_sources: { select: { source_id: true } },
-        primary_source: { select: { source_id: true } },
+        source_id: true,
+        canonical_event_id: true,
       },
     });
-    const bySource: Record<string, number> = {};
-    for (const event of events) {
-      const sourceIds = new Set<string>();
-      for (const es of event.event_sources) {
-        if (es.source_id) sourceIds.add(es.source_id);
-      }
-      if (sourceIds.size === 0 && event.primary_source?.source_id) {
-        sourceIds.add(event.primary_source.source_id);
-      }
-      for (const sid of sourceIds) {
-        bySource[sid] = (bySource[sid] ?? 0) + 1;
-      }
+    // Count distinct events per source (one event can have multiple raw items from the same source)
+    const bySource: Record<string, Set<string>> = {};
+    for (const row of rows) {
+      if (!bySource[row.source_id]) bySource[row.source_id] = new Set();
+      bySource[row.source_id].add(row.canonical_event_id!);
     }
-    res.json({ success: true, data: bySource });
+    const result: Record<string, number> = {};
+    for (const [sid, eventSet] of Object.entries(bySource)) {
+      result[sid] = eventSet.size;
+    }
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
