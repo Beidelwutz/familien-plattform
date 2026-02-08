@@ -1054,7 +1054,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         const totalPending = sumBySource > 0 ? sumBySource : pendingCount;
         sourceSelect.innerHTML = '<option value="">Alle Quellen (' + totalPending + ' Pending AI)</option>' +
           sourcesList.map(s => {
-            const n = pendingAiCountBySource[s.id] ?? 0;
+            const n = pendingAiCountBySource[s.id] !== undefined ? pendingAiCountBySource[s.id] : 0;
             return `<option value="${s.id}">${escapeHtml(s.name || s.id)} (${n})</option>`;
           }).join('');
         updateBatchSourceCountDisplay();
