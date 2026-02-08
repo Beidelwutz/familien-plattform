@@ -2477,7 +2477,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
   try {
     const limit = Number(req.query.limit) || 50;
     const sourceId = typeof req.query.source_id === 'string' ? req.query.source_id : undefined;
-    const forceCrawlFirst = req.query.force_crawl_first === 'true' || req.query.force_crawl_first === true;
+    const forceCrawlFirst = req.query.force_crawl_first === 'true';
     const userId = req.user?.sub;
 
     // Stale-Jobs aufräumen: ältesten "running" Job prüfen und ggf. als stale markieren
@@ -4153,7 +4153,7 @@ router.post('/events/bulk-action', requireAuth, requireAdmin, async (req: AuthRe
           req,
         });
       } catch (auditErr) {
-        logger.warn('Bulk action audit log failed', auditErr);
+        logger.warn('Bulk action audit log failed: ' + (auditErr instanceof Error ? auditErr.message : String(auditErr)));
       }
     }
 
