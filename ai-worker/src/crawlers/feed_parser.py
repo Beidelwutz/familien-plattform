@@ -225,7 +225,9 @@ class FeedParser:
         if not fetch_result.was_modified:
             return [], fetch_result.etag, fetch_result.last_modified, False
         
-        cal = Calendar.from_ical(fetch_result.content)
+        # icalendar chokes on empty lines ("Content line could not be parsed into parts: ''")
+        content = "\n".join(line for line in fetch_result.content.splitlines() if line.strip())
+        cal = Calendar.from_ical(content)
         events = []
         
         for component in cal.walk():
