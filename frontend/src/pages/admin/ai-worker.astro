@@ -1924,7 +1924,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       return f.format ? f.format(raw) : String(raw);
     }
     function inGroup(prov) {
-      const s = (typeof prov === 'string' ? prov : (prov && (prov as any).source)) || '';
+      const s = (typeof prov === 'string' ? prov : (prov && typeof prov === 'object' && 'source' in prov ? prov.source : '')) || '';
       const src = String(s).toLowerCase();
       if (PROVENANCE_FEED.includes(src)) return 'feed';
       if (PROVENANCE_CRAWL.includes(src)) return 'crawl';
