@@ -217,6 +217,26 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                       <p id="input-data-description" class="text-slate-800 text-xs mt-1 line-clamp-3 max-h-16 overflow-hidden">--</p>
                     </div>
                   </div>
+                  <!-- Daten nach Herkunft (RSS / Crawl / AI) -->
+                  <div id="input-data-by-source" class="mt-4 pt-4 border-t border-slate-200 space-y-4">
+                    <h5 class="text-xs font-semibold text-slate-600 uppercase tracking-wide">Daten nach Herkunft</h5>
+                    <div id="input-data-from-feed" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Daten von RSS/Feed</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-feed-fields"></div>
+                    </div>
+                    <div id="input-data-from-crawl" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Daten vom Website-Crawl</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-crawl-fields"></div>
+                    </div>
+                    <div id="input-data-from-ai" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Daten von AI</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-ai-fields"></div>
+                    </div>
+                    <div id="input-data-from-manual" class="hidden">
+                      <p class="text-xs font-medium text-slate-600 mb-1">Manuell</p>
+                      <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm text-slate-800" id="input-data-from-manual-fields"></div>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Validation Checks (Ampel) -->
@@ -1878,8 +1898,31 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     });
   }
 
+  const INPUT_DATA_OVERVIEW_FIELDS = [
+    { key: 'title', label: 'Titel' },
+    { key: 'location_address', label: 'Adresse' },
+    { key: 'venue_name', label: 'Venue' },
+    { key: 'city', label: 'Stadt' },
+    { key: 'postal_code', label: 'PLZ' },
+    { key: 'start_datetime', label: 'Start', format: v => v ? formatDateTime(v) : null },
+    { key: 'end_datetime', label: 'Ende', format: v => v ? formatDateTime(v) : null },
+    { key: 'price_type', label: 'Preistyp' },
+    { key: 'price_min', label: 'Preis Min', format: v => v != null ? `${v}€` : null },
+    { key: 'price_max', label: 'Preis Max', format: v => v != null ? `${v}€` : null },
+    { key: 'is_indoor', label: 'Indoor', format: v => v ? 'Ja' : null },
+    { key: 'is_outdoor', label: 'Outdoor', format: v => v ? 'Ja' : null },
+    { key: 'description_short', label: 'Kurzbeschreibung', format: v => (v && v.length > 120 ? v.slice(0, 120) + '…' : v) || null },
+    { key: 'description_long', label: 'Beschreibung', format: v => (v && v.length > 120 ? v.slice(0, 120) + '…' : v) || null },
+  ];
+
+  const PROVENANCE_FEED = ['feed', 'rss', 'ical', 'normalizer'];
+  const PROVENANCE_CRAWL = ['crawl'];
+  const PROVENANCE_AI = ['ai', 'ai_classify'];
+  const PROVENANCE_MANUAL = ['manual', 'manual_override'];
+
   function renderInputDataOverview(event) {
     const existing = event.existing || {};
+    const provenance = existing.field_provenance || {};
     const desc = existing.description_long || existing.description_short || '';
     const descSnippet = desc ? (desc.length > 250 ? desc.slice(0, 250) + '…' : desc) : '--';
     document.getElementById('input-data-title').textContent = existing.title || '--';
@@ -1895,6 +1938,50 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     if (existing.is_outdoor) io.push('Outdoor');
     document.getElementById('input-data-indoor-outdoor').textContent = io.length ? io.join(', ') : '--';
     document.getElementById('input-data-description').textContent = descSnippet;
+
+    // Daten nach Herkunft gruppieren
+    function getDisplayValue(f, obj) {
+      const raw = obj[f.key];
+      if (raw === null || raw === undefined || raw === '') return null;
+      if (Array.isArray(raw) && raw.length === 0) return null;
+      return f.format ? f.format(raw) : String(raw);
+    }
+    function inGroup(prov) {
+      const s = (typeof prov === 'string' ? prov : (prov && (prov as any).source)) || '';
+      const src = String(s).toLowerCase();
+      if (PROVENANCE_FEED.includes(src)) return 'feed';
+      if (PROVENANCE_CRAWL.includes(src)) return 'crawl';
+      if (PROVENANCE_AI.includes(src)) return 'ai';
+      if (PROVENANCE_MANUAL.includes(src)) return 'manual';
+      return null;
+    }
+    const bySource = { feed: [], crawl: [], ai: [], manual: [] };
+    const hasProvenance = Object.keys(provenance).length > 0;
+    for (const f of INPUT_DATA_OVERVIEW_FIELDS) {
+      const val = getDisplayValue(f, existing);
+      if (val == null) continue;
+      const prov = provenance[f.key];
+      const src = hasProvenance && prov != null ? inGroup(prov) : 'feed';
+      const bucket = (src && bySource[src]) ? src : 'feed';
+      bySource[bucket].push({ label: f.label, value: val });
+    }
+    function renderBucket(containerId, fieldsId, items) {
+      const section = document.getElementById(containerId);
+      const fieldsEl = document.getElementById(fieldsId);
+      if (!section || !fieldsEl) return;
+      if (items.length === 0) {
+        section.classList.add('hidden');
+        return;
+      }
+      section.classList.remove('hidden');
+      fieldsEl.innerHTML = items.map(it =>
+        `<div><span class="text-slate-500">${escapeHtml(it.label)}:</span></div><div class="truncate">${escapeHtml(it.value)}</div>`
+      ).join('');
+    }
+    renderBucket('input-data-from-feed', 'input-data-from-feed-fields', bySource.feed);
+    renderBucket('input-data-from-crawl', 'input-data-from-crawl-fields', bySource.crawl);
+    renderBucket('input-data-from-ai', 'input-data-from-ai-fields', bySource.ai);
+    renderBucket('input-data-from-manual', 'input-data-from-manual-fields', bySource.manual);
   }
 
   function renderValidationChecks(event) {
