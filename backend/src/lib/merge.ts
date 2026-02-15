@@ -884,6 +884,10 @@ export async function processBatch(
   
   // Update IngestRun with statistics
   const topReasons = aggregateMergeReasons(results);
+  // #region agent log
+  const _updateData = { events_found: candidates.length, events_created: created, events_updated: updated, events_unchanged: unchanged, events_ignored: ignored, status: ignored === candidates.length ? 'failed' : (ignored > 0 ? 'partial' : 'success') };
+  fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'merge.ts:processBatch_before_update', message: 'updating IngestRun (per-batch overwrite)', data: { runId, batch_candidates_length: candidates.length, ..._updateData }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
+  // #endregion
   await prisma.ingestRun.update({
     where: { id: runId },
     data: {

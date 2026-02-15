@@ -59,6 +59,9 @@ prisma/*.db-journal
 # Docker
 docker-compose.override.yml
 
+# Cursor debug logs (RSS-Import; optional: set DEBUG_LOG_PATH for live)
+.cursor/debug.log
+
 # Misc
 *.bak
 *.tmp

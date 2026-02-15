@@ -35,6 +35,24 @@ from src.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# #region agent log
+def _agent_log(location: str, message: str, data: dict, hypothesis_id: str = ""):
+    import json
+    import os
+    payload = {"id": f"log_{int(__import__('time').time()*1000)}", "timestamp": int(__import__('time').time()*1000), "location": location, "message": message, "data": data, "hypothesisId": hypothesis_id}
+    try:
+        log_path = os.environ.get("DEBUG_LOG_PATH")
+        if not log_path:
+            # Repo root = 3 levels up from this file (ai-worker/src/queue/worker.py)
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+            log_path = os.path.join(repo_root, ".cursor", "debug.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+# #endregion
+
 # Version tracking
 VERSIONS = Versions(
     parser="1.0.0",
@@ -328,9 +346,17 @@ async def send_batch_to_backend(
                 for key in all_results:
                     all_results[key] += summary.get(key, 0)
                 logger.info(f"[BATCH] Sub-batch {batch_num}/{total_batches} OK: +{summary.get('created', 0)} created")
+                # #region agent log
+                if batch_num == 1:
+                    _agent_log("worker.py:first_batch_ok", "first batch response OK", {"batch_num": batch_num, "summary": summary, "status_code": 200}, "H2,H4")
+                # #endregion
                 success = True
                 break
             except Exception as e:
+                # #region agent log
+                if batch_num == 1:
+                    _agent_log("worker.py:first_batch_error", "first batch request failed", {"batch_num": 1, "error": str(e), "attempt": attempt + 1}, "H2,H4,H5")
+                # #endregion
                 if attempt < MAX_RETRIES - 1:
                     wait = 2 ** attempt
                     logger.warning(f"[BATCH] Sub-batch {batch_num} attempt {attempt+1} failed: {e}, retrying in {wait}s")
@@ -526,7 +552,10 @@ async def process_crawl_job(payload: dict) -> dict:
             events_found=len(parsed_events),
             events_created=0, events_updated=0, events_skipped=0,
         )
-    
+    # #region agent log
+    _agent_log("worker.py:after_events_found", "ingest_run updated with events_found", {"events_found": len(parsed_events), "ingest_run_id": ingest_run_id, "source_id": source_id}, "H1")
+    # #endregion
+
     # Step 2: In-Run Dedupe (remove duplicates within this fetch)
     deduplicator = create_parsed_event_deduplicator()
     unique_events = deduplicator.dedupe(parsed_events)
@@ -555,9 +584,15 @@ async def process_crawl_job(payload: dict) -> dict:
             # Count how many were enriched
             enriched_count = sum(1 for e in unique_events if e.deep_fetched)
             logger.info(f"Deep-fetch complete: {enriched_count}/{len(unique_events)} events enriched")
+            # #region agent log
+            _agent_log("worker.py:after_deep_fetch", "selective_deep_fetch done", {"enriched_count": enriched_count, "unique_events": len(unique_events)}, "H1")
+            # #endregion
         except Exception as e:
             logger.warning(f"Deep-fetch failed (continuing with RSS data): {e}")
-    
+            # #region agent log
+            _agent_log("worker.py:deep_fetch_error", "deep_fetch exception", {"error": str(e)}, "H1")
+            # #endregion
+
     # Step 3: Convert to Candidates
     candidates = [
         parsed_event_to_candidate(event, source_type)
@@ -582,6 +617,9 @@ async def process_crawl_job(payload: dict) -> dict:
         })
     
     # Step 5 (normal): Batch Ingest to Backend
+    # #region agent log
+    _agent_log("worker.py:before_send_batch", "calling send_batch_to_backend", {"candidates_count": len(candidates), "ingest_run_id": ingest_run_id}, "H2")
+    # #endregion
     result = await send_batch_to_backend(source_id, candidates, ingest_run_id)
     summary = result.get("summary", {})
 
