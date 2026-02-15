@@ -364,8 +364,8 @@ class SingleEventCrawlResponse(BaseModel):
     suggested_selectors: Optional[dict] = None  # Always {css:[], attr} format
 
 
-def _extract_visible_text(html: str, max_length: int = 5000) -> str:
-    """Extract visible text from HTML for AI processing, removing noise."""
+def _extract_visible_text(html: str, max_length: int = 12000) -> str:
+    """Extract visible text from HTML for AI processing (genug Kontext für Classifier/Score)."""
     soup = BeautifulSoup(html, 'lxml')
     for tag_name in ('script', 'style', 'nav', 'footer', 'aside', 'noscript',
                      'iframe', 'svg', 'form'):
@@ -427,8 +427,8 @@ async def crawl_single_event(request: SingleEventCrawlRequest):
         raise HTTPException(status_code=400, detail=f"URL blocked: {e}")
 
     fields_needed = list(request.fields_needed) if request.fields_needed else [
-        "location_address", "location_name", "start_datetime", "end_datetime",
-        "image_url", "description", "price", "organizer_name"
+        "title", "location_address", "location_name", "start_datetime", "end_datetime",
+        "image_url", "description", "price", "organizer_name", "image"
     ]
     # When detail_page_config has selectors, request those fields too (e.g. title, image, organizer)
     if request.detail_page_config and request.detail_page_config.get("selectors"):

@@ -17,6 +17,7 @@ from urllib.parse import urlparse, urljoin
 from urllib.robotparser import RobotFileParser
 from datetime import datetime
 import hashlib
+import re
 
 import httpx
 from bs4 import BeautifulSoup
@@ -47,7 +48,8 @@ class ScraperConfig:
     
     # CSS/XPath Selectors (only used if jsonld/microdata fail)
     selectors: dict = field(default_factory=dict)
-    # Expected keys: eventList, title, date, description, link, image
+    # Expected keys: eventList, title, date, description, link, image,
+    # optional: location_name, location_address, organizer, price, end_date
     
     # Date parsing
     date_format: Optional[str] = None  # e.g., "DD.MM.YYYY HH:mm"
@@ -316,6 +318,37 @@ class PoliteScraper:
                     if src:
                         image_url = urljoin(self.config.url, src)
                 
+                # Optional: location, organizer, price, end_date (für vollständige AI-Daten)
+                location_name = None
+                loc_el = item.select_one(selectors.get('location_name', '.location, .venue, [itemprop="name"]'))
+                if loc_el:
+                    location_name = loc_el.get_text(strip=True)
+                location_address = None
+                addr_el = item.select_one(selectors.get('location_address', '.address, [itemprop="address"]'))
+                if addr_el:
+                    location_address = addr_el.get('content') or addr_el.get_text(strip=True)
+                organizer_name = None
+                org_el = item.select_one(selectors.get('organizer', '.organizer, [itemprop="organizer"]'))
+                if org_el:
+                    organizer_name = org_el.get_text(strip=True)
+                price = None
+                price_el = item.select_one(selectors.get('price', '.price, [itemprop="price"]'))
+                if price_el:
+                    raw_price = price_el.get('content') or price_el.get_text(strip=True)
+                    if raw_price:
+                        num = re.search(r'[\d,\.]+', raw_price.replace(',', '.'))
+                        if num:
+                            try:
+                                price = float(num.group(0).replace(',', '.'))
+                            except ValueError:
+                                pass
+                end_datetime = None
+                end_el = item.select_one(selectors.get('end_date', '.end-date, time[datetime]'))
+                if end_el:
+                    end_str = end_el.get('datetime') or end_el.get_text(strip=True)
+                    if end_str:
+                        end_datetime = self._parse_date(end_str)
+                
                 # Create event
                 fingerprint = self._compute_fingerprint(title, start_datetime)
                 external_id = link or fingerprint
@@ -325,17 +358,26 @@ class PoliteScraper:
                     title=title[:200],
                     description=description[:5000] if description else None,
                     start_datetime=start_datetime,
-                    end_datetime=None,
-                    location_address=None,
+                    end_datetime=end_datetime,
+                    location_address=location_address,
                     source_url=link or self.config.url,
                     raw_data={
                         'title': title,
                         'description': description,
                         'date': str(start_datetime) if start_datetime else None,
+                        'end_date': str(end_datetime) if end_datetime else None,
                         'link': link,
                         'image': image_url,
+                        'location_name': location_name,
+                        'location_address': location_address,
+                        'organizer_name': organizer_name,
+                        'price': price,
                     },
                     fingerprint=fingerprint,
+                    image_url=image_url,
+                    location_name=location_name,
+                    organizer_name=organizer_name,
+                    price=price,
                 ))
                 
             except Exception as e:

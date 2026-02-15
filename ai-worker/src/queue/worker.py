@@ -110,32 +110,94 @@ def parsed_event_to_candidate(
     event: ParsedEvent,
     source_type: str,
 ) -> CanonicalCandidate:
-    """Convert ParsedEvent to CanonicalCandidate."""
-    
-    # Build images list from deep-fetched image_url
+    """
+    Convert ParsedEvent to CanonicalCandidate.
+    Füllt CandidateData mit allen vom Crawler/Feed verfügbaren Feldern,
+    damit Backend und AI Worker (Classify/Score) die komplette Info haben.
+    """
+    raw = event.raw_data or {}
+
+    # Images: aus raw_data (image_urls, images) + event.image_url zusammenführen
     images = None
-    if event.image_url:
+    if raw.get("image_urls") and isinstance(raw["image_urls"], list):
+        images = [u for u in raw["image_urls"] if isinstance(u, str) and u.startswith(("http://", "https://"))][:10]
+    elif raw.get("images") and isinstance(raw["images"], list):
+        images = [u for u in raw["images"] if isinstance(u, str) and u.startswith(("http://", "https://"))][:10]
+    if not images and event.image_url:
         images = [event.image_url]
-    
-    # Build CandidateData with enriched fields from deep-fetch
+    if images and len(images) > 10:
+        images = images[:10]
+
+    # Price: min/max aus raw_data oder event
+    price_min = event.price
+    price_max = event.price
+    if raw.get("price_min") is not None:
+        try:
+            price_min = float(raw["price_min"])
+        except (TypeError, ValueError):
+            pass
+    if raw.get("price_max") is not None:
+        try:
+            price_max = float(raw["price_max"])
+        except (TypeError, ValueError):
+            pass
+    if price_min is None and raw.get("price") is not None:
+        try:
+            price_min = float(raw["price"])
+            price_max = price_min
+        except (TypeError, ValueError):
+            pass
+
+    # Price details (für Normalizer/AI: z.B. adult/child/family)
+    price_details = raw.get("price_details") if isinstance(raw.get("price_details"), dict) else None
+
+    # Kontakt aus raw_data (Crawler/Detail-Seiten)
+    contact_email = raw.get("contact_email") or raw.get("email")
+    if contact_email and not isinstance(contact_email, str):
+        contact_email = None
+    contact_phone = raw.get("contact_phone") or raw.get("phone")
+    if contact_phone and not isinstance(contact_phone, str):
+        contact_phone = None
+
+    # Stadt/PLZ aus raw_data oder Default
+    city = raw.get("city") or "Karlsruhe"
+    if not isinstance(city, str):
+        city = "Karlsruhe"
+    postal_code = raw.get("postal_code")
+    if postal_code is not None and not isinstance(postal_code, str):
+        postal_code = str(postal_code) if postal_code else None
+
+    # Beschreibung: Organizer aus raw_data einbauen, damit AI alle Infos hat
+    description = event.description or ""
+    organizer_name = raw.get("organizer_name") or raw.get("organizer") or getattr(event, "organizer_name", None)
+    if organizer_name and isinstance(organizer_name, str) and organizer_name.strip():
+        if description and "veranstalter" not in description.lower() and "organizer" not in description.lower():
+            description = f"Veranstalter: {organizer_name.strip()}\n\n{description}"
+        elif not description:
+            description = f"Veranstalter: {organizer_name.strip()}"
+
+    # Build CandidateData with ALL available fields for AI and backend
     data = CandidateData(
         title=event.title,
-        description=event.description,
+        description=description or None,
         start_at=event.start_datetime.isoformat() if event.start_datetime else None,
         end_at=event.end_datetime.isoformat() if event.end_datetime else None,
         address=event.location_address,
-        # Enriched from deep-fetch
         venue_name=event.location_name,
-        city="Karlsruhe",  # Default for this region
+        city=city,
+        postal_code=postal_code,
         lat=event.lat,
         lng=event.lng,
-        price_min=event.price,  # From deep-fetch
-        price_max=event.price,  # Same as min for now
+        price_min=price_min,
+        price_max=price_max,
+        price_details=price_details,
         age_min=None,
         age_max=None,
         categories=None,
         images=images,
-        booking_url=event.source_url,
+        booking_url=event.source_url or raw.get("url") or raw.get("booking_url"),
+        contact_email=contact_email,
+        contact_phone=contact_phone,
     )
     
     # Compute raw hash from data
