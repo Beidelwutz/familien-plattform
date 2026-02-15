@@ -407,6 +407,28 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
     }
   })();
 
+  const DASHBOARD_CACHE_KEY = 'admin_dashboard_cache';
+
+  function getDashboardCache(): { data: Record<string, unknown>; fetchedAt: number } | null {
+    try {
+      const raw = sessionStorage.getItem(DASHBOARD_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { data?: unknown; fetchedAt?: number };
+      if (!parsed?.data || typeof parsed.fetchedAt !== 'number') return null;
+      return { data: parsed.data as Record<string, unknown>, fetchedAt: parsed.fetchedAt };
+    } catch {
+      return null;
+    }
+  }
+
+  function setDashboardCache(data: Record<string, unknown>) {
+    try {
+      sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ data, fetchedAt: Date.now() }));
+    } catch {
+      // ignore
+    }
+  }
+
   // Get auth token
   function getToken(): string | null {
     return localStorage.getItem('auth_token');
@@ -509,6 +531,68 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
     }
   }
 
+  // Apply dashboard API payload to the DOM (KPIs, sources, trends, teaser, hide loading, remove skeleton)
+  function applyDashboardData(d: Record<string, unknown>) {
+    const setText = (id: string, value: string | number) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = String(value);
+        el.setAttribute('data-loaded', 'true');
+      }
+    };
+
+    const stats = d.stats as Record<string, unknown>;
+    const events = (stats?.events ?? {}) as Record<string, unknown>;
+    setText('kpi-total', (events.total as number) ?? 0);
+    setText('kpi-published', (events.published as number) ?? 0);
+    setText('kpi-pending', (events.pending_review as number) ?? 0);
+    setText('kpi-today', (events.today_imports as number) ?? 0);
+    setText('kpi-pending-ai', (d.pendingAiCount as number) ?? 0);
+    setText('kpi-duplicates', (d.duplicatesTotal as number) ?? 0);
+
+    const aiStats = (stats?.ai_stats ?? {}) as Record<string, unknown>;
+    if (aiStats && Object.keys(aiStats).length) {
+      setText('ai-total-processed', `${aiStats.total_processed ?? 0} Events verarbeitet`);
+      setText('ai-published', (aiStats.ai_published as number) ?? 0);
+      setText('ai-pending-review', (aiStats.ai_pending_review as number) ?? 0);
+      setText('ai-rejected', (aiStats.ai_rejected as number) ?? 0);
+    }
+
+    const sources = (stats?.sources ?? {}) as Record<string, number>;
+    const totalSources = Object.values(sources).reduce((a, b) => a + Number(b), 0);
+    setText('sources-total', `${totalSources} Quellen`);
+    setText('sources-healthy', sources.healthy ?? 0);
+    setText('sources-degraded', sources.degraded ?? 0);
+    setText('sources-failing', sources.failing ?? 0);
+    setText('sources-dead', sources.dead ?? 0);
+    setText('sources-unknown', sources.unknown ?? 0);
+
+    const trends = (d.trends ?? {}) as Record<string, unknown>;
+    setText('trends-count', (trends.uniqueTerms as number) ?? 0);
+    setText('trends-last-computed', formatRelativeTime((trends.lastComputed as string) ?? null));
+
+    const attentionCount = (d.attentionTotal as number) ?? 0;
+    setText('attention-count', attentionCount);
+
+    const attentionContainer = document.getElementById('attention-container');
+    if (attentionContainer && attentionCount === 0) {
+      attentionContainer.className = 'flex-1 p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50';
+      const countEl = attentionContainer.querySelector('#attention-count');
+      const labelEl = attentionContainer.querySelector('span:last-child');
+      if (countEl) countEl.className = 'block text-3xl font-bold text-green-600';
+      if (labelEl) {
+        labelEl.className = 'text-sm text-green-700';
+        labelEl.textContent = 'alles in Ordnung';
+      }
+    }
+
+    document.getElementById('loading-state')?.classList.add('hidden');
+    document.getElementById('dashboard-content')?.classList.remove('dashboard-skeleton');
+
+    fillTeaserForm((d.teaser ?? null) as Record<string, unknown> | null);
+    updateTeaserPreview();
+  }
+
   // Load dashboard via single aggregate endpoint (1 HTTP call, backend coordinates DB load)
   let dashboardCallCount = 0;
   let dashboardLoadInFlight = false;
@@ -532,66 +616,9 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
       const fetchMs = Date.now() - fetchStart;
       fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin/index.astro:afterFetch', message: 'dashboard fetch completed', data: { callId, fetchMs }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
       // #endregion
-      const d = res.data;
-
-      const setText = (id: string, value: string | number) => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.textContent = String(value);
-          el.setAttribute('data-loaded', 'true');
-        }
-      };
-
-      const stats = d.stats;
-      const events = stats.events;
-      setText('kpi-total', events.total);
-      setText('kpi-published', events.published);
-      setText('kpi-pending', events.pending_review);
-      setText('kpi-today', events.today_imports);
-      setText('kpi-pending-ai', d.pendingAiCount ?? 0);
-      setText('kpi-duplicates', d.duplicatesTotal ?? 0);
-
-      const aiStats = stats.ai_stats;
-      if (aiStats) {
-        setText('ai-total-processed', `${aiStats.total_processed} Events verarbeitet`);
-        setText('ai-published', aiStats.ai_published);
-        setText('ai-pending-review', aiStats.ai_pending_review);
-        setText('ai-rejected', aiStats.ai_rejected);
-      }
-
-      const sources = stats.sources;
-      const totalSources = Object.values(sources).reduce((a: number, b) => a + (b as number), 0);
-      setText('sources-total', `${totalSources} Quellen`);
-      setText('sources-healthy', sources.healthy);
-      setText('sources-degraded', sources.degraded);
-      setText('sources-failing', sources.failing);
-      setText('sources-dead', sources.dead);
-      setText('sources-unknown', sources.unknown);
-
-      const trends = d.trends ?? {};
-      setText('trends-count', trends.uniqueTerms ?? 0);
-      setText('trends-last-computed', formatRelativeTime(trends.lastComputed ?? null));
-
-      const attentionCount = d.attentionTotal ?? 0;
-      setText('attention-count', attentionCount);
-
-      const attentionContainer = document.getElementById('attention-container');
-      if (attentionContainer && attentionCount === 0) {
-        attentionContainer.className = 'flex-1 p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50';
-        const countEl = attentionContainer.querySelector('#attention-count');
-        const labelEl = attentionContainer.querySelector('span:last-child');
-        if (countEl) countEl.className = 'block text-3xl font-bold text-green-600';
-        if (labelEl) {
-          labelEl.className = 'text-sm text-green-700';
-          labelEl.textContent = 'alles in Ordnung';
-        }
-      }
-
-      document.getElementById('loading-state')?.classList.add('hidden');
-      document.getElementById('dashboard-content')?.classList.remove('dashboard-skeleton');
-
-      fillTeaserForm(d.teaser ?? null);
-      updateTeaserPreview();
+      const d = res.data as Record<string, unknown>;
+      setDashboardCache(d);
+      applyDashboardData(d);
     } catch (e) {
       console.error('Dashboard load error:', e);
       document.getElementById('loading-state')?.classList.add('hidden');
@@ -707,9 +734,18 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
     // #region agent log
     fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin/index.astro:initDashboard', message: 'about to call loadDashboardData', data: { readyState: document.readyState }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
     // #endregion
-    await loadDashboardData();
+
+    const cached = getDashboardCache();
+    if (cached?.data) {
+      applyDashboardData(cached.data);
+      void loadDashboardData();
+    } else {
+      await loadDashboardData();
+    }
+
     void updateHealthWidget();
     setInterval(() => void updateHealthWidget(), 30000);
+    setInterval(() => void loadDashboardData(), 5 * 60 * 1000);
 
     // Teaser-Box: Preset-Dropdown – bei Änderung Hidden-Felder setzen und Vorschau aktualisieren
     document.getElementById('teaser-preset')?.addEventListener('change', () => {

@@ -296,7 +296,8 @@ router.get('/dashboard', async (_req: Request, res: Response, next: NextFunction
 
     // #region agent log
     const t1 = Date.now();
-    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin.ts:afterPromiseAll', message: 'after Promise.all', data: { totalMs: t1 - t0 }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+    const dashboardMs = t1 - t0;
+    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin.ts:afterPromiseAll', message: 'after Promise.all', data: { totalMs: dashboardMs }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
     // #endregion
 
     const teaserDefaults = {
@@ -312,6 +313,7 @@ router.get('/dashboard', async (_req: Request, res: Response, next: NextFunction
     };
     const teaserData = { ...teaserDefaults, ...(((teaserRow as { value?: unknown } | null)?.value as Record<string, unknown>) || {}) };
 
+    res.setHeader('X-Dashboard-Duration-Ms', String(dashboardMs));
     res.json({
       success: true,
       data: {
