@@ -1076,10 +1076,6 @@ interface IngestBatchRequest {
 // POST /api/events/ingest/batch - Batch ingest events from AI-Worker (requires SERVICE_TOKEN)
 router.post('/ingest/batch', requireServiceToken, async (req: Request, res: Response, next: NextFunction) => {
   const correlationId = req.headers['x-correlation-id'] as string || crypto.randomUUID().substring(0, 8);
-  // #region agent log
-  const _body = req.body as IngestBatchRequest;
-  fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'events.ts:ingest/batch_start', message: 'batch ingest request received', data: { candidates_count: _body?.candidates?.length ?? 0, run_id: _body?.run_id, source_id: _body?.source_id }, timestamp: Date.now(), hypothesisId: 'H2,H3,H5' }) }).catch(() => {});
-  // #endregion
   try {
     const { run_id, source_id, candidates } = req.body as IngestBatchRequest;
     
@@ -1114,9 +1110,6 @@ router.post('/ingest/batch', requireServiceToken, async (req: Request, res: Resp
     const { results, summary } = await processBatch(candidates, source_id, ingestRunId);
     // Log so ops can verify batches are applied (created/updated are persisted immediately)
     console.info(`[INGEST] batch applied source_id=${source_id} run_id=${ingestRunId} created=${summary.created} updated=${summary.updated} unchanged=${summary.unchanged} ignored=${summary.ignored}`);
-    // #region agent log
-    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'events.ts:ingest/batch_after_processBatch', message: 'processBatch completed', data: { run_id: ingestRunId, summary, candidates_count: candidates.length }, timestamp: Date.now(), hypothesisId: 'H3,H5' }) }).catch(() => {});
-    // #endregion
     // Update source health on success
     if (summary.created > 0 || summary.updated > 0) {
       await prisma.source.update({

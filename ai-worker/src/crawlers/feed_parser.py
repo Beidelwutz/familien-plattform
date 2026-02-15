@@ -151,7 +151,7 @@ class FeedParser:
             except Exception as e:
                 logger.warning(f"Error parsing RSS entry: {e}")
                 continue
-        
+
         return events, fetch_result.etag, fetch_result.last_modified, True
     
     async def parse_rss_simple(self, url: str) -> list[ParsedEvent]:

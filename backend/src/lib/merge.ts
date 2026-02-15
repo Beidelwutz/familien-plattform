@@ -258,7 +258,7 @@ export async function processSingleCandidate(
   const appliedFields: string[] = [];
   const ignoredFields: string[] = [];
   const mergeReasons: MergeReason[] = [];
-  
+
   // Get source info
   const source = await prisma.source.findUnique({ where: { id: sourceId } });
   if (!source) {
@@ -276,7 +276,7 @@ export async function processSingleCandidate(
       canonical_event: true
     }
   });
-  
+
   // Create or update RawEventItem for audit trail (with tracking fields)
   const rawEventItem = await prisma.rawEventItem.upsert({
     where: {
@@ -744,9 +744,22 @@ export async function processSingleCandidate(
     }
   }
   
+  // Omit fields not in CanonicalEvent schema (would cause Prisma create to throw → all candidates ignored)
+  const {
+    age_recommendation_text: _ar,
+    sibling_friendly: _sf,
+    language: _lang,
+    complexity_level: _cl,
+    noise_level: _nl,
+    has_seating: _hs,
+    typical_wait_minutes: _tw,
+    food_drink_allowed: _fd,
+    ...eventDataForDb
+  } = eventData as Record<string, unknown> & typeof eventData;
+
   const newEvent = await prisma.canonicalEvent.create({
     data: {
-      ...eventData,
+      ...eventDataForDb,
       status: initialStatus as EventStatus,
       is_complete: completeness.isComplete,
       completeness_score: completeness.score,
