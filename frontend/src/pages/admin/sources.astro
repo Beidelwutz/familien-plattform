@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+// In production (e.g. kiezling.com) use same origin if PUBLIC_API_URL not set
+const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : '');
 ---
 
 <AdminLayout title="Quellen - kiezling Admin" currentPage="sources">
@@ -148,6 +149,16 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   <div id="loading-state" class="text-center py-12">
     <div class="animate-spin inline-block w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
     <p class="text-gray-500 mt-4">Lade Quellen...</p>
+  </div>
+
+  <!-- Error State (load failed) -->
+  <div id="error-state" class="hidden text-center py-12 bg-amber-50 rounded-xl border border-amber-200">
+    <svg class="w-16 h-16 mx-auto text-amber-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+    <h3 class="text-lg font-medium text-amber-900 mb-1">Quellen konnten nicht geladen werden</h3>
+    <p id="error-state-message" class="text-amber-800 text-sm mb-4">Backend nicht erreichbar. Bitte PUBLIC_API_URL prüfen oder Seite neu laden.</p>
+    <button type="button" id="error-state-retry" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 text-sm font-medium">Erneut versuchen</button>
   </div>
 
   <!-- Empty State -->
@@ -530,6 +541,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 </style>
 
 <script is:inline define:vars={{ API_URL }}>
+  // Runtime: if no API URL set (production build), use current origin so /admin/sources works on kiezling.com
+  const apiBase = (typeof window !== 'undefined' && !API_URL) ? window.location.origin : (API_URL || 'http://localhost:4000');
   let sources = [];
   let filteredSources = [];
   let pendingAiCounts = {}; // sourceId -> count
@@ -553,7 +566,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // API helper
   async function apiFetch(endpoint, options = {}) {
-    const res = await fetch(`${API_URL}${endpoint}`, {
+    const res = await fetch(`${apiBase}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -608,6 +621,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     document.getElementById('loading-state').classList.remove('hidden');
     document.getElementById('source-table').classList.add('hidden');
     document.getElementById('empty-state').classList.add('hidden');
+    const errorEl = document.getElementById('error-state');
+    if (errorEl) errorEl.classList.add('hidden');
 
     try {
       const [sourcesRes, countsRes] = await Promise.all([
@@ -647,6 +662,17 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       applyFilters();
     } catch (e) {
       console.error('Load error:', e);
+      const errState = document.getElementById('error-state');
+      const errMsg = document.getElementById('error-state-message');
+      if (errState && errMsg) {
+        errMsg.textContent = e?.message || 'Backend nicht erreichbar. Bitte PUBLIC_API_URL prüfen oder Seite neu laden.';
+        document.getElementById('source-table').classList.add('hidden');
+        document.getElementById('empty-state').classList.add('hidden');
+        errState.classList.remove('hidden');
+      } else {
+        sources = [];
+        applyFilters();
+      }
     } finally {
       document.getElementById('loading-state').classList.add('hidden');
     }
@@ -1826,6 +1852,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   document.getElementById('delete-confirm').addEventListener('click', confirmDelete);
   document.getElementById('bulk-pending-cancel').addEventListener('click', closeBulkPendingModal);
   document.getElementById('bulk-pending-confirm').addEventListener('click', runBulkPendingAction);
+  const errorRetryBtn = document.getElementById('error-state-retry');
+  if (errorRetryBtn) errorRetryBtn.addEventListener('click', loadSources);
 
   // Close modals on backdrop click
   document.getElementById('edit-modal').addEventListener('click', (e) => {
