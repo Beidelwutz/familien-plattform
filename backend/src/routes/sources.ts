@@ -122,6 +122,8 @@ interface AIScoresResponse {
   relevance_score?: number;
   quality_score?: number;
   stressfree_score?: number;
+  fun_score?: number;
+  reasoning?: Record<string, string>;
 }
 
 // GET /api/sources - List all sources (admin)
@@ -1286,7 +1288,7 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
           data: updateData
         });
         
-        // Create/update EventScore
+        // Create/update EventScore (incl. fun_score and ai_reasoning for Tagestipp)
         await prisma.eventScore.upsert({
           where: { event_id: event.id },
           create: {
@@ -1295,7 +1297,9 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
             quality_score: scores.quality_score,
             family_fit_score: scores.family_fit_score,
             stressfree_score: scores.stressfree_score,
+            fun_score: scores.fun_score ?? null,
             confidence: classification.confidence,
+            ai_reasoning: scores.reasoning ?? undefined,
             ai_model_version: 'cron-v1',
           },
           update: {
@@ -1303,7 +1307,9 @@ router.post('/cron/process-pending-ai', async (req: Request, res: Response, next
             quality_score: scores.quality_score,
             family_fit_score: scores.family_fit_score,
             stressfree_score: scores.stressfree_score,
+            fun_score: scores.fun_score ?? null,
             confidence: classification.confidence,
+            ai_reasoning: scores.reasoning ?? undefined,
             scored_at: new Date(),
           }
         });

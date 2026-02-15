@@ -3,6 +3,33 @@
 Quelle: `kalender.karlsruhe.de` (z. B. `/db/termine/musik/…`).  
 Komma-getrennt = Fallback-Reihenfolge (erster Treffer gewinnt).
 
+---
+
+## Scraping per RSS – Wichtiger Hinweis zu &lt;pubDate&gt;
+
+Das RSS-Feed (`https://kalender.karlsruhe.de/db/termine/rss`) liefert pro Event u. a.:
+
+- `<title>`, `<link>`, `<description>`, `<content:encoded>`, `<guid>`, **`<pubDate>`**
+
+**`<pubDate>` ist nur das Veröffentlichungsdatum des Eintrags im Kalender, nicht der Termin der Veranstaltung.**
+
+Beispiel aus dem RSS:
+
+```xml
+<item>
+  <title>90ER VS. 2000ER PARTY</title>
+  <link>https://kalender.karlsruhe.de/db/termine/musik/90er_vs_2000er_party-2</link>
+  <description>21 Uhr - Substage Karlsruhe e.V. - ...</description>
+  <pubDate>Sat, 21 Feb 2026 21:00:00 +0018</pubDate>
+</item>
+```
+
+Hier bedeutet `pubDate` „wann dieser Eintrag veröffentlicht wurde“, nicht „wann die Party stattfindet“. Das **tatsächliche Event-Datum und die Uhrzeit** stehen auf der **Detailseite** (z. B. dort: „21. Februar 2026, 21 Uhr“). Beim Scrapen per RSS muss daher für jedes `<item>` die Detail-URL (`<link>`) aufgerufen und mit den unten stehenden Selektoren **Startdatum** (und ggf. Enddatum) von der HTML-Detailseite extrahiert werden. `pubDate` aus dem RSS darf nicht als Event-Start übernommen werden.
+
+---
+
+## Selektoren für die Detailseite
+
 | Feld | Typ | CSS-Selektoren |
 |------|-----|----------------|
 | **Titel** | text | `.vevent h2`, `#h2-style`, `h2#h2-style` |

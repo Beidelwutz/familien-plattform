@@ -79,8 +79,9 @@ class ScoringResult(BaseModel):
     quality_score: int
     family_fit_score: int
     stressfree_score: int
+    fun_score: Optional[int] = None
     confidence: float
-    reasoning: dict
+    reasoning: Optional[dict] = None
 
 
 @router.post("/event", response_model=ClassificationResult)
@@ -144,8 +145,9 @@ async def score_event(event: EventInput):
             quality_score=result.quality_score,
             family_fit_score=result.family_fit_score,
             stressfree_score=result.stressfree_score,
+            fun_score=result.fun_score,
             confidence=result.confidence,
-            reasoning=result.reasoning
+            reasoning=result.reasoning or {}
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scoring failed: {str(e)}")

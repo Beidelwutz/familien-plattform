@@ -1,0 +1,106 @@
+---
+/**
+ * TagestippRow.astro – Einzelner Tipp als klickbare Zeile (rausgegangen.de-Spec).
+ * Reihenfolge (Spec): Badge (oben/links, Versalien) → Datum+Uhrzeit → Titel → Venue → Preis → Kategorie (Tag).
+ * States: A) PRESENTED + Sponsored, B) Sold out („Ausverkauft“), C) Badge als eigene Zeile.
+ */
+interface Props {
+  id: string;
+  title: string;
+  startDatetime?: string;
+  venueName?: string;
+  locationDistrict?: string;
+  priceType: 'free' | 'paid' | 'range' | 'unknown';
+  priceMin?: number;
+  priceMax?: number;
+  categoryName?: string;
+  badge?: 'PICK_OF_THE_DAY' | 'PRESENTED';
+  isSoldOut?: boolean;
+  isSponsored?: boolean;
+}
+
+const {
+  id,
+  title,
+  startDatetime,
+  venueName,
+  locationDistrict,
+  priceType,
+  priceMin,
+  priceMax,
+  categoryName,
+  badge = 'PICK_OF_THE_DAY',
+  isSoldOut = false,
+  isSponsored = false,
+} = Astro.props;
+
+const formatDateMeta = (datetime: string | undefined) => {
+  if (!datetime) return null;
+  try {
+    const d = new Date(datetime);
+    const today = new Date();
+    const isToday =
+      d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear();
+    const dateStr = d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+    const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return isToday ? `Heute, ${dateStr} | ${timeStr}` : `${dateStr} | ${timeStr}`;
+  } catch {
+    return null;
+  }
+};
+
+const formatPrice = () => {
+  if (isSoldOut) return 'Ausverkauft';
+  if (priceType === 'free') return 'Kostenlos';
+  if (priceType === 'paid' && priceMin != null) return `${Number(priceMin).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  if (priceType === 'range' && priceMin != null && priceMax != null)
+    return `${Number(priceMin).toLocaleString('de-DE', { minimumFractionDigits: 2 })} bis ${Number(priceMax).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  return '';
+};
+
+const dateMeta = formatDateMeta(startDatetime);
+const venueDisplay = venueName || locationDistrict || '';
+const priceDisplay = formatPrice();
+const badgeLabel = badge === 'PRESENTED' ? 'PRESENTED' : 'PICK OF THE DAY';
+---
+
+<li class="tagestipp-row border-b border-gray-200 last:border-b-0">
+  <a href={`/event/${id}`} class="block py-2.5 sm:py-3 group hover:bg-gray-50/80 transition-colors -mx-2 px-2 rounded-lg">
+    <!-- Badge + Datum in einer Zeile (kompakt) -->
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-0.5">
+      <span class="text-[11px] font-semibold tracking-wider text-gray-500 uppercase">
+        {badgeLabel}
+      </span>
+      {dateMeta && (
+        <span class="text-xs text-gray-500">
+          {dateMeta}
+          {isSoldOut && <span class="text-red-600 font-medium"> · Ausverkauft</span>}
+        </span>
+      )}
+    </div>
+
+    <!-- Titel (eine Zeile, overflow versteckt) -->
+    <h3 class="text-base font-semibold text-gray-900 group-hover:text-primary-600 transition-colors truncate">
+      {isSponsored && <span class="text-primary-500">♥️ </span>}
+      {title}
+    </h3>
+
+    <!-- Venue + Preis + Kategorie in einer Zeile -->
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-600 mt-0.5">
+      {venueDisplay && <span>{venueDisplay}</span>}
+      {venueDisplay && (priceDisplay || categoryName) && <span class="text-gray-300">·</span>}
+      {priceDisplay && (
+        <span class={isSoldOut ? 'text-red-600 font-medium' : 'text-gray-700'}>
+          {priceDisplay}
+        </span>
+      )}
+      {categoryName && (
+        <span class="inline-block px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px] font-medium">
+          {categoryName}
+        </span>
+      )}
+    </div>
+  </a>
+</li>

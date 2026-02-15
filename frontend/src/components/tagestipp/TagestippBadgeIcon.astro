@@ -1,0 +1,24 @@
+---
+import { getTagestippIcon, type TagestippIconId } from './icons';
+
+interface Props {
+  iconId?: TagestippIconId;
+  size?: 14 | 16;
+}
+
+const { iconId = 'default', size = 16 } = Astro.props;
+const icon = getTagestippIcon(iconId);
+---
+
+<svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" class="shrink-0">
+  {icon.paths.map((p) => (
+    <path
+      d={p.d}
+      fill={p.fill === 'white' ? 'white' : 'none'}
+      stroke={p.stroke === 'white' ? 'white' : undefined}
+      stroke-width={p.stroke ? '1.6' : undefined}
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+  ))}
+</svg>

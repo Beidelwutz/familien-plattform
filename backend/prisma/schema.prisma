@@ -644,6 +644,15 @@ model JobQueueEntry {
   @@map("job_queue")
 }
 
+model SiteSetting {
+  id         String   @id @default(cuid())
+  key        String   @unique @db.VarChar(100)
+  value      Json
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("site_settings")
+}
+
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model spatial_ref_sys {
   srid      Int     @id

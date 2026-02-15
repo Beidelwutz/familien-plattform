@@ -1,0 +1,37 @@
+---
+/**
+ * Minimales Layout für die Teaser-Vorschau (iframe).
+ * Gleiche Schrift (Inter) und Basis-Styles wie Startseite für 1:1-Look.
+ */
+interface Props {
+  title?: string;
+}
+const { title = 'Teaser-Vorschau' } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style is:global>
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: var(--tagestipp-bg, #FDFBF8) !important;
+        min-height: 0 !important;
+        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        color: #1f2937;
+        overflow-x: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

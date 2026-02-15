@@ -26,7 +26,14 @@ import {
   createEventRevision 
 } from '../lib/eventRevision.js';
 import { searchEventsWithinRadius, addDistanceToEvents } from '../lib/geo.js';
-import { whereDisplayable, whereDisplayableWith, RESTRICTED_AGE_RATINGS } from '../lib/eventQuery.js';
+import { whereDisplayable, whereDisplayableWith, canPublish, RESTRICTED_AGE_RATINGS } from '../lib/eventQuery.js';
+import {
+  computeTotalScore,
+  assignBadges,
+  buildWhyRecommended,
+  reRank,
+  type EventWithScores,
+} from '../lib/tagestippScore.js';
 import { optionalAuth, requireAuth, requireServiceToken, type AuthRequest } from '../middleware/auth.js';
 import crypto from 'crypto';
 import { sendEventSubmittedEmail } from '../lib/email.js';
@@ -526,6 +533,87 @@ router.get('/featured', async (req: Request, res: Response, next: NextFunction) 
       success: true,
       data: events,
       pagination: createPaginationResult(page, limit, total),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/events/tagestipp - Tagestipps für heute (Ranking, Badges, optional why_recommended)
+router.get('/tagestipp', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const limit = Math.min(parseInt(String(req.query.limit || '6'), 10) || 6, 20);
+    const lat = req.query.lat ? parseFloat(String(req.query.lat)) : null;
+    const lng = req.query.lng ? parseFloat(String(req.query.lng)) : null;
+    const dateParam = req.query.date as string | undefined;
+
+    const now = new Date();
+    const today = dateParam
+      ? (() => {
+          const d = new Date(dateParam);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        })()
+      : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const where = whereDisplayableWith(now, {
+      start_datetime: { gte: today, lt: tomorrow },
+    });
+
+    let events = await prisma.canonicalEvent.findMany({
+      where,
+      take: 50,
+      orderBy: [{ start_datetime: 'asc' }],
+      include: {
+        categories: { include: { category: true } },
+        scores: true,
+      },
+    });
+
+    events = events.filter((e) => canPublish(e).valid);
+
+    if (lat != null && lng != null) {
+      events = addDistanceToEvents(events, lat, lng);
+    }
+
+    const scored: EventWithScores[] = events.map((event) => {
+      const { components, total } = computeTotalScore(event);
+      return { event, scoreComponents: components, totalScore: total };
+    });
+
+    const sorted = scored.sort((a, b) => b.totalScore - a.totalScore);
+    const reranked = reRank(sorted, limit);
+
+    const subline = 'Top Picks heute';
+    const intent_label = null;
+
+    const data = reranked.map(({ event, scoreComponents }) => {
+      const badges = assignBadges(event, events);
+      const why_recommended = buildWhyRecommended(event);
+      const out: any = {
+        ...event,
+        badges: badges as string[],
+        score_components: {
+          popularity: scoreComponents.popularity,
+          match: scoreComponents.match,
+          freshness: scoreComponents.freshness,
+          distance: scoreComponents.distance,
+        },
+      };
+      if (why_recommended) out.why_recommended = why_recommended;
+      if (event.distance_km != null) out.distance_km = event.distance_km;
+      if (event.distance_meters != null) out.distance_meters = event.distance_meters;
+      return out;
+    });
+
+    res.json({
+      success: true,
+      data,
+      pagination: createPaginationResult(1, limit, data.length),
+      subline,
+      intent_label,
     });
   } catch (error) {
     next(error);

@@ -1,0 +1,95 @@
+---
+/**
+ * Pick of the day #2 – Karten-Grid (wie TopPicks / Feed).
+ */
+import EventCardNew from '../feed/EventCardNew.astro';
+
+interface PickEvent {
+  id: string;
+  title: string;
+  start_datetime?: string;
+  image_urls?: string[];
+  venue_name?: string;
+  location_district?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  price_max?: number;
+  age_min?: number;
+  age_max?: number;
+  is_indoor?: boolean;
+  is_outdoor?: boolean;
+  availability_status?: string;
+  last_verified_at?: string;
+  scores?: { stressfree_score?: number; family_fit_score?: number };
+  categories?: { category?: { name_de?: string } }[];
+}
+
+interface Props {
+  events: PickEvent[];
+  locationName?: string;
+}
+
+const { events, locationName = 'Karlsruhe' } = Astro.props;
+
+const formatDate = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch { return undefined; }
+};
+
+const formatTime = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    return new Date(datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  } catch { return undefined; }
+};
+
+const formatLastVerified = (datetime: string | undefined) => {
+  if (!datetime) return undefined;
+  try {
+    const diff = Date.now() - new Date(datetime).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    if (hours < 1) return 'vor kurzem';
+    if (hours < 24) return `vor ${hours}h`;
+    return `vor ${Math.floor(hours / 24)}d`;
+  } catch { return undefined; }
+};
+---
+
+<section id="pick-2" class="py-6 md:py-8" aria-labelledby="pick-2-heading">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 id="pick-2-heading" class="text-xl md:text-2xl font-bold text-gray-900 mb-1">
+      Pick of the day #2 – Events heute in {locationName}
+    </h2>
+    <p class="text-sm text-gray-500 mb-5">Karten-Grid</p>
+
+    {events.length > 0 ? (
+      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        {events.slice(0, 6).map((event) => (
+          <EventCardNew
+            id={event.id}
+            title={event.title}
+            imageUrl={event.image_urls?.[0]}
+            date={formatDate(event.start_datetime)}
+            startTime={formatTime(event.start_datetime)}
+            priceType={event.price_type}
+            priceMin={event.price_min}
+            priceMax={event.price_max}
+            ageMin={event.age_min}
+            ageMax={event.age_max}
+            isIndoor={event.is_indoor}
+            isOutdoor={event.is_outdoor}
+            venueName={event.venue_name}
+            availabilityStatus={event.availability_status as any}
+            stressfreeScore={event.scores?.stressfree_score}
+            familyFitScore={event.scores?.family_fit_score}
+            lastVerified={formatLastVerified(event.last_verified_at)}
+          />
+        ))}
+      </div>
+    ) : (
+      <p class="text-gray-500 text-sm py-6">Keine Events für heute.</p>
+    )}
+  </div>
+</section>

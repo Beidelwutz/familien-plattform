@@ -1,0 +1,94 @@
+---
+/**
+ * TagestippSection.astro – "Pick of the day" Box (rausgegangen.de-Spec).
+ * Vorgaben:
+ * - Teaser/Quote direkt ÜBER der Headline (Testimonial-Style)
+ * - H1: "Pick of the day – Events heute in [Ort]"
+ * - Vertikale Liste; jeder Eintrag = ein klickbarer Link/Row
+ */
+import TagestippRow from '../feed/TagestippRow.astro';
+
+interface TagestippEvent {
+  id: string;
+  title: string;
+  start_datetime?: string;
+  venue_name?: string;
+  location_district?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  price_max?: number;
+  availability_status?: string;
+  categories?: { category?: { name_de?: string } }[];
+}
+
+interface Props {
+  events: TagestippEvent[];
+  subline: string;
+  /** Kurzer Teaser/Quote oberhalb der Headline (Testimonial-Style, optional) */
+  teaser?: string;
+  /** Ort für die Headline, z. B. "Karlsruhe" */
+  locationName?: string;
+}
+
+const { events, subline, teaser, locationName = 'Karlsruhe' } = Astro.props;
+---
+
+<section class="tagestipp-section py-4 md:py-5" aria-labelledby="tagestipp-heading">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <!-- Teaser/Quote direkt über der Headline -->
+    {teaser && (
+      <p class="text-sm text-gray-500 italic mb-0.5">
+        {teaser}
+      </p>
+    )}
+
+    <!-- Section-Headline (H1) -->
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <h1 id="tagestipp-heading" class="text-xl md:text-2xl font-bold text-gray-900 leading-tight">
+        Pick of the day – Events heute in {locationName}
+      </h1>
+      <a
+        href="/suche"
+        class="flex-shrink-0 text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+      >
+        Alle
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+      </a>
+    </div>
+
+    {subline && (
+      <p class="text-sm text-gray-500 mb-4">{subline}</p>
+    )}
+
+    <!-- Liste der Tipps (kompakte Rows) -->
+    <ul class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+      {events.length > 0 ? (
+        events.map((event) => (
+          <TagestippRow
+            id={event.id}
+            title={event.title}
+            startDatetime={event.start_datetime}
+            venueName={event.venue_name}
+            locationDistrict={event.location_district}
+            priceType={event.price_type}
+            priceMin={event.price_min}
+            priceMax={event.price_max}
+            categoryName={event.categories?.[0]?.category?.name_de}
+            badge="PICK_OF_THE_DAY"
+            isSoldOut={event.availability_status === 'sold_out'}
+            isSponsored={false}
+          />
+        ))
+      ) : (
+        <li class="py-6 px-4 text-center text-gray-500">
+          <p class="mb-2">Keine Events für heute gefunden.</p>
+          <a href="/suche" class="text-primary-600 hover:text-primary-700 font-medium text-sm">
+            Alle Events durchsuchen →
+          </a>
+        </li>
+      )}
+    </ul>
+  </div>
+</section>

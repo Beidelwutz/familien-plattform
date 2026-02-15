@@ -1,0 +1,283 @@
+---
+/**
+ * Tagestipps – Layout 1:1 Spec (Screenshot).
+ * Links: Hero-Card (Bild, TAGESTIPP-Badge, Like-Badge, Meta, Titel, Venue, Preis, Kategorie-Pill).
+ * Rechts: Scrollbare Liste (Thumb, Badges, Meta, Titel, Venue, Ausverkauft, Preis, Pill).
+ * Like: Toggle + Count (optimistisch) + localStorage.
+ */
+import TagestippBadgeIcon from '../tagestipp/TagestippBadgeIcon.astro';
+import type { TagestippIconId } from '../tagestipp/icons';
+
+interface PickEvent {
+  id: string;
+  title: string;
+  start_datetime?: string;
+  venue_name?: string;
+  location_district?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  price_max?: number;
+  availability_status?: string;
+  image_urls?: string[];
+  categories?: { category?: { name_de?: string } }[];
+  badges?: string[];
+}
+
+type HoverVariant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
+type LikeBoxVariant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39 | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53 | 54 | 55 | 56 | 57 | 58 | 59 | 60;
+
+interface Props {
+  events: PickEvent[];
+  locationName?: string;
+  /** Badge icon variant (1–20 or 'default'). */
+  iconId?: TagestippIconId;
+  /** Hover animation variant for list items (1–20). */
+  hoverVariant?: HoverVariant;
+  /** Like-Box design variant (1–20). */
+  likeBoxVariant?: LikeBoxVariant;
+}
+
+const { events, locationName = 'Karlsruhe', iconId = 'default', hoverVariant = 1, likeBoxVariant = 1 } = Astro.props;
+
+/** "Heute, 14. Feb | 21:30 Uhr" / "Morgen, 15. Feb | 20:00 Uhr" */
+const formatMeta = (datetime: string | undefined) => {
+  if (!datetime) return null;
+  try {
+    const d = new Date(datetime);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayStart = new Date(d);
+    dayStart.setHours(0, 0, 0, 0);
+    const isToday = dayStart.getTime() === today.getTime();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow = dayStart.getTime() === tomorrow.getTime();
+    const dateStr = d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+    const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const timePart = `${timeStr} Uhr`;
+    if (isToday) return `Heute, ${dateStr} | ${timePart}`;
+    if (isTomorrow) return `Morgen, ${dateStr} | ${timePart}`;
+    return `${dateStr} | ${timePart}`;
+  } catch { return null; }
+};
+
+const formatPrice = (e: PickEvent) => {
+  if (e.availability_status === 'sold_out') return 'Ausverkauft';
+  if (e.price_type === 'free') return 'Kostenlos';
+  if (e.price_type === 'paid' && e.price_min != null) return `${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  if (e.price_type === 'range' && e.price_min != null && e.price_max != null) return `${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} bis ${Number(e.price_max).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  if (e.price_type === 'range' && e.price_min != null) return `ab ${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  return '';
+};
+
+const hero = events[0];
+const listEvents = events.slice(1);
+const isSoldOut = (e: PickEvent) => e.availability_status === 'sold_out';
+const getCategory = (e: PickEvent) => e.categories?.[0]?.category?.name_de ?? '';
+---
+
+<section id="pick-of-the-day" class="tagestipp-section py-[22px] px-[18px] pb-7 bg-tagestipp-bg" aria-labelledby="tagestipp-h1">
+  <div class="max-w-[1220px] mx-auto">
+    <h1 id="tagestipp-h1" class="text-[28px] font-extrabold leading-tight tracking-tight text-tagestipp-text mb-3.5 m-0">
+      Tagestipps – Veranstaltungen heute in {locationName}
+    </h1>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-[var(--tagestipp-gap)] items-stretch">
+      <!-- LEFT: Hero Card -->
+      {hero && (
+        <article class="tagestipp-hero-card bg-tagestipp-card rounded-tagestipp-card shadow-tagestipp flex flex-col min-h-[480px] relative" aria-label="Tagestipp Highlight">
+          <div class="rounded-tagestipp-card overflow-hidden flex-1 flex flex-col">
+            <a href={`/event/${hero.id}`} class="tagestipp-hero-link block flex-1 flex flex-col">
+              <div class="relative h-[310px] bg-gray-200 shrink-0 overflow-hidden">
+                {hero.image_urls?.[0] ? (
+                  <img src={hero.image_urls[0]} alt="" class="w-full h-full object-cover block" />
+                ) : (
+                  <div class="w-full h-full flex items-center justify-center text-tagestipp-muted text-4xl">·</div>
+                )}
+                <span class="absolute top-3 left-3 inline-flex items-center gap-2 bg-tagestipp-tag text-white font-extrabold text-xs tracking-wide uppercase py-1.5 px-2.5 border-2 border-white/95 rounded-[10px]">
+                  <TagestippBadgeIcon iconId={iconId} size={16} />
+                  TAGESTIPP
+                </span>
+              </div>
+              <div class="p-3 px-[14px] pb-3.5">
+              {formatMeta(hero.start_datetime) && <div class="text-xs font-semibold text-[#2b2b2b]/90">{formatMeta(hero.start_datetime)}</div>}
+              <div class="mt-1 text-[20px] font-black tracking-tight leading-tight text-tagestipp-text">{hero.title}</div>
+              <div class="mt-2 flex items-end justify-between gap-2">
+                <div>
+                  {(hero.venue_name || hero.location_district) && <div class="text-xs text-tagestipp-muted font-semibold">{hero.venue_name || hero.location_district}</div>}
+                  <div class="text-xs font-extrabold text-tagestipp-accent mt-1.5">{formatPrice(hero)}</div>
+                </div>
+                {getCategory(hero) && <span class="inline-flex items-center justify-center py-1 px-2.5 text-xs font-bold border border-tagestipp-accent-soft text-[#7f79eb] rounded-full shrink-0">{getCategory(hero)}</span>}
+              </div>
+            </div>
+            </a>
+          </div>
+          <div class="absolute top-3 right-3 z-10 pointer-events-none [&>*]:pointer-events-auto">
+            <div class={`tagestipp-likeBadge tagestipp-likebox tagestipp-likebox-${likeBoxVariant} tagestipp-likebox--hero`} data-event-id={hero.id}>
+              <button type="button" class="tagestipp-likeBtn border-0 bg-transparent p-0 cursor-pointer flex items-center justify-center" data-like={hero.id} aria-label="Event liken">
+                <svg class="tagestipp-heart w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" stroke="var(--tagestipp-like-icon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+              </button>
+              <div class="tagestipp-count font-extrabold text-[13px] text-[#2b3650] leading-none" data-count={hero.id}>0</div>
+            </div>
+          </div>
+        </article>
+      )}
+
+      <!-- RIGHT: Scrollable List -->
+      <section class="h-[560px] overflow-auto py-3 px-3 rounded-tagestipp-card bg-tagestipp-card shadow-tagestipp [scrollbar-gutter:stable]" aria-label="Weitere Tagestipps" data-tagestipp-list>
+        <div class="space-y-4">
+          {listEvents.map((e) => {
+            const meta = formatMeta(e.start_datetime);
+            const priceStr = formatPrice(e);
+            const venue = e.venue_name || e.location_district || '';
+            const cat = getCategory(e);
+            const soldOut = isSoldOut(e);
+            return (
+              <a href={`/event/${e.id}`} class={`tagestipp-item tagestipp-hover-${hoverVariant} flex gap-4 p-3 rounded-2xl bg-tagestipp-card shadow-tagestipp block`}>
+                <div class="relative w-[260px] min-w-[260px] h-[120px] shrink-0">
+                  <div class="absolute inset-0 rounded-tagestipp-thumb overflow-hidden bg-gray-200">
+                    {e.image_urls?.[0] ? (
+                      <img src={e.image_urls[0]} alt="" class="w-full h-full object-cover block" />
+                    ) : (
+                      <div class="w-full h-full flex items-center justify-center text-tagestipp-muted text-2xl">·</div>
+                    )}
+                    <span class="absolute top-2.5 left-2.5 inline-flex items-center gap-2 bg-tagestipp-tag text-white font-extrabold text-xs tracking-wide uppercase py-1 px-2 border-2 border-white/95 rounded-[10px] -translate-y-0.5">
+                      <TagestippBadgeIcon iconId={iconId} size={14} />
+                      TAGESTIPP
+                    </span>
+                  </div>
+                  <div class={`absolute top-2.5 right-2.5 z-10 tagestipp-likebox tagestipp-likebox-${likeBoxVariant} tagestipp-likebox--list`} data-event-id={e.id}>
+                    <button type="button" class="tagestipp-likeBtn border-0 bg-transparent p-0 cursor-pointer flex items-center justify-center" data-like={e.id} aria-label="Event liken" onclick="return false;">
+                      <svg class="tagestipp-heart w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="var(--tagestipp-like-icon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+                    </button>
+                    <div class="tagestipp-count font-extrabold text-xs text-[#2b3650] leading-none" data-count={e.id}>0</div>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0 pt-0.5">
+                  <div class="flex items-start justify-between gap-2">
+                    {meta && <div class="text-xs font-semibold text-[#2b2b2b]/90">{meta}</div>}
+                    {cat && <span class="inline-flex items-center justify-center py-1 px-2.5 text-xs font-bold border border-tagestipp-accent-soft text-[#7f79eb] rounded-full shrink-0">{cat}</span>}
+                  </div>
+                  <div class="mt-1.5 text-lg font-black leading-tight tracking-tight text-tagestipp-text line-clamp-2">{e.title}</div>
+                  {venue && <div class="mt-1.5 text-xs font-bold text-tagestipp-muted">{venue}</div>}
+                  <div class="mt-1.5 flex items-center justify-between gap-2">
+                    <div class="flex flex-col gap-1.5">
+                      {soldOut && <span class="inline-flex py-1 px-2.5 rounded-full bg-[#111] text-white text-xs font-extrabold w-max">Ausverkauft</span>}
+                      {priceStr && !soldOut && <div class="text-xs font-extrabold text-tagestipp-accent">{priceStr}</div>}
+                    </div>
+                  </div>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+        {listEvents.length === 0 && hero && (
+          <p class="text-sm text-tagestipp-muted py-4 text-center">Weitere Tagestipps folgen.</p>
+        )}
+      </section>
+    </div>
+
+    {events.length === 0 && (
+      <div class="bg-tagestipp-card rounded-tagestipp-card shadow-tagestipp p-8 text-center">
+        <p class="text-tagestipp-muted">Keine Events für heute in {locationName}.</p>
+        <a href="/suche" class="inline-block mt-3 text-tagestipp-accent hover:opacity-90 font-semibold text-sm">Zur Suche →</a>
+      </div>
+    )}
+  </div>
+</section>
+
+<style>
+  .tagestipp-section .tagestipp-likeBadge {
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+  }
+  /* Große Hero-Box: gleicher Zoom wie bei den Kacheln (Scale), aber weniger auffallend (1.008) */
+  .tagestipp-section .tagestipp-hero-card {
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+  }
+  .tagestipp-section .tagestipp-hero-card:hover {
+    transform: scale(1.008);
+    box-shadow: 0 12px 32px rgba(20, 20, 20, 0.09);
+  }
+  .tagestipp-section [data-tagestipp-list]::-webkit-scrollbar { width: 10px; }
+  .tagestipp-section [data-tagestipp-list]::-webkit-scrollbar-track { background: transparent; }
+  .tagestipp-section [data-tagestipp-list]::-webkit-scrollbar-thumb {
+    background: rgba(120, 130, 255, 0.35);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  @media (max-width: 980px) {
+    .tagestipp-section [data-tagestipp-list] { height: auto; padding: 0; }
+  }
+</style>
+
+<script>
+  const LS_KEY = 'daytips_likes_v1';
+
+  function getLikeState() {
+    if (typeof localStorage === 'undefined') return {};
+    try {
+      return JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  function heartSvg(filled: boolean) {
+    const fill = filled ? 'var(--tagestipp-like-icon)' : 'none';
+    return `<svg class="tagestipp-heart w-5 h-5" viewBox="0 0 24 24" fill="${fill}" stroke="var(--tagestipp-like-icon)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>`;
+  }
+
+  function syncUI() {
+    const likeState = getLikeState();
+    document.querySelectorAll('[data-like]').forEach((btn) => {
+      const id = btn.getAttribute('data-like');
+      if (!id) return;
+      const st = likeState[id] || { liked: false, likeCount: 0 };
+      const countEl = document.querySelector(`[data-count="${id}"]`);
+      btn.innerHTML = heartSvg(st.liked);
+      if (countEl) countEl.textContent = st.likeCount;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    syncUI();
+    // #region agent log
+    (function() {
+      const heart = document.querySelector('.tagestipp-heart');
+      const btn = document.querySelector('.tagestipp-likeBtn');
+      const likebox = document.querySelector('.tagestipp-likebox');
+      const rect = heart ? heart.getBoundingClientRect() : null;
+      const cs = heart && window.getComputedStyle ? window.getComputedStyle(heart as Element) : null;
+      let parentOverflow: string[] = [];
+      if (heart) {
+        let p: Element | null = heart.parentElement;
+        for (let i = 0; i < 8 && p; i++) {
+          const o = window.getComputedStyle(p).overflow;
+          if (o !== 'visible') parentOverflow.push(p.tagName + ':' + o);
+          p = p.parentElement;
+        }
+      }
+      const btnCs = btn && window.getComputedStyle ? window.getComputedStyle(btn as Element) : null;
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PickOfTheDaySideBySide.astro:DOMContentLoaded',message:'heart debug',data:{hypothesisId:'H1-H5',heartOuterHTML:heart?(heart as SVGElement).outerHTML?.substring(0,400):null,heartRect:rect,heartOverflow:cs?.overflow,heartWidth:cs?.width,heartHeight:cs?.height,parentOverflow,likeboxRect:likebox?likebox.getBoundingClientRect():null,likeboxOverflow:likebox?window.getComputedStyle(likebox as Element).overflow:null,btnInnerHTML:btn?(btn as HTMLElement).innerHTML?.substring(0,400):null,btnFlexShrink:btnCs?.flexShrink,heartParentClass:heart?.parentElement?.className||null},timestamp:Date.now()})}).catch(()=>{});
+    })();
+    // #endregion
+    document.body.addEventListener('click', (ev) => {
+      const btn = (ev.target as HTMLElement | null)?.closest?.('.tagestipp-likeBtn');
+      if (!btn) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const id = btn.getAttribute('data-like');
+      const countEl = document.querySelector(`[data-count="${id}"]`);
+      if (!id || !countEl) return;
+      const likeState = getLikeState();
+      const cur = likeState[id] || { liked: false, likeCount: Math.max(0, Number(countEl.textContent || '0')) };
+      cur.liked = !cur.liked;
+      cur.likeCount = Math.max(0, cur.likeCount + (cur.liked ? 1 : -1));
+      likeState[id] = cur;
+      countEl.textContent = cur.likeCount;
+      btn.innerHTML = heartSvg(cur.liked);
+      try { localStorage.setItem(LS_KEY, JSON.stringify(likeState)); } catch (_) {}
+    });
+  });
+</script>

@@ -1,0 +1,85 @@
+---
+/**
+ * Pick of the day #1 – Liste mit Rand (primary-Linie links) + optional Mini-Thumbnail.
+ */
+interface PickEvent {
+  id: string;
+  title: string;
+  start_datetime?: string;
+  venue_name?: string;
+  location_district?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  price_max?: number;
+  availability_status?: string;
+  image_urls?: string[];
+  categories?: { category?: { name_de?: string } }[];
+}
+
+interface Props {
+  events: PickEvent[];
+  locationName?: string;
+}
+
+const { events, locationName = 'Karlsruhe' } = Astro.props;
+
+const formatMeta = (datetime: string | undefined) => {
+  if (!datetime) return null;
+  try {
+    const d = new Date(datetime);
+    const today = new Date();
+    const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    const dateStr = d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+    const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return isToday ? `Heute, ${dateStr} | ${timeStr}` : `${dateStr} | ${timeStr}`;
+  } catch { return null; }
+};
+
+const formatPrice = (e: PickEvent) => {
+  if (e.availability_status === 'sold_out') return 'Ausverkauft';
+  if (e.price_type === 'free') return 'Kostenlos';
+  if (e.price_type === 'paid' && e.price_min != null) return `${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  if (e.price_type === 'range' && e.price_min != null && e.price_max != null) return `${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} – ${Number(e.price_max).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  return '';
+};
+---
+
+<section id="pick-1" class="py-6 md:py-8" aria-labelledby="pick-1-heading">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 id="pick-1-heading" class="text-xl md:text-2xl font-bold text-gray-900 mb-1">
+      Pick of the day #1 – Events heute in {locationName}
+    </h2>
+    <p class="text-sm text-gray-500 mb-4">Liste mit Rand</p>
+
+    {events.length > 0 ? (
+      <ul class="rounded-lg border border-gray-200 bg-white shadow-card overflow-hidden divide-y divide-gray-100">
+        {events.map((e) => {
+          const meta = formatMeta(e.start_datetime);
+          const priceStr = formatPrice(e);
+          const venue = e.venue_name || e.location_district || '';
+          const cat = e.categories?.[0]?.category?.name_de;
+          return (
+            <li>
+              <a href={`/event/${e.id}`} class="group flex gap-3 p-3 sm:p-4 hover:bg-primary-50/60 transition-colors border-l-4 border-primary-500">
+                {e.image_urls?.[0] ? (
+                  <img src={e.image_urls[0]} alt="" class="w-14 h-14 flex-shrink-0 rounded object-cover bg-gray-100" loading="lazy" />
+                ) : (
+                  <div class="w-14 h-14 flex-shrink-0 rounded bg-primary-100 flex items-center justify-center text-primary-600 text-xl">·</div>
+                )}
+                <div class="min-w-0 flex-1">
+                  {meta && <p class="text-xs text-gray-500 mb-0.5">{meta}</p>}
+                  <h3 class="font-semibold text-gray-900 truncate group-hover:text-primary-600">{e.title}</h3>
+                  <p class="text-sm text-gray-600 truncate">
+                    {venue}{venue && (priceStr || cat) ? ' · ' : ''}{priceStr}{priceStr && cat ? ' · ' : ''}{cat || ''}
+                  </p>
+                </div>
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    ) : (
+      <p class="text-gray-500 text-sm py-6">Keine Events für heute.</p>
+    )}
+  </div>
+</section>

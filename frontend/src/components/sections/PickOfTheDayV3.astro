@@ -1,0 +1,103 @@
+---
+/**
+ * Pick of the day #3 – Hero (erstes Event groß) + weitere als horizontale Textzeilen.
+ */
+interface PickEvent {
+  id: string;
+  title: string;
+  start_datetime?: string;
+  venue_name?: string;
+  location_district?: string;
+  price_type: 'free' | 'paid' | 'range' | 'unknown';
+  price_min?: number;
+  price_max?: number;
+  availability_status?: string;
+  image_urls?: string[];
+  categories?: { category?: { name_de?: string } }[];
+}
+
+interface Props {
+  events: PickEvent[];
+  locationName?: string;
+}
+
+const { events, locationName = 'Karlsruhe' } = Astro.props;
+
+const formatMeta = (datetime: string | undefined) => {
+  if (!datetime) return null;
+  try {
+    const d = new Date(datetime);
+    const today = new Date();
+    const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    const dateStr = d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+    const timeStr = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    return isToday ? `Heute, ${dateStr} · ${timeStr}` : `${dateStr} · ${timeStr}`;
+  } catch { return null; }
+};
+
+const formatPrice = (e: PickEvent) => {
+  if (e.availability_status === 'sold_out') return 'Ausverkauft';
+  if (e.price_type === 'free') return 'Kostenlos';
+  if (e.price_type === 'paid' && e.price_min != null) return `${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  if (e.price_type === 'range' && e.price_min != null && e.price_max != null) return `${Number(e.price_min).toLocaleString('de-DE', { minimumFractionDigits: 2 })} – ${Number(e.price_max).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`;
+  return '';
+};
+
+const hero = events[0];
+const rest = events.slice(1, 5);
+---
+
+<section id="pick-3" class="py-6 md:py-8" aria-labelledby="pick-3-heading">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 id="pick-3-heading" class="text-xl md:text-2xl font-bold text-gray-900 mb-1">
+      Pick of the day #3 – Events heute in {locationName}
+    </h2>
+    <p class="text-sm text-gray-500 mb-5">Hero + Streifen</p>
+
+    {events.length > 0 ? (
+      <>
+        {hero && (
+          <a href={`/event/${hero.id}`} class="block rounded-xl overflow-hidden border border-gray-200 bg-white shadow-card hover:shadow-card-hover transition-shadow mb-4 group">
+            <div class="aspect-video bg-gray-100 relative overflow-hidden">
+              {hero.image_urls?.[0] ? (
+                <img src={hero.image_urls[0]} alt="" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+              ) : (
+                <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-50 text-primary-600 text-5xl">·</div>
+              )}
+            </div>
+            <div class="p-4 sm:p-5">
+              {formatMeta(hero.start_datetime) && <p class="text-sm text-gray-500 mb-1">{formatMeta(hero.start_datetime)}</p>}
+              <h3 class="text-lg font-bold text-gray-900 group-hover:text-primary-600 transition-colors mb-2">{hero.title}</h3>
+              {(hero.venue_name || hero.location_district) && <p class="text-sm text-gray-600 mb-2">{hero.venue_name || hero.location_district}</p>}
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700">{formatPrice(hero)}</span>
+                <span class="text-sm text-primary-600 font-medium">Details →</span>
+              </div>
+            </div>
+          </a>
+        )}
+
+        {rest.length > 0 && (
+          <ul class="rounded-lg border border-gray-200 bg-white shadow-card overflow-hidden divide-y divide-gray-100">
+            {rest.map((e) => {
+              const timeStr = e.start_datetime ? new Date(e.start_datetime).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+              const venue = e.venue_name || e.location_district || '';
+              const priceStr = formatPrice(e);
+              return (
+                <li>
+                  <a href={`/event/${e.id}`} class="flex items-center gap-3 px-4 py-3 hover:bg-primary-50/60 transition-colors text-sm">
+                    {timeStr && <span class="flex-shrink-0 w-12 font-medium text-gray-500">{timeStr}</span>}
+                    <span class="flex-1 min-w-0 font-medium text-gray-900 truncate">{e.title}</span>
+                    <span class="flex-shrink-0 text-gray-500 truncate max-w-[140px]">{venue}{venue && priceStr ? ' · ' : ''}{priceStr}</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </>
+    ) : (
+      <p class="text-gray-500 text-sm py-6">Keine Events für heute.</p>
+    )}
+  </div>
+</section>

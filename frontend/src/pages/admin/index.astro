@@ -1,5 +1,6 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import { TEASER_PRESETS } from '../../lib/teaserPresets';
 ---
 
 <AdminLayout title="Dashboard - kiezling Admin" currentPage="dashboard">
@@ -13,11 +14,76 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 
   <!-- Dashboard Content (hidden until loaded) -->
   <div id="dashboard-content" class="hidden">
+    <script type="application/json" id="teaser-presets-json" set:html={JSON.stringify(TEASER_PRESETS).replace(/</g, '\\u003c')}></script>
     <!-- Page Header -->
     <header class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
       <p class="text-gray-500 mt-1">Übersicht über Events, Quellen und Systemstatus</p>
     </header>
+
+    <!-- Teaser-Box (Startseite): Titel + Einstellungen in einer Zeile, darunter Vorschau -->
+    <section class="mb-6 bento-card">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3">
+        <details id="teaser-settings-details" class="group w-full min-w-0 sm:w-auto">
+          <summary class="cursor-pointer list-none flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100 border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-200 hover:border-gray-300 active:bg-gray-300 select-none w-fit transition-colors shadow-sm">
+            <svg class="w-4 h-4 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 2.31.841 1.37 1.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.841 2.31-1.37 1.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-2.31-.841-1.37-1.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.841-2.31 1.37-1.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Einstellungen
+          </summary>
+          <div class="pt-3 mt-2 border-t border-gray-200">
+          <form id="teaser-form" class="space-y-3 max-w-xl">
+            <div>
+              <label for="teaser-authorName" class="block text-sm font-medium text-gray-700">Autor-Name</label>
+              <input type="text" id="teaser-authorName" name="authorName" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="WENKE" />
+            </div>
+            <div>
+              <label for="teaser-message" class="block text-sm font-medium text-gray-700">Nachricht</label>
+              <textarea id="teaser-message" name="message" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Heute Abend gibt's ein kleines Geheimkonzert …"></textarea>
+            </div>
+            <div>
+              <label for="teaser-avatarSrc" class="block text-sm font-medium text-gray-700">Profilbild-URL</label>
+              <input type="url" id="teaser-avatarSrc" name="avatarSrc" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="https://…" />
+            </div>
+            <div>
+              <label for="teaser-countdownEndDate" class="block text-sm font-medium text-gray-700">Countdown-Enddatum (ISO)</label>
+              <input type="datetime-local" id="teaser-countdownEndDate" name="countdownEndDate" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label for="teaser-preset" class="block text-sm font-medium text-gray-700">Design / Anlass</label>
+              <select id="teaser-preset" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                {TEASER_PRESETS.map((p) => (
+                  <option value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <input type="hidden" id="teaser-variant" name="variant" value="7" />
+            <input type="hidden" id="teaser-contentVariant" name="contentVariant" value="16" />
+            <input type="hidden" id="teaser-teaserLabel" name="teaserLabel" value="Tipp von" />
+            <input type="hidden" id="teaser-teaserIcon" name="teaserIcon" value="" />
+            <input type="hidden" id="teaser-teaserThemeClass" name="teaserThemeClass" value="" />
+            <div class="flex gap-2 pt-2">
+              <button type="button" id="teaser-preview-btn" class="px-4 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200">Vorschau aktualisieren</button>
+              <button type="submit" id="teaser-save-btn" class="px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700">Speichern</button>
+            </div>
+          </form>
+          <p id="teaser-save-status" class="mt-2 text-sm text-green-600 hidden">Gespeichert.</p>
+          </div>
+        </details>
+        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <h2 class="font-semibold text-gray-900">Teaser-Box (Startseite)</h2>
+          <span class="text-sm text-gray-500">— Vorschau wie auf der Startseite</span>
+        </div>
+      </div>
+
+      <!-- Vorschau 1:1 wie auf der Startseite (ohne abgerundete Ecken) -->
+      <div class="tagestipp-section pt-3 px-[18px] pb-0 bg-tagestipp-bg overflow-hidden">
+        <div class="max-w-[1220px] mx-auto">
+          <iframe id="teaser-preview-iframe" title="Teaser-Box Vorschau" class="w-full border-0 bg-tagestipp-bg block" style="min-height: 170px; height: 170px;"></iframe>
+        </div>
+      </div>
+    </section>
 
     <!-- KPI Cards: Top Section - 2x3 Grid -->
     <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
@@ -317,10 +383,21 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
   .health-degraded { @apply bg-yellow-500; }
   .health-error { @apply bg-red-500; }
   .health-unknown { @apply bg-gray-400; }
+
+  /* Teaser: Einstellungen aufgeklappt = volle Breite für Formular */
+  #teaser-settings-details[open] { width: 100%; }
 </style>
 
 <script>
   const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+  const TEASER_PRESETS = (() => {
+    try {
+      const el = document.getElementById('teaser-presets-json');
+      return el?.textContent ? JSON.parse(el.textContent) : [];
+    } catch {
+      return [];
+    }
+  })();
 
   // Get auth token
   function getToken(): string | null {
@@ -357,15 +434,77 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     return `vor ${diffDays} Tagen`;
   }
 
+  // Teaser-Box: Form aus Daten füllen (inkl. Preset-Dropdown und teaserLabel/Icon/ThemeClass)
+  function fillTeaserForm(data: Record<string, unknown> | null) {
+    if (!data) return;
+    const authorName = document.getElementById('teaser-authorName') as HTMLInputElement;
+    const message = document.getElementById('teaser-message') as HTMLTextAreaElement;
+    const avatarSrc = document.getElementById('teaser-avatarSrc') as HTMLInputElement;
+    const countdownEndDate = document.getElementById('teaser-countdownEndDate') as HTMLInputElement;
+    const variant = document.getElementById('teaser-variant') as HTMLInputElement;
+    const contentVariant = document.getElementById('teaser-contentVariant') as HTMLInputElement;
+    const teaserLabel = document.getElementById('teaser-teaserLabel') as HTMLInputElement;
+    const teaserIcon = document.getElementById('teaser-teaserIcon') as HTMLInputElement;
+    const teaserThemeClass = document.getElementById('teaser-teaserThemeClass') as HTMLInputElement;
+    const presetSelect = document.getElementById('teaser-preset') as HTMLSelectElement;
+    if (authorName && data.authorName != null) authorName.value = String(data.authorName);
+    if (message && data.message != null) message.value = String(data.message);
+    if (avatarSrc && data.avatarSrc != null) avatarSrc.value = String(data.avatarSrc);
+    if (countdownEndDate && data.countdownEndDate != null) {
+      const iso = String(data.countdownEndDate);
+      countdownEndDate.value = iso.slice(0, 16);
+    }
+    if (data.teaserLabel != null && teaserLabel) teaserLabel.value = String(data.teaserLabel);
+    if (data.teaserIcon != null && teaserIcon) teaserIcon.value = String(data.teaserIcon);
+    if (data.teaserThemeClass != null && teaserThemeClass) teaserThemeClass.value = String(data.teaserThemeClass);
+    if (variant && data.variant != null) variant.value = String(data.variant);
+    if (contentVariant && data.contentVariant != null) contentVariant.value = String(data.contentVariant);
+    if (presetSelect && Array.isArray(TEASER_PRESETS) && TEASER_PRESETS.length > 0) {
+      const v = Number(variant?.value ?? 7);
+      const c = Number(contentVariant?.value ?? 16);
+      const theme = teaserThemeClass?.value ?? '';
+      const match = TEASER_PRESETS.find((p) => p.variant === v && p.contentVariant === c && (p.themeClass === theme || (!p.themeClass && !theme)));
+      presetSelect.value = match ? String(match.id) : '1';
+    }
+  }
+
+  // Teaser-Box: iframe-Vorschau-URL aus Form bauen und setzen
+  function updateTeaserPreview() {
+    const iframe = document.getElementById('teaser-preview-iframe') as HTMLIFrameElement;
+    if (!iframe) return;
+    const authorName = (document.getElementById('teaser-authorName') as HTMLInputElement)?.value || 'WENKE';
+    const message = (document.getElementById('teaser-message') as HTMLTextAreaElement)?.value || '';
+    const avatarSrc = (document.getElementById('teaser-avatarSrc') as HTMLInputElement)?.value || '';
+    const countdownEndDate = (document.getElementById('teaser-countdownEndDate') as HTMLInputElement)?.value || '';
+    const variant = (document.getElementById('teaser-variant') as HTMLInputElement)?.value || '7';
+    const contentVariant = (document.getElementById('teaser-contentVariant') as HTMLInputElement)?.value || '16';
+    const teaserLabel = (document.getElementById('teaser-teaserLabel') as HTMLInputElement)?.value ?? '';
+    const teaserIcon = (document.getElementById('teaser-teaserIcon') as HTMLInputElement)?.value ?? '';
+    const teaserThemeClass = (document.getElementById('teaser-teaserThemeClass') as HTMLInputElement)?.value ?? '';
+    const params = new URLSearchParams({
+      authorName,
+      message,
+      avatarSrc,
+      countdownEndDate: countdownEndDate ? countdownEndDate.replace(' ', 'T') : '2025-08-16T20:00:00',
+      variant,
+      contentVariant,
+    });
+    if (teaserLabel) params.set('teaserLabel', teaserLabel);
+    if (teaserIcon) params.set('teaserIcon', teaserIcon);
+    if (teaserThemeClass) params.set('teaserThemeClass', teaserThemeClass);
+    iframe.src = `/admin/teaser-preview?${params.toString()}`;
+  }
+
   // Load all dashboard data
   async function loadDashboardData() {
     try {
-      const [statsRes, dupsRes, attentionRes, trendsRes, pendingAiRes] = await Promise.all([
+      const [statsRes, dupsRes, attentionRes, trendsRes, pendingAiRes, teaserRes] = await Promise.all([
         fetchWithAuth(`${API_URL}/api/admin/stats`),
         fetchWithAuth(`${API_URL}/api/admin/duplicates?status=pending&limit=1`).catch(() => ({ pagination: { total: 0 } })),
         fetchWithAuth(`${API_URL}/api/admin/ingest-runs/needs-attention`).catch(() => ({ total: 0 })),
         fetchWithAuth(`${API_URL}/api/admin/trends/stats`).catch(() => ({ uniqueTerms: 0, lastComputed: null })),
         fetchWithAuth(`${API_URL}/api/admin/pending-ai-count`).catch(() => ({ data: { count: 0 } })),
+        fetchWithAuth(`${API_URL}/api/admin/settings/homepage-teaser`).catch(() => ({ data: null })),
       ]);
 
       // Update KPI Cards
@@ -426,6 +565,10 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
       // Show content
       document.getElementById('loading-state')?.classList.add('hidden');
       document.getElementById('dashboard-content')?.classList.remove('hidden');
+
+      // Teaser-Box: Form füllen und Vorschau setzen
+      fillTeaserForm(teaserRes?.data ?? null);
+      updateTeaserPreview();
 
     } catch (e) {
       console.error('Dashboard load error:', e);
@@ -540,6 +683,62 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
     // Load initial data
     await loadDashboardData();
     await updateHealthWidget();
+
+    // Teaser-Box: Preset-Dropdown – bei Änderung Hidden-Felder setzen und Vorschau aktualisieren
+    document.getElementById('teaser-preset')?.addEventListener('change', () => {
+      if (!Array.isArray(TEASER_PRESETS) || TEASER_PRESETS.length === 0) return;
+      const presetSelect = document.getElementById('teaser-preset') as HTMLSelectElement;
+      const id = parseInt(presetSelect?.value || '1', 10);
+      const preset = TEASER_PRESETS.find((p) => p.id === id) ?? TEASER_PRESETS[0];
+      if (!preset) return;
+      const variant = document.getElementById('teaser-variant') as HTMLInputElement;
+      const contentVariant = document.getElementById('teaser-contentVariant') as HTMLInputElement;
+      const teaserLabel = document.getElementById('teaser-teaserLabel') as HTMLInputElement;
+      const teaserIcon = document.getElementById('teaser-teaserIcon') as HTMLInputElement;
+      const teaserThemeClass = document.getElementById('teaser-teaserThemeClass') as HTMLInputElement;
+      if (variant) variant.value = String(preset.variant);
+      if (contentVariant) contentVariant.value = String(preset.contentVariant);
+      if (teaserLabel) teaserLabel.value = preset.label ?? '';
+      if (teaserIcon) teaserIcon.value = preset.icon ?? '';
+      if (teaserThemeClass) teaserThemeClass.value = preset.themeClass ?? '';
+      updateTeaserPreview();
+    });
+
+    // Teaser-Box: Buttons und Form
+    document.getElementById('teaser-preview-btn')?.addEventListener('click', updateTeaserPreview);
+    document.getElementById('teaser-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const countdownVal = (document.getElementById('teaser-countdownEndDate') as HTMLInputElement)?.value;
+      const payload = {
+        authorName: (form.authorName as HTMLInputElement)?.value,
+        message: (form.message as HTMLTextAreaElement)?.value,
+        avatarSrc: (form.avatarSrc as HTMLInputElement)?.value,
+        countdownEndDate: countdownVal ? countdownVal.replace(' ', 'T') : undefined,
+        variant: parseInt((form.variant as HTMLInputElement)?.value || '7', 10),
+        contentVariant: parseInt((form.contentVariant as HTMLInputElement)?.value || '16', 10),
+        teaserLabel: (form.teaserLabel as HTMLInputElement)?.value ?? undefined,
+        teaserIcon: (form.teaserIcon as HTMLInputElement)?.value ?? undefined,
+        teaserThemeClass: (form.teaserThemeClass as HTMLInputElement)?.value ?? undefined,
+      };
+      const putRes = await fetch(`${API_URL}/api/admin/settings/homepage-teaser`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
+      const json = await putRes.json();
+      fillTeaserForm(json.data ?? null);
+      updateTeaserPreview();
+      const statusEl = document.getElementById('teaser-save-status');
+      if (statusEl) {
+        statusEl.classList.remove('hidden');
+        setTimeout(() => statusEl.classList.add('hidden'), 3000);
+      }
+    });
 
     // Auto-refresh every 30 seconds
     setInterval(() => {

@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import StickyHeader from '../components/layout/StickyHeader.astro';
+import TagestippTeaserBox from '../components/sections/TagestippTeaserBox.astro';
+
+const ideaLabels: Record<number, string> = {
+  1: 'Status quo',
+  2: 'CTA-Button',
+  3: 'Event-Teaser-Zeile',
+  4: 'Datum/Uhrzeit-Badge',
+  5: 'Kategorie-Pill',
+  6: 'Autor-Subline',
+  7: 'Zitat-Stil',
+  8: 'Top-Tipp-Badge',
+  9: 'Social Proof',
+  10: 'Zweiter Satz',
+  11: 'Icon-Leiste',
+  12: 'Schmalere Blase',
+  13: 'Größere Schrift',
+  14: 'Link-Zeile',
+  15: 'Preis-Badge',
+  16: 'Countdown/Zeit',
+  17: 'Dezenter Hintergrund',
+  18: 'Rahmen links farbig',
+  19: 'Zwei Spalten',
+  20: 'Sprechblasen-Schwanz',
+  21: 'Kompakte Zeile',
+  22: 'Banner-Style',
+  23: 'Vollbreite Blase',
+  24: 'Avatar größer',
+  25: 'Empfehlungs-Stern',
+  26: 'Hashtag/Thema',
+  27: 'Kurz + Mehr lesen',
+  28: 'Ort-Zeile',
+  29: 'Zwei Absätze',
+  30: 'Minimal-Banner',
+};
+
+const contentVariants = Array.from({ length: 30 }, (_, i) => i + 1);
+---
+
+<BaseLayout title="Tagestipp – 30 Ideen Teaser-Box" description="30 Ideen: Teaser-Box weniger leer. Jede Sektion zeigt eine Content-Idee bei festem Design 7.">
+  <StickyHeader />
+
+  <main class="max-w-[1220px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">30 Ideen: Teaser-Box weniger leer</h1>
+    <p class="text-sm text-gray-600 mb-8">Jede Sektion zeigt eine <strong>Idee</strong> (Content-Variante) bei festem <strong>Design 7</strong>. So siehst du im Vergleich, wie wir die Box füllen können.</p>
+
+    {contentVariants.map((n) => (
+      <section class="mb-14" aria-labelledby={`idee-${n}`}>
+        <h2 id={`idee-${n}`} class="text-lg font-semibold text-tagestipp-text mb-3 sticky top-16 z-20 bg-tagestipp-bg py-2 -mx-1 px-1 border-b border-gray-200">
+          Idee {n}: {ideaLabels[n]}
+        </h2>
+        <div class={n === 22 || n === 23 ? 'w-full' : 'max-w-xl'}>
+          <TagestippTeaserBox
+            variant={7}
+            contentVariant={n as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30}
+            ctaText={n === 2 ? 'Tagestipps ansehen' : undefined}
+            ctaHref="#pick-of-the-day"
+            eventTeaser={n === 3 ? 'Heute 20 Uhr · Kleines Konzert' : undefined}
+            dateBadge={n === 4 ? 'Heute, 20 Uhr' : undefined}
+            category={n === 5 ? 'Kultur' : undefined}
+            authorSubline={n === 6 ? 'von kiezling Redaktion' : undefined}
+            socialProof={n === 9 ? '12 Personen merken sich das' : undefined}
+            secondParagraph={n === 10 ? 'Schau gleich in die Tagestipps – da findest du alle Details.' : undefined}
+            eventCount={n === 14 ? 3 : undefined}
+            priceBadge={n === 15 ? 'Kostenlos' : undefined}
+            timeHint={n === 16 ? 'Start 20 Uhr' : undefined}
+            recommendationLabel={n === 25 ? '★ Empfohlen' : undefined}
+            topic={n === 26 ? '#Geheimkonzert' : undefined}
+            locationLine={n === 28 ? 'Karlsruhe · Innenstadt' : undefined}
+            shortMessage={n === 21 || n === 27 || n === 30 ? "Geheimkonzert – schau in die Tagestipps!" : undefined}
+          />
+          <p class="mt-2 text-sm text-gray-500 font-medium">Tagestipps – Veranstaltungen heute in Karlsruhe</p>
+        </div>
+      </section>
+    ))}
+  </main>
+</BaseLayout>

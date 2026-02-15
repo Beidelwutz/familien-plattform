@@ -24,6 +24,7 @@ import providersRoutes from './routes/providers.js';
 import categoriesRoutes from './routes/categories.js';
 import amenitiesRoutes from './routes/amenities.js';
 import aiUsageRoutes from './routes/aiUsage.js';
+import settingsRoutes from './routes/settings.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -83,6 +84,7 @@ app.use('/api/admin/amenities', amenitiesRoutes);
 app.use('/api/admin/ai-usage', aiUsageRoutes);
 app.use('/api/ai', aiUsageRoutes);  // For AI worker log ingestion
 app.use('/api/search', searchRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/api/admin/trends', adminTrendsRoutes);
 
 // Error handling

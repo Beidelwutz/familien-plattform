@@ -1041,7 +1041,9 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
           quality_score: scores.quality_score,
           family_fit_score: scores.family_fit_score,
           stressfree_score: scores.stressfree_score,
+          fun_score: scores.fun_score ?? null,
           confidence: classification?.confidence ?? 0.8,
+          ai_reasoning: scores.reasoning ?? undefined,
           ai_model_version: 'classify-v1',
         },
         update: {
@@ -1049,7 +1051,9 @@ router.post('/events/:id/trigger-ai', async (req: AuthRequest, res: Response, ne
           quality_score: scores.quality_score,
           family_fit_score: scores.family_fit_score,
           stressfree_score: scores.stressfree_score,
+          fun_score: scores.fun_score ?? null,
           confidence: classification?.confidence ?? 0.8,
+          ai_reasoning: scores.reasoning ?? undefined,
           scored_at: new Date(),
         },
       });
@@ -3073,7 +3077,7 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             });
           }
           
-          // Create/update EventScore
+          // Create/update EventScore (incl. fun_score and ai_reasoning for Tagestipp / "Warum empfohlen?")
           await prisma.eventScore.upsert({
             where: { event_id: event.id },
             create: {
@@ -3082,7 +3086,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
               quality_score: scores.quality_score,
               family_fit_score: scores.family_fit_score,
               stressfree_score: scores.stressfree_score,
+              fun_score: scores.fun_score ?? null,
               confidence: classification.confidence,
+              ai_reasoning: scores.reasoning ?? undefined,
               ai_model_version: 'classify-v1',
             },
             update: {
@@ -3090,7 +3096,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
               quality_score: scores.quality_score,
               family_fit_score: scores.family_fit_score,
               stressfree_score: scores.stressfree_score,
+              fun_score: scores.fun_score ?? null,
               confidence: classification.confidence,
+              ai_reasoning: scores.reasoning ?? undefined,
               scored_at: new Date(),
             }
           });
@@ -3364,6 +3372,57 @@ router.get('/pending-ai-count', async (_req: Request, res: Response, next: NextF
       success: true,
       data: { count }
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/settings/homepage-teaser - Teaser-Box-Konfiguration (Admin)
+const HOMEPAGE_TEASER_KEY = 'homepage_teaser';
+const HOMEPAGE_TEASER_DEFAULTS = {
+  authorName: 'WENKE',
+  message: "Heute Abend gibt's ein kleines Geheimkonzert – schau in die Tagestipps!",
+  avatarSrc: 'https://i.pravatar.cc/96?u=wenke',
+  countdownEndDate: '2025-08-16T20:00:00',
+  variant: 7,
+  contentVariant: 16,
+  teaserLabel: 'Tipp von',
+  teaserIcon: '',
+  teaserThemeClass: '',
+};
+
+router.get('/settings/homepage-teaser', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const row = await prisma.siteSetting.findUnique({ where: { key: HOMEPAGE_TEASER_KEY } });
+    const value = (row?.value as Record<string, unknown>) || {};
+    const data = { ...HOMEPAGE_TEASER_DEFAULTS, ...value };
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/admin/settings/homepage-teaser - Teaser-Box-Konfiguration speichern
+router.put('/settings/homepage-teaser', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { authorName, message, avatarSrc, countdownEndDate, variant, contentVariant, teaserLabel, teaserIcon, teaserThemeClass } = req.body;
+    const value: Record<string, unknown> = {};
+    if (authorName !== undefined) value.authorName = authorName;
+    if (message !== undefined) value.message = message;
+    if (avatarSrc !== undefined) value.avatarSrc = avatarSrc;
+    if (countdownEndDate !== undefined) value.countdownEndDate = countdownEndDate;
+    if (variant !== undefined) value.variant = Number(variant);
+    if (contentVariant !== undefined) value.contentVariant = Number(contentVariant);
+    if (teaserLabel !== undefined) value.teaserLabel = teaserLabel;
+    if (teaserIcon !== undefined) value.teaserIcon = teaserIcon;
+    if (teaserThemeClass !== undefined) value.teaserThemeClass = teaserThemeClass;
+    const row = await prisma.siteSetting.upsert({
+      where: { key: HOMEPAGE_TEASER_KEY },
+      create: { key: HOMEPAGE_TEASER_KEY, value },
+      update: { value },
+    });
+    const data = { ...HOMEPAGE_TEASER_DEFAULTS, ...(row.value as Record<string, unknown>) };
+    res.json({ success: true, data });
   } catch (error) {
     next(error);
   }

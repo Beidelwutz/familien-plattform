@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tagestipps Design-Tokens (Screenshot-Spec) */
+:root {
+  --tagestipp-bg: #FDFBF8;
+  --tagestipp-card: #FFFFFF;
+  --tagestipp-text: #151515;
+  --tagestipp-muted: #8C8C8C;
+  --tagestipp-accent: #A96CE9;
+  --tagestipp-accent-soft: #C0BDF6;
+  --tagestipp-tag: #DC7256;
+  --tagestipp-like-bg: #BEC3CB;
+  --tagestipp-like-icon: #5851E8;
+  --tagestipp-shadow: 0 10px 30px rgba(20, 20, 20, 0.08);
+  --tagestipp-r-card: 18px;
+  --tagestipp-r-thumb: 14px;
+  --tagestipp-gap: 18px;
+}
+
 /* Custom base styles */
 @layer base {
   html {
@@ -73,6 +90,663 @@
            placeholder:text-gray-400;
   }
 }
+
+/* Tagestipp list item hover animations (20 variants, all with movement) */
+.tagestipp-hover-1 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tagestipp-hover-1:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(20, 20, 20, 0.14);
+}
+.tagestipp-hover-2 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tagestipp-hover-2:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 14px 32px rgba(20, 20, 20, 0.12);
+}
+.tagestipp-hover-3 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tagestipp-hover-3:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 36px rgba(20, 20, 20, 0.1);
+}
+.tagestipp-hover-4 {
+  transition: transform 0.18s ease-out;
+}
+.tagestipp-hover-4:hover {
+  transform: scale(1.02);
+}
+.tagestipp-hover-5 {
+  transition: transform 0.18s ease-out;
+}
+.tagestipp-hover-5:hover {
+  transform: scale(1.03);
+}
+.tagestipp-hover-6 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tagestipp-hover-6:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 10px 26px rgba(20, 20, 20, 0.12);
+}
+.tagestipp-hover-7 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-7:hover {
+  transform: translateY(-4px) scale(1.02);
+}
+.tagestipp-hover-8 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-8:hover {
+  transform: rotate(0.5deg) translateY(-2px);
+}
+.tagestipp-hover-9 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-9:hover {
+  transform: rotate(-0.5deg) translateY(-3px);
+}
+.tagestipp-hover-10 {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tagestipp-hover-10:hover {
+  transform: translateY(-4px);
+}
+.tagestipp-hover-11 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-11:hover {
+  transform: translateX(3px) translateY(-2px);
+}
+.tagestipp-hover-12 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-12:hover {
+  transform: translateX(-3px) translateY(-2px);
+}
+.tagestipp-hover-13 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tagestipp-hover-13:hover {
+  transform: translateY(-3px) scale(1.015);
+  box-shadow: 0 12px 30px rgba(20, 20, 20, 0.11);
+}
+.tagestipp-hover-14 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-14:hover {
+  transform: translateY(-2px) scale(1.025);
+}
+.tagestipp-hover-15 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-15:hover {
+  transform: perspective(200px) rotateX(1deg) translateY(-2px);
+}
+.tagestipp-hover-16 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-16:hover {
+  transform: translateY(-5px) scale(1.01);
+}
+.tagestipp-hover-17 {
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease;
+}
+.tagestipp-hover-17:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(20, 20, 20, 0.1);
+}
+.tagestipp-hover-18 {
+  transition: transform 0.2s ease;
+}
+.tagestipp-hover-18:hover {
+  transform: translateY(-4px) rotate(0.3deg);
+}
+.tagestipp-hover-19 {
+  transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+.tagestipp-hover-19:hover {
+  transform: translateY(-3px) scale(1.02);
+}
+.tagestipp-hover-20 {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tagestipp-hover-20:hover {
+  transform: translateY(-4px) scale(1.015);
+  box-shadow: 0 14px 34px rgba(20, 20, 20, 0.1);
+}
+
+/* Tagestipp Like-Box: Basis + Größen-Modifier */
+.tagestipp-likebox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.tagestipp-likebox .tagestipp-likeBtn {
+  flex-shrink: 0;
+}
+.tagestipp-likebox .tagestipp-heart {
+  display: block;
+}
+.tagestipp-likebox--hero {
+  width: 46px;
+  min-width: 46px;
+  padding: 6px;
+  gap: 6px;
+}
+.tagestipp-likebox--list {
+  width: 38px;
+  min-width: 38px;
+  padding: 6px 4px;
+  gap: 4px;
+}
+
+/* Tagestipp Like-Box – 20 Design-Varianten */
+.tagestipp-likebox-1 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+}
+.tagestipp-likebox-2 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+.tagestipp-likebox-3 {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-3 .tagestipp-heart { stroke: var(--tagestipp-like-icon); }
+.tagestipp-likebox-4 {
+  background: transparent;
+  border: 2px solid var(--tagestipp-like-icon);
+  border-radius: 9999px;
+  box-shadow: none;
+}
+.tagestipp-likebox-5 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-5 .tagestipp-count { display: none; }
+.tagestipp-likebox-5.tagestipp-likebox--hero { width: 40px; min-width: 40px; }
+.tagestipp-likebox-5.tagestipp-likebox--list { width: 32px; min-width: 32px; }
+.tagestipp-likebox-6 {
+  flex-direction: row;
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  padding-left: 10px;
+  padding-right: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-6.tagestipp-likebox--hero { width: auto; min-width: 52px; gap: 6px; }
+.tagestipp-likebox-6.tagestipp-likebox--list { width: auto; min-width: 44px; gap: 4px; padding-left: 8px; padding-right: 8px; }
+.tagestipp-likebox-7 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.tagestipp-likebox-7 .tagestipp-count { display: none; }
+.tagestipp-likebox-7.tagestipp-likebox--hero { width: 36px; min-width: 36px; }
+.tagestipp-likebox-7.tagestipp-likebox--list { width: 30px; min-width: 30px; }
+.tagestipp-likebox-8 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 8px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
+}
+.tagestipp-likebox-9 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+}
+.tagestipp-likebox-10 {
+  background: var(--tagestipp-card);
+  border: 2px solid var(--tagestipp-accent);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(169, 108, 233, 0.15);
+}
+.tagestipp-likebox-11 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-12 {
+  background: var(--tagestipp-tag);
+  border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+.tagestipp-likebox-12 .tagestipp-heart { stroke: white; }
+.tagestipp-likebox-12 .tagestipp-heart[fill] { fill: white !important; }
+.tagestipp-likebox-12 .tagestipp-count { color: white !important; }
+.tagestipp-likebox-13 {
+  background: transparent;
+  border: 1px solid var(--tagestipp-like-icon);
+  border-radius: 9999px;
+  box-shadow: none;
+}
+.tagestipp-likebox-14 {
+  background: var(--tagestipp-card);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.tagestipp-likebox-15 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 12px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-15 .tagestipp-heart { stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-16 {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border-radius: 9999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-17 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+.tagestipp-likebox-17.tagestipp-likebox--hero { width: 46px; padding: 4px 8px; }
+.tagestipp-likebox-17.tagestipp-likebox--list { width: 38px; padding: 3px 6px; }
+.tagestipp-likebox-18 {
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+.tagestipp-likebox-18 .tagestipp-count { font-size: 10px; }
+.tagestipp-likebox-19 {
+  background: var(--tagestipp-like-bg);
+  border: 2px solid white;
+  outline: 1px solid var(--tagestipp-accent);
+  outline-offset: -1px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-20 {
+  flex-direction: row;
+  background: var(--tagestipp-like-bg);
+  border-radius: 9999px;
+  padding-left: 10px;
+  padding-right: 10px;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.tagestipp-likebox-20.tagestipp-likebox--hero { width: auto; min-width: 58px; }
+.tagestipp-likebox-20.tagestipp-likebox--list { width: auto; min-width: 48px; padding-left: 8px; padding-right: 8px; }
+.tagestipp-likebox-20 .tagestipp-count::before { content: 'Merken '; font-weight: 600; font-size: 9px; color: var(--tagestipp-text); }
+.tagestipp-likebox-20 .tagestipp-count { font-size: 10px; }
+
+/* 21–60: Design-6-Look (Pill, horizontal) mit Variationen: transparenter BG, Herzfarbe, ausgefüllt/outline */
+.tagestipp-likebox-21 { flex-direction: row; background: transparent; border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; border: 1px solid rgba(0,0,0,0.08); }
+.tagestipp-likebox-21.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-21.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-22 { flex-direction: row; background: rgba(255,255,255,0.6); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-likebox-22.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-22.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-23 { flex-direction: row; background: rgba(0,0,0,0.04); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-23.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-23.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-24 { flex-direction: row; background: rgba(190,195,203,0.4); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.tagestipp-likebox-24.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-24.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-25 { flex-direction: row; background: transparent; border: 1px solid var(--tagestipp-like-icon); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-25.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-25.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-26 { flex-direction: row; background: rgba(255,255,255,0.85); backdrop-filter: blur(6px); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+.tagestipp-likebox-26.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-26.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-27 { flex-direction: row; background: rgba(169,108,233,0.12); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-27.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-27.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-28 { flex-direction: row; background: rgba(220,114,86,0.2); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.tagestipp-likebox-28.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-28.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-29 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-29 .tagestipp-heart { stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-29 .tagestipp-heart[fill] { fill: var(--tagestipp-accent) !important; }
+.tagestipp-likebox-29.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-29.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-30 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-30 .tagestipp-heart { stroke: var(--tagestipp-tag); }
+.tagestipp-likebox-30 .tagestipp-heart[fill] { fill: var(--tagestipp-tag) !important; }
+.tagestipp-likebox-30.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-30.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-31 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-31 .tagestipp-heart { stroke: #e11d48; }
+.tagestipp-likebox-31 .tagestipp-heart[fill] { fill: #e11d48 !important; }
+.tagestipp-likebox-31.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-31.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-32 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-32 .tagestipp-heart { stroke: #2b3650; }
+.tagestipp-likebox-32 .tagestipp-heart[fill] { fill: #2b3650 !important; }
+.tagestipp-likebox-32.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-32.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-33 { flex-direction: row; background: transparent; border: 1px solid var(--tagestipp-accent); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-33 .tagestipp-heart { stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-33 .tagestipp-heart[fill] { fill: var(--tagestipp-accent) !important; }
+.tagestipp-likebox-33.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-33.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-34 { flex-direction: row; background: rgba(255,255,255,0.7); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-likebox-34 .tagestipp-heart { stroke: #e11d48; }
+.tagestipp-likebox-34 .tagestipp-heart[fill] { fill: #e11d48 !important; }
+.tagestipp-likebox-34.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-34.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-35 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-35 .tagestipp-heart { stroke: #059669; }
+.tagestipp-likebox-35 .tagestipp-heart[fill] { fill: #059669 !important; }
+.tagestipp-likebox-35.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-35.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-36 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-36 .tagestipp-heart { stroke: #151515; }
+.tagestipp-likebox-36 .tagestipp-heart[fill] { fill: #151515 !important; }
+.tagestipp-likebox-36.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-36.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-37 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-37 .tagestipp-heart { fill: var(--tagestipp-like-icon); stroke: var(--tagestipp-like-icon); }
+.tagestipp-likebox-37.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-37.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-38 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-38 .tagestipp-heart { fill: var(--tagestipp-accent); stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-38.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-38.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-39 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-39 .tagestipp-heart { fill: #e11d48; stroke: #e11d48; }
+.tagestipp-likebox-39.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-39.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-40 { flex-direction: row; background: rgba(255,255,255,0.6); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-likebox-40 .tagestipp-heart { fill: var(--tagestipp-like-icon); stroke: var(--tagestipp-like-icon); }
+.tagestipp-likebox-40.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-40.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-41 { flex-direction: row; background: transparent; border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; border: 1px solid rgba(0,0,0,0.1); }
+.tagestipp-likebox-41 .tagestipp-heart { fill: var(--tagestipp-tag); stroke: var(--tagestipp-tag); }
+.tagestipp-likebox-41.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-41.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-42 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-42 .tagestipp-heart { fill: #059669; stroke: #059669; }
+.tagestipp-likebox-42.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-42.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-43 { flex-direction: row; background: rgba(169,108,233,0.15); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-43 .tagestipp-heart { fill: var(--tagestipp-accent); stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-43.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-43.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-44 { flex-direction: row; background: rgba(225,29,72,0.12); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-44 .tagestipp-heart { fill: #e11d48; stroke: #e11d48; }
+.tagestipp-likebox-44.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-44.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-45 { flex-direction: row; background: transparent; border: 2px solid var(--tagestipp-tag); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-45 .tagestipp-heart { stroke: var(--tagestipp-tag); }
+.tagestipp-likebox-45 .tagestipp-heart[fill] { fill: var(--tagestipp-tag) !important; }
+.tagestipp-likebox-45.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-45.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-46 { flex-direction: row; background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.06); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+.tagestipp-likebox-46.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-46.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-47 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+.tagestipp-likebox-47.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-47.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-48 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.tagestipp-likebox-48.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-48.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-49 { flex-direction: row; background: transparent; border: 1px solid var(--tagestipp-accent); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 0 0 1px rgba(169,108,233,0.2); }
+.tagestipp-likebox-49 .tagestipp-heart { stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-49 .tagestipp-heart[fill] { fill: var(--tagestipp-accent) !important; }
+.tagestipp-likebox-49.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-49.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-50 { flex-direction: row; background: rgba(255,255,255,0.5); backdrop-filter: blur(8px); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+.tagestipp-likebox-50 .tagestipp-heart { stroke: #2b3650; }
+.tagestipp-likebox-50 .tagestipp-heart[fill] { fill: #2b3650 !important; }
+.tagestipp-likebox-50.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-50.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-51 { flex-direction: row; background: rgba(220,114,86,0.15); border: 1px solid rgba(220,114,86,0.3); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-51 .tagestipp-heart { stroke: var(--tagestipp-tag); }
+.tagestipp-likebox-51 .tagestipp-heart[fill] { fill: var(--tagestipp-tag) !important; }
+.tagestipp-likebox-51.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-51.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-52 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 12px; padding-right: 12px; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-52.tagestipp-likebox--hero { width: auto; min-width: 56px; }
+.tagestipp-likebox-52.tagestipp-likebox--list { width: auto; min-width: 48px; padding-left: 10px; padding-right: 10px; gap: 5px; }
+.tagestipp-likebox-53 { flex-direction: row; background: transparent; border: 2px solid #e11d48; border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-53 .tagestipp-heart { stroke: #e11d48; }
+.tagestipp-likebox-53 .tagestipp-heart[fill] { fill: #e11d48 !important; }
+.tagestipp-likebox-53.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-53.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-54 { flex-direction: row; background: rgba(88,81,232,0.15); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-54.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-54.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-55 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 16px rgba(88,81,232,0.15); }
+.tagestipp-likebox-55.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-55.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-56 { flex-direction: row; background: rgba(255,255,255,0.9); border: 1px solid rgba(0,0,0,0.06); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-likebox-56.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-56.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-57 { flex-direction: row; background: transparent; border: 1px solid var(--tagestipp-like-icon); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-57.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-57.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-58 { flex-direction: row; background: var(--tagestipp-like-bg); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+.tagestipp-likebox-58 .tagestipp-heart { fill: var(--tagestipp-accent); stroke: var(--tagestipp-accent); }
+.tagestipp-likebox-58.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-58.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-59 { flex-direction: row; background: rgba(0,0,0,0.06); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: none; }
+.tagestipp-likebox-59 .tagestipp-heart { stroke: #151515; }
+.tagestipp-likebox-59 .tagestipp-heart[fill] { fill: #151515 !important; }
+.tagestipp-likebox-59.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-59.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+.tagestipp-likebox-60 { flex-direction: row; background: rgba(255,255,255,0.75); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.8); border-radius: 9999px; padding-left: 10px; padding-right: 10px; gap: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.tagestipp-likebox-60 .tagestipp-heart { stroke: var(--tagestipp-like-icon); }
+.tagestipp-likebox-60 .tagestipp-heart[fill] { fill: var(--tagestipp-like-icon) !important; }
+.tagestipp-likebox-60.tagestipp-likebox--hero { width: auto; min-width: 52px; }
+.tagestipp-likebox-60.tagestipp-likebox--list { width: auto; min-width: 44px; padding-left: 8px; padding-right: 8px; gap: 4px; }
+
+/* Tagestipp Teaser-Box: Avatar + Blase (Tipp von Mensch). Varianten stylen nur .tagestipp-teaser-box__bubble */
+.tagestipp-teaser-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 100%;
+}
+.tagestipp-teaser-box__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.tagestipp-teaser-box__icon-emoji {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  background: var(--tagestipp-card, #fff);
+  border: 2px solid #e5e5e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.tagestipp-teaser-box__bubble {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+}
+.tagestipp-teaser-box__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--tagestipp-muted, #6b7280);
+  margin-bottom: 2px;
+}
+.tagestipp-teaser-box__author { font-weight: 700; color: var(--tagestipp-text, #2b3650); display: block; margin-bottom: 4px; }
+.tagestipp-teaser-box__sparkle-wrap { display: inline-block; vertical-align: middle; margin-left: 4px; }
+.tagestipp-teaser-box__sparkle { width: 16px; height: 16px; color: var(--tagestipp-accent, #7f79eb); vertical-align: middle; }
+.tagestipp-teaser-box__message { margin: 0; color: var(--tagestipp-text, #2b3650); opacity: 0.9; }
+
+/* 1–6: Hintergrund (nur Blase) */
+.tagestipp-teaser-box-1 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-2 .tagestipp-teaser-box__bubble { background: #f5f5f5; border-radius: 4px 16px 16px 16px; }
+.tagestipp-teaser-box-3 .tagestipp-teaser-box__bubble { background: var(--tagestipp-card, #fff); border-radius: 4px 16px 16px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.tagestipp-teaser-box-4 .tagestipp-teaser-box__bubble { background: rgba(169,108,233,0.12); border-radius: 4px 16px 16px 16px; }
+.tagestipp-teaser-box-5 .tagestipp-teaser-box__bubble { background: transparent; border: 1px solid rgba(0,0,0,0.1); border-radius: 4px 16px 16px 16px; }
+.tagestipp-teaser-box-6 .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #f8f7ff 0%, #f0eeff 100%); border-radius: 4px 16px 16px 16px; }
+
+/* 7–12: Border-Varianten */
+.tagestipp-teaser-box-7 .tagestipp-teaser-box__bubble { background: #fff; border: 2px solid #e5e5e5; border-radius: 4px 16px 16px 16px; }
+.tagestipp-teaser-box-8 .tagestipp-teaser-box__bubble { background: #fff; border: 1px solid var(--tagestipp-accent); border-radius: 4px 16px 16px 16px; }
+.tagestipp-teaser-box-9 .tagestipp-teaser-box__bubble { background: #fff; border: 2px dashed rgba(0,0,0,0.15); border-radius: 4px 16px 16px 16px; }
+.tagestipp-teaser-box-10 .tagestipp-teaser-box__bubble { background: #fff; border-bottom: 3px solid var(--tagestipp-tag, #dc7256); border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+.tagestipp-teaser-box-11 .tagestipp-teaser-box__bubble { background: #fff; border: 1px solid rgba(127,121,235,0.4); border-radius: 4px 20px 20px 20px; }
+.tagestipp-teaser-box-12 .tagestipp-teaser-box__bubble { background: #fafafa; border-left: 4px solid var(--tagestipp-accent); border-radius: 0 12px 12px 12px; }
+
+/* 13–18: Schatten */
+.tagestipp-teaser-box-13 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: none; }
+.tagestipp-teaser-box-14 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-15 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+.tagestipp-teaser-box-16 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 4px 16px rgba(127,121,235,0.2); }
+.tagestipp-teaser-box-17 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-18 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 6px 12px rgba(0,0,0,0.06); }
+
+/* 19–24: Form/Layout (Blase + ggf. Container row-reverse) */
+.tagestipp-teaser-box-19 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 20px 20px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-20 .tagestipp-teaser-box__bubble { background: var(--tagestipp-like-bg); border-radius: 4px 9999px 9999px 9999px; padding: 14px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-21 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 16px 16px 16px 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); position: relative; }
+.tagestipp-teaser-box-21 .tagestipp-teaser-box__bubble::after { content: ''; position: absolute; left: 12px; bottom: -8px; border: 8px solid transparent; border-top-color: #fff; border-left: 0; }
+.tagestipp-teaser-box-22 { flex-direction: row-reverse; }
+.tagestipp-teaser-box-22 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 16px 4px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-23 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-24 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 8px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+/* 25–30: Mischungen */
+.tagestipp-teaser-box-25 .tagestipp-teaser-box__bubble { background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.tagestipp-teaser-box-26 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-26 .tagestipp-teaser-box__author { font-weight: 800; font-size: 13px; }
+.tagestipp-teaser-box-27 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-27 .tagestipp-teaser-box__author { color: var(--tagestipp-accent); }
+.tagestipp-teaser-box-28 .tagestipp-teaser-box__bubble { background: linear-gradient(180deg, #faf9ff 0%, #fff 100%); border: 1px solid rgba(127,121,235,0.15); border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+.tagestipp-teaser-box-29 .tagestipp-teaser-box__bubble { background: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.tagestipp-teaser-box-29 .tagestipp-teaser-box__author { border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 4px; margin-bottom: 6px; }
+.tagestipp-teaser-box-30 .tagestipp-teaser-box__bubble { background: var(--tagestipp-tag); color: #fff; border-radius: 4px 16px 16px 16px; box-shadow: 0 4px 12px rgba(220,114,86,0.3); }
+.tagestipp-teaser-box-30 .tagestipp-teaser-box__author { color: #fff; }
+.tagestipp-teaser-box-30 .tagestipp-teaser-box__message { color: rgba(255,255,255,0.95); }
+.tagestipp-teaser-box-30 .tagestipp-teaser-box__label { color: rgba(255,255,255,0.85); }
+.tagestipp-teaser-box-30 .tagestipp-teaser-box__sparkle { color: #fff; }
+
+/* Content-Varianten (Ideen 1–30): Box weniger leer */
+.tagestipp-teaser-box__bubble-inner { display: block; }
+.tagestipp-teaser-box__cta { display: inline-block; margin-top: 10px; padding: 8px 14px; background: var(--tagestipp-accent, #7f79eb); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; }
+.tagestipp-teaser-box__cta:hover { opacity: 0.95; }
+.tagestipp-teaser-box__event-teaser { font-size: 12px; font-weight: 600; color: var(--tagestipp-accent); margin: 4px 0 6px 0; }
+.tagestipp-teaser-box__badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+.tagestipp-teaser-box__date-badge { background: rgba(127,121,235,0.2); color: var(--tagestipp-accent); }
+.tagestipp-teaser-box__top-badge { background: var(--tagestipp-tag); color: #fff; }
+.tagestipp-teaser-box__price-badge { background: #e8f5e9; color: #2e7d32; }
+.tagestipp-teaser-box__category { display: inline-block; margin-left: 8px; padding: 2px 8px; font-size: 11px; font-weight: 600; border: 1px solid var(--tagestipp-accent-soft); color: var(--tagestipp-accent); border-radius: 9999px; }
+.tagestipp-teaser-box__subline { display: block; font-size: 11px; color: var(--tagestipp-muted); font-weight: 500; margin-top: 2px; }
+.tagestipp-teaser-box__message--quote { font-style: italic; }
+.tagestipp-teaser-box__social-proof { font-size: 12px; color: var(--tagestipp-muted); margin-top: 6px; }
+.tagestipp-teaser-box__second-p { margin: 8px 0 0 0; color: var(--tagestipp-text); opacity: 0.9; font-size: 13px; }
+.tagestipp-teaser-box__icon-row { display: flex; gap: 10px; margin-top: 8px; font-size: 14px; }
+.tagestipp-teaser-box__link-line { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--tagestipp-accent); text-decoration: none; }
+.tagestipp-teaser-box__link-line:hover { text-decoration: underline; }
+.tagestipp-teaser-box__time-hint { display: inline-block; margin-top: 6px; padding: 4px 10px; background: #fff3e0; color: #e65100; font-size: 12px; font-weight: 700; border-radius: 6px; }
+.tagestipp-teaser-box__more { font-weight: 700; color: var(--tagestipp-accent); cursor: pointer; }
+.tagestipp-teaser-box__recommendation { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--tagestipp-accent); font-weight: 600; margin-left: 6px; }
+.tagestipp-teaser-box__topic { display: block; font-size: 12px; color: var(--tagestipp-muted); margin-top: 2px; }
+.tagestipp-teaser-box__location-line { font-size: 12px; color: var(--tagestipp-muted); margin-top: 6px; }
+
+/* Content 12: schmalere Blase */
+.tagestipp-teaser-box--content-12 .tagestipp-teaser-box__bubble { max-width: 320px; }
+
+/* Content 13: größere Schrift Nachricht */
+.tagestipp-teaser-box--content-13 .tagestipp-teaser-box__message { font-size: 16px; }
+
+/* Content 17: dezenter Hintergrund */
+.tagestipp-teaser-box--content-17 .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #faf9ff 0%, #f5f4ff 50%, #fff 100%) !important; }
+
+/* Content 18: Rahmen links farbig */
+.tagestipp-teaser-box--content-18 .tagestipp-teaser-box__bubble { border-left: 4px solid var(--tagestipp-accent) !important; }
+
+/* Content 19: zwei Spalten in der Blase */
+.tagestipp-teaser-box--content-19 .tagestipp-teaser-box__bubble { display: flex; gap: 12px; align-items: flex-start; }
+.tagestipp-teaser-box--content-19 .tagestipp-teaser-box__bubble-icon { flex-shrink: 0; font-size: 24px; }
+.tagestipp-teaser-box--content-19 .tagestipp-teaser-box__bubble-inner { flex: 1; min-width: 0; }
+
+/* Content 20: Sprechblasen-Schwanz */
+.tagestipp-teaser-box--content-20 .tagestipp-teaser-box__bubble { position: relative; }
+.tagestipp-teaser-box--content-20 .tagestipp-teaser-box__bubble::after { content: ''; position: absolute; left: 8px; bottom: -10px; border: 10px solid transparent; border-top-color: inherit; border-left: 0; }
+.tagestipp-teaser-box--content-20 .tagestipp-teaser-box__bubble::after { border-top-color: #fff; }
+
+/* Content 21: kompakte Zeile */
+.tagestipp-teaser-box__bubble--compact { padding: 10px 14px; }
+.tagestipp-teaser-box__compact-line { font-size: 14px; font-weight: 600; color: var(--tagestipp-text); }
+
+/* Content 22: Banner-Style */
+.tagestipp-teaser-box--banner { width: 100%; max-width: 100%; }
+.tagestipp-teaser-box__bubble--banner { flex: 1; border-radius: 12px; }
+
+/* Content 23: Vollbreite Blase */
+.tagestipp-teaser-box--content-23 .tagestipp-teaser-box__bubble { width: 100%; padding: 16px 18px; }
+
+/* Content 24: Avatar größer (im Markup width/height 56) – bereits in Komponente */
+
+/* Teaser-Box Themen (20 Designs): thematisches Styling pro themeClass */
+.teaser-theme-announcement .tagestipp-teaser-box__bubble { border-left: 4px solid var(--tagestipp-accent); background: #fafaff !important; }
+.teaser-theme-easter .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #e8f5e9 0%, #fff9c4 100%) !important; border-color: #aed581; }
+.teaser-theme-easter .tagestipp-teaser-box__icon-emoji { background: #e8f5e9; border-color: #81c784; }
+.teaser-theme-music .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #ede7f6 0%, #e3f2fd 100%) !important; border-color: #b39ddb; }
+.teaser-theme-music .tagestipp-teaser-box__icon-emoji { background: #ede7f6; border-color: #9575cd; }
+.teaser-theme-family .tagestipp-teaser-box__bubble { background: #fff8e1 !important; border-color: #ffcc80; }
+.teaser-theme-family .tagestipp-teaser-box__icon-emoji { background: #fff3e0; border-color: #ffb74d; }
+.teaser-theme-christmas .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #ffebee 0%, #e8f5e9 100%) !important; border-color: #c8e6c9; }
+.teaser-theme-christmas .tagestipp-teaser-box__icon-emoji { background: #ffebee; border-color: #e57373; }
+.teaser-theme-summer .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%) !important; border-color: #ffcc80; }
+.teaser-theme-summer .tagestipp-teaser-box__icon-emoji { background: #fff8e1; border-color: #ffb74d; }
+.teaser-theme-culture .tagestipp-teaser-box__bubble { background: #fafafa !important; border-color: #bdbdbd; }
+.teaser-theme-culture .tagestipp-teaser-box__icon-emoji { background: #eceff1; border-color: #90a4ae; }
+.teaser-theme-weekend .tagestipp-teaser-box__bubble { background: #e3f2fd !important; border-color: #90caf9; }
+.teaser-theme-weekend .tagestipp-teaser-box__icon-emoji { background: #e3f2fd; border-color: #64b5f6; }
+.teaser-theme-lastminute .tagestipp-teaser-box__bubble { background: #fff3e0 !important; border: 2px solid #ff9800; box-shadow: 0 2px 12px rgba(255,152,0,0.25); }
+.teaser-theme-lastminute .tagestipp-teaser-box__icon-emoji { background: #ff9800; border-color: #e65100; color: #fff; }
+.teaser-theme-festival .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important; border-color: #ce93d8; }
+.teaser-theme-festival .tagestipp-teaser-box__icon-emoji { background: #f3e5f5; border-color: #ba68c8; }
+.teaser-theme-sport .tagestipp-teaser-box__bubble { background: #e8f5e9 !important; border-color: #81c784; }
+.teaser-theme-sport .tagestipp-teaser-box__icon-emoji { background: #e8f5e9; border-color: #4caf50; }
+.teaser-theme-cinema .tagestipp-teaser-box__bubble { background: #eceff1 !important; border-color: #78909c; }
+.teaser-theme-cinema .tagestipp-teaser-box__icon-emoji { background: #37474f; border-color: #263238; color: #fff; }
+.teaser-theme-market .tagestipp-teaser-box__bubble { background: #efebe9 !important; border-color: #a1887f; }
+.teaser-theme-market .tagestipp-teaser-box__icon-emoji { background: #efebe9; border-color: #8d6e63; }
+.teaser-theme-workshop .tagestipp-teaser-box__bubble { background: #e8eaf6 !important; border-color: #9fa8da; }
+.teaser-theme-workshop .tagestipp-teaser-box__icon-emoji { background: #e8eaf6; border-color: #7986cb; }
+.teaser-theme-party .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%) !important; border-color: #f48fb1; }
+.teaser-theme-party .tagestipp-teaser-box__icon-emoji { background: #fce4ec; border-color: #ec407a; }
+.teaser-theme-halloween .tagestipp-teaser-box__bubble { background: #fff3e0 !important; border: 2px solid #ff9800; }
+.teaser-theme-halloween .tagestipp-teaser-box__icon-emoji { background: #ff9800; border-color: #212121; }
+.teaser-theme-silvester .tagestipp-teaser-box__bubble { background: linear-gradient(135deg, #37474f 0%, #455a64 100%) !important; border-color: #ffd54f; color: #fff; }
+.teaser-theme-silvester .tagestipp-teaser-box__icon-emoji { background: #455a64; border-color: #ffd54f; color: #ffd54f; }
+.teaser-theme-silvester .tagestipp-teaser-box__label,
+.teaser-theme-silvester .tagestipp-teaser-box__author,
+.teaser-theme-silvester .tagestipp-teaser-box__message { color: rgba(255,255,255,0.95); }
+.teaser-theme-school .tagestipp-teaser-box__bubble { background: #fffde7 !important; border-color: #fdd835; }
+.teaser-theme-school .tagestipp-teaser-box__icon-emoji { background: #fffde7; border-color: #f9a825; }
+.teaser-theme-kiez .tagestipp-teaser-box__bubble { background: #e8f5e9 !important; border-color: #66bb6a; }
+.teaser-theme-kiez .tagestipp-teaser-box__icon-emoji { background: #c8e6c9; border-color: #43a047; }
 
 /* Custom utilities */
 @layer utilities {

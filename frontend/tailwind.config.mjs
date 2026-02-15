@@ -40,6 +40,17 @@ export default {
           800: '#92400E',
           900: '#78350F',
         },
+        tagestipp: {
+          bg: '#FDFBF8',
+          card: '#FFFFFF',
+          text: '#151515',
+          muted: '#8C8C8C',
+          accent: '#A96CE9',
+          'accent-soft': '#C0BDF6',
+          tag: '#DC7256',
+          'like-bg': '#BEC3CB',
+          'like-icon': '#5851E8',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
@@ -47,6 +58,11 @@ export default {
       boxShadow: {
         'card': '0 2px 8px rgba(0, 0, 0, 0.08)',
         'card-hover': '0 8px 24px rgba(0, 0, 0, 0.12)',
+        'tagestipp': '0 10px 30px rgba(20, 20, 20, 0.08)',
+      },
+      borderRadius: {
+        'tagestipp-card': '18px',
+        'tagestipp-thumb': '14px',
       },
     },
   },

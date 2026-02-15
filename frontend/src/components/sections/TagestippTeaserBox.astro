@@ -1,0 +1,204 @@
+---
+/**
+ * TagestippTeaserBox – Chat-artige Box über der Tagestipp-Sektion (Avatar + Blase).
+ * variant = Design 1–30; contentVariant = Idee 1–30 (Inhalt/Layout gegen leere Box).
+ */
+type TeaserBoxVariant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30;
+type ContentVariant = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30;
+
+interface Props {
+  variant: TeaserBoxVariant;
+  /** Content-Idee 1–30 (optional). Wenn gesetzt: zusätzliches Markup/Klassen für „Box weniger leer“. */
+  contentVariant?: ContentVariant;
+  authorName?: string;
+  message?: string;
+  avatarSrc?: string;
+  showSparkle?: boolean;
+  ctaText?: string;
+  ctaHref?: string;
+  eventTeaser?: string;
+  dateBadge?: string;
+  category?: string;
+  authorSubline?: string;
+  socialProof?: string;
+  secondParagraph?: string;
+  eventCount?: number;
+  priceBadge?: string;
+  timeHint?: string;
+  recommendationLabel?: string;
+  topic?: string;
+  locationLine?: string;
+  shortMessage?: string;
+  /** Für Idee 16: Startdatum für Live-Countdown (ISO-Datum z. B. "2025-08-16" oder "2025-08-16T20:00:00") */
+  countdownEndDate?: string;
+  /** Optional: Emoji oder Icon-Slug; wenn gesetzt, wird statt Avatar dieses Icon angezeigt (Unique Icon pro Thema). */
+  icon?: string;
+  /** Optional: CSS-Klasse für thematisches Styling (z. B. teaser-theme-easter). */
+  themeClass?: string;
+  /** Optional: Ersetzt "Tipp von" (z. B. "Ankündigung", "Ostern"). */
+  labelPrefix?: string;
+}
+
+const DEFAULT_AVATAR = 'https://api.dicebear.com/7.x/avataaars/png?seed=Wenke&size=96';
+const defaultMessage = "Heute Abend gibt's ein kleines Geheimkonzert – schau in die Tagestipps!";
+
+const {
+  variant,
+  contentVariant,
+  authorName = 'WENKE',
+  message = defaultMessage,
+  avatarSrc = DEFAULT_AVATAR,
+  showSparkle = false,
+  ctaText,
+  ctaHref = '#pick-of-the-day',
+  eventTeaser,
+  dateBadge,
+  category,
+  authorSubline,
+  socialProof,
+  secondParagraph,
+  eventCount,
+  priceBadge,
+  timeHint,
+  recommendationLabel,
+  topic,
+  locationLine,
+  shortMessage = "Geheimkonzert – schau in die Tagestipps!",
+  countdownEndDate,
+  icon: iconProp,
+  themeClass = '',
+  labelPrefix,
+} = Astro.props;
+
+const cv = contentVariant ?? 0;
+const showIcon = typeof iconProp === 'string' && iconProp.length > 0;
+const labelText = labelPrefix ?? 'Tipp von';
+const themeClassStr = themeClass ? ` ${themeClass}` : '';
+const isCompactLine = cv === 21 || cv === 30;
+const isBanner = cv === 22;
+const bubbleClass = cv > 0 ? ` tagestipp-teaser-box__bubble--content-${cv}` : '';
+const rootClass = cv > 0 ? ` tagestipp-teaser-box--content-${cv}` : '';
+---
+
+{/* Idee 21: Kompakte Zeile | Idee 30: Minimal-Banner */}
+{(cv === 21 || cv === 30) && (
+  <div class={`tagestipp-teaser-box tagestipp-teaser-box-${variant}${rootClass}${themeClassStr}`} role="complementary" aria-label={`${labelText} ${authorName}`}>
+    {showIcon ? <span class="tagestipp-teaser-box__icon-emoji" aria-hidden="true">{iconProp}</span> : <img src={avatarSrc} alt="" class="tagestipp-teaser-box__avatar" width={cv === 24 ? 56 : 44} height={cv === 24 ? 56 : 44} />}
+    <div class={`tagestipp-teaser-box__bubble tagestipp-teaser-box__bubble--compact${bubbleClass}`}>
+      <span class="tagestipp-teaser-box__compact-line">{authorName} {cv === 21 ? 'tippt:' : ':'} {shortMessage}</span>
+    </div>
+  </div>
+)}
+
+{/* Idee 22: Banner-Style (Vollbreite, ohne Blase) */}
+{cv === 22 && (
+  <div class={`tagestipp-teaser-box tagestipp-teaser-box-${variant} tagestipp-teaser-box--banner${rootClass}${themeClassStr}`} role="complementary" aria-label={`${labelText} ${authorName}`}>
+    {showIcon ? <span class="tagestipp-teaser-box__icon-emoji" aria-hidden="true">{iconProp}</span> : <img src={avatarSrc} alt="" class="tagestipp-teaser-box__avatar" width="44" height="44" />}
+    <div class={`tagestipp-teaser-box__bubble tagestipp-teaser-box__bubble--banner${bubbleClass}`}>
+      <span class="tagestipp-teaser-box__label">{labelText}</span>
+      <span class="tagestipp-teaser-box__author">{authorName}</span>
+      <p class="tagestipp-teaser-box__message">{message}</p>
+    </div>
+  </div>
+)}
+
+{/* Standard + alle anderen Content-Varianten (1, 2–20, 23–29) */}
+{(cv === 0 || (cv >= 1 && cv !== 21 && cv !== 22 && cv !== 30)) && (
+  <div class={`tagestipp-teaser-box tagestipp-teaser-box-${variant}${rootClass}${themeClassStr}`} role="complementary" aria-label={`${labelText} ${authorName}`}>
+    {showIcon ? <span class="tagestipp-teaser-box__icon-emoji" aria-hidden="true">{iconProp}</span> : <img src={avatarSrc} alt="" class="tagestipp-teaser-box__avatar" width={cv === 24 ? 56 : 44} height={cv === 24 ? 56 : 44} />}
+    <div class={`tagestipp-teaser-box__bubble${bubbleClass}`}>
+      {cv === 4 && dateBadge && <span class="tagestipp-teaser-box__badge tagestipp-teaser-box__date-badge">{dateBadge}</span>}
+      {cv === 8 && <span class="tagestipp-teaser-box__badge tagestipp-teaser-box__top-badge">Top-Tipp</span>}
+      {cv === 15 && priceBadge && <span class="tagestipp-teaser-box__badge tagestipp-teaser-box__price-badge">{priceBadge}</span>}
+      {cv === 19 && <span class="tagestipp-teaser-box__bubble-icon" aria-hidden="true">✨</span>}
+      <div class="tagestipp-teaser-box__bubble-inner">
+        <span class="tagestipp-teaser-box__label">{labelText}</span>
+        <span class="tagestipp-teaser-box__author">{authorName}</span>
+        {cv === 5 && category && <span class="tagestipp-teaser-box__category">{category}</span>}
+        {cv === 6 && authorSubline && <span class="tagestipp-teaser-box__subline">{authorSubline}</span>}
+        {cv === 25 && recommendationLabel && <span class="tagestipp-teaser-box__recommendation">{recommendationLabel}</span>}
+        {cv === 26 && topic && <span class="tagestipp-teaser-box__topic">{topic}</span>}
+        {showSparkle && (cv === 0 || cv === 1) && (
+          <span class="tagestipp-teaser-box__sparkle-wrap" aria-hidden="true">
+            <svg class="tagestipp-teaser-box__sparkle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/></svg>
+          </span>
+        )}
+        {cv === 3 && eventTeaser && <p class="tagestipp-teaser-box__event-teaser">{eventTeaser}</p>}
+        {cv === 3 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 7 && <p class="tagestipp-teaser-box__message tagestipp-teaser-box__message--quote">"{message}"</p>}
+        {(cv === 0 || cv === 1 || cv === 4 || cv === 5 || cv === 6 || cv === 8 || cv === 12 || cv === 13 || cv === 15 || cv === 17 || cv === 18 || cv === 20 || cv === 23 || cv === 24 || cv === 25 || cv === 26 || cv === 28) && cv !== 7 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 27 && <p class="tagestipp-teaser-box__message">{message.split(/[.–]/)[0]}… <span class="tagestipp-teaser-box__more">Mehr lesen</span></p>}
+        {cv === 9 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 9 && socialProof && <p class="tagestipp-teaser-box__social-proof">{socialProof}</p>}
+        {cv === 10 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 10 && secondParagraph && <p class="tagestipp-teaser-box__second-p">{secondParagraph}</p>}
+        {cv === 11 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 11 && <div class="tagestipp-teaser-box__icon-row" aria-hidden="true"><span>📅</span><span>📍</span><span>💰</span></div>}
+        {cv === 14 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 14 && <a href={ctaHref} class="tagestipp-teaser-box__link-line">{eventCount ?? 3} Events heute →</a>}
+        {cv === 16 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 16 && countdownEndDate && (
+          <span class="tagestipp-teaser-box__time-hint tagestipp-teaser-box__countdown" data-countdown-end={countdownEndDate} aria-live="polite">
+            …
+          </span>
+        )}
+        {cv === 16 && !countdownEndDate && timeHint && <span class="tagestipp-teaser-box__time-hint">{timeHint}</span>}
+        {cv === 29 && (
+          <>
+            <p class="tagestipp-teaser-box__message">{message.split(/[.–]/)[0]}.</p>
+            <p class="tagestipp-teaser-box__message tagestipp-teaser-box__second-p">{message.split(/[.–]/).slice(1).join('.')}</p>
+          </>
+        )}
+        {cv === 2 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 2 && ctaText && <a href={ctaHref} class="tagestipp-teaser-box__cta">{ctaText}</a>}
+        {cv === 28 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {cv === 28 && locationLine && <p class="tagestipp-teaser-box__location-line">{locationLine}</p>}
+      </div>
+    </div>
+  </div>
+)}
+
+<script>
+  function formatCountdown(endIso) {
+    if (!endIso || typeof endIso !== 'string') return '—';
+    const end = new Date(endIso);
+    if (isNaN(end.getTime())) return '—';
+    const now = new Date();
+    const ms = end.getTime() - now.getTime();
+
+    if (ms <= 0) return 'Jetzt';
+    if (ms < 60000) return "Gleich geht's los";
+
+    const totalMin = Math.floor(ms / 60000);
+    if (totalMin < 15) return `Startet in ${totalMin} Min.`;
+    if (totalMin < 60) return `Startet in ${totalMin} Min.`;
+
+    const startOfNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    const daysDiff = Math.round((startOfEnd.getTime() - startOfNow.getTime()) / 86400000);
+    const timeStr = end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+
+    if (daysDiff === 0) return `Heute um ${timeStr}`;
+    if (daysDiff === 1) return `Morgen um ${timeStr}`;
+    if (daysDiff >= 2 && daysDiff <= 6) return `${end.toLocaleDateString('de-DE', { weekday: 'long' })}, ${timeStr}`;
+    return end.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  function tick() {
+    document.querySelectorAll('[data-countdown-end]').forEach(function (el) {
+      const end = el.getAttribute('data-countdown-end');
+      if (end) el.textContent = formatCountdown(end);
+    });
+  }
+
+  function startCountdown() {
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startCountdown);
+  } else {
+    startCountdown();
+  }
+</script>

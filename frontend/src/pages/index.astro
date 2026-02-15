@@ -1,38 +1,45 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import StickyHeader from '../components/layout/StickyHeader.astro';
-import PlannerBar from '../components/planner/PlannerBar.astro';
-import QuickTabs from '../components/feed/QuickTabs.astro';
-import TopPicks from '../components/sections/TopPicks.astro';
+import TagestippTeaserBox from '../components/sections/TagestippTeaserBox.astro';
+import PickOfTheDaySideBySide from '../components/sections/PickOfTheDaySideBySide.astro';
 import FeedSection from '../components/feed/FeedSection.astro';
 import MapPreview from '../components/map/MapPreview.astro';
 import AvailableNow from '../components/sections/AvailableNow.astro';
 import NewThisWeek from '../components/sections/NewThisWeek.astro';
 import TrendingNearby from '../components/sections/TrendingNearby.astro';
 
-// Get tab from URL
-const url = new URL(Astro.request.url);
-const activeTab = url.searchParams.get('tab') || 'heute';
-
 // API Base URL
 const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
-// Fetch data in parallel
+// Fetch data in parallel (incl. Tagestipp + Teaser-Konfiguration)
 let topPicks: any[] = [];
+let tagestippEvents: any[] = [];
+let tagestippSubline = 'Top Picks heute';
+let pickOfTheDayEvents: any[] = [];
 let feedEvents: any[] = [];
 let availableEvents: any[] = [];
 let newEvents: any[] = [];
 let trendingEvents: any[] = [];
 let mapPins: any[] = [];
+let teaserConfig: { authorName?: string; message?: string; avatarSrc?: string; countdownEndDate?: string; variant?: number; contentVariant?: number; teaserLabel?: string; teaserIcon?: string; teaserThemeClass?: string } = {};
 
 try {
-  const [topPicksRes, feedRes, availableRes, newRes, trendingRes] = await Promise.all([
+  const [tagestippRes, topPicksRes, feedRes, availableRes, newRes, trendingRes, teaserRes] = await Promise.all([
+    fetch(`${API_BASE}/api/events/tagestipp?limit=6`).catch(() => null),
     fetch(`${API_BASE}/api/events/top-picks?limit=8`).catch(() => null),
-    fetch(`${API_BASE}/api/events?tab=${activeTab}&limit=20`).catch(() => null),
+    fetch(`${API_BASE}/api/events?tab=heute&limit=20`).catch(() => null),
     fetch(`${API_BASE}/api/events/available?limit=12`).catch(() => null),
     fetch(`${API_BASE}/api/events/new?limit=12`).catch(() => null),
     fetch(`${API_BASE}/api/events/trending?limit=12`).catch(() => null),
+    fetch(`${API_BASE}/api/settings/homepage-teaser`).catch(() => null),
   ]);
+
+  if (tagestippRes?.ok) {
+    const data = await tagestippRes.json();
+    tagestippEvents = data.data || [];
+    if (data.subline) tagestippSubline = data.subline;
+  }
 
   if (topPicksRes?.ok) {
     const data = await topPicksRes.json();
@@ -59,8 +66,15 @@ try {
     trendingEvents = data.data || [];
   }
 
-  // Create map pins from events (nur echte Events)
-  mapPins = [...topPicks, ...feedEvents]
+  if (teaserRes?.ok) {
+    const data = await teaserRes.json();
+    if (data?.data && typeof data.data === 'object') teaserConfig = data.data;
+  }
+
+  pickOfTheDayEvents = tagestippEvents.length > 0 ? tagestippEvents : topPicks;
+
+  // Create map pins from events (Pick of the day + Feed)
+  mapPins = [...pickOfTheDayEvents, ...feedEvents]
     .filter(e => e.location_lat && e.location_lng)
     .slice(0, 12)
     .map(e => ({
@@ -81,18 +95,29 @@ try {
 <BaseLayout title="kiezling - Familienaktivitäten in Karlsruhe">
   <!-- Sticky Header -->
   <StickyHeader />
-  
-  <!-- Planner Bar (Turbo-Fokus) -->
-  <PlannerBar />
-  
-  <!-- Quick Tabs -->
-  <QuickTabs activeTab={activeTab} />
+
+  <!-- Teaser-Box über der Tagestipp-Sektion (Konfiguration aus Admin) -->
+  <div class="tagestipp-section pt-3 px-[18px] pb-0 bg-tagestipp-bg">
+    <div class="max-w-[1220px] mx-auto mb-2">
+      <TagestippTeaserBox
+        variant={Math.min(30, Math.max(1, teaserConfig.variant ?? 7)) as 1}
+        contentVariant={Math.min(30, Math.max(1, teaserConfig.contentVariant ?? 16)) as 16}
+        authorName={teaserConfig.authorName}
+        message={teaserConfig.message}
+        avatarSrc={teaserConfig.avatarSrc}
+        countdownEndDate={teaserConfig.countdownEndDate}
+        labelPrefix={teaserConfig.teaserLabel}
+        icon={teaserConfig.teaserIcon}
+        themeClass={teaserConfig.teaserThemeClass}
+      />
+    </div>
+  </div>
+
+  <!-- Pick of the day – bündige Box, Icon 60, Hover-Animation #4 (Scale) -->
+  <PickOfTheDaySideBySide events={pickOfTheDayEvents} locationName="Karlsruhe" iconId="60" hoverVariant={4} likeBoxVariant={22} />
 
   <main id="main-content" role="main">
-    <!-- Section A: Top Picks (nur bei echten Events) -->
-    {topPicks.length > 0 && <TopPicks events={topPicks} />}
-
-    <!-- Section B: Main Feed (nur bei echten Events) -->
+    <!-- Main Feed (nur bei echten Events) -->
     {feedEvents.length > 0 && <FeedSection events={feedEvents} />}
 
     <!-- Section C: Map Preview (nur bei echten Pins) -->
