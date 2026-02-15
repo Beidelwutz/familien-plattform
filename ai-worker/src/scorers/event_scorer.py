@@ -16,6 +16,7 @@ import logging
 from src.config import get_settings
 from src.lib.pii_redactor import PIIRedactor
 from src.lib.schema_validator import validate_scoring, try_parse_json
+from src.monitoring.ai_cost_tracker import get_cost_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,9 @@ class EventScorer:
             logger.error(f"AI scoring error: {e}")
             result = self._default_scoring(event)
             result.parse_error = str(e)
+            err_str = str(e).lower()
+            if "429" in err_str or "insufficient_quota" in err_str or "quota" in err_str:
+                result.reasoning = {"note": "--leer-- API-Kontingent überschritten (OpenAI Billing prüfen)"}
         
         return result
     
@@ -241,6 +245,14 @@ class EventScorer:
                 )
                 
                 raw_response = response.choices[0].message.content or ""
+                try:
+                    usage = getattr(response, "usage", None)
+                    if usage is not None:
+                        inp = getattr(usage, "prompt_tokens", 0) or getattr(usage, "input_tokens", 0)
+                        out = getattr(usage, "completion_tokens", 0) or getattr(usage, "output_tokens", 0)
+                        get_cost_tracker().log_usage(model=model, operation="score", input_tokens=inp, output_tokens=out)
+                except Exception:
+                    pass
                 
                 success, data, parse_error = try_parse_json(raw_response)
                 
@@ -298,6 +310,14 @@ class EventScorer:
                 )
                 
                 raw_response = response.content[0].text
+                try:
+                    usage = getattr(response, "usage", None)
+                    if usage is not None:
+                        inp = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
+                        out = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
+                        get_cost_tracker().log_usage(model=model, operation="score", input_tokens=inp, output_tokens=out)
+                except Exception:
+                    pass
                 
                 success, data, parse_error = try_parse_json(raw_response)
                 
@@ -354,21 +374,14 @@ class EventScorer:
     
     def _default_scoring(self, event: dict) -> ScoringResult:
         """Return default scores when AI unavailable."""
-        has_title = bool(event.get("title"))
-        has_description = bool(event.get("description"))
-        has_location = bool(event.get("location_address"))
-        has_price = event.get("price_type") != "unknown"
-        
-        quality_score = 25 * sum([has_title, has_description, has_location, has_price])
-        
         return ScoringResult(
-            relevance_score=60,
-            quality_score=quality_score,
-            family_fit_score=60,
-            stressfree_score=50,
-            fun_score=60,
-            confidence=0.3,
-            reasoning={"note": "Default scoring - AI unavailable"},
+            relevance_score=0,
+            quality_score=0,
+            family_fit_score=0,
+            stressfree_score=0,
+            fun_score=0,
+            confidence=0.0,
+            reasoning={"note": "--leer-- AI nicht verfügbar"},
             model="fallback",
             temperature=0.0,
             prompt_version=self.settings.scorer_prompt_version

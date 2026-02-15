@@ -241,3 +241,58 @@ class AICostTracker:
         output_cost = (output_tokens / 1000) * costs["output"]
         
         return input_cost + output_cost
+
+    def get_today_entries(self) -> list[CostEntry]:
+        """Return all cost entries for the current calendar day (UTC)."""
+        from datetime import datetime
+        now = datetime.utcnow()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        return [e for e in self._entries if e.timestamp >= today_start]
+
+    def get_today_summary(self) -> dict:
+        """Summary of today's usage for live view."""
+        entries = self.get_today_entries()
+        total_usd = sum(e.estimated_cost_usd for e in entries)
+        by_model = {}
+        by_operation = {}
+        for e in entries:
+            by_model[e.model] = by_model.get(e.model, 0) + e.estimated_cost_usd
+            by_operation[e.operation] = by_operation.get(e.operation, 0) + e.estimated_cost_usd
+        return {
+            "date_utc": datetime.utcnow().strftime("%Y-%m-%d"),
+            "total_cost_usd": round(total_usd, 4),
+            "total_calls": len(entries),
+            "by_model": {k: round(v, 4) for k, v in by_model.items()},
+            "by_operation": {k: round(v, 4) for k, v in by_operation.items()},
+            "recent": [
+                {
+                    "time": e.timestamp.strftime("%H:%M:%S"),
+                    "model": e.model,
+                    "operation": e.operation,
+                    "cost_usd": round(e.estimated_cost_usd, 4),
+                    "in_tokens": e.input_tokens,
+                    "out_tokens": e.output_tokens,
+                }
+                for e in sorted(entries, key=lambda x: x.timestamp, reverse=True)[:50]
+            ],
+        }
+
+
+# Singleton for app-wide cost tracking
+_tracker: Optional[AICostTracker] = None
+
+
+def get_cost_tracker() -> AICostTracker:
+    """Get or create the global cost tracker (uses config for limits)."""
+    global _tracker
+    if _tracker is None:
+        try:
+            from src.config import get_settings
+            s = get_settings()
+            _tracker = AICostTracker(
+                daily_limit_usd=s.ai_daily_limit_usd,
+                monthly_limit_usd=s.ai_monthly_limit_usd,
+            )
+        except Exception:
+            _tracker = AICostTracker(daily_limit_usd=50.0, monthly_limit_usd=200.0)
+    return _tracker

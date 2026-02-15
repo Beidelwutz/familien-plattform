@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     ai_low_cost_mode: bool = False  # Use cheaper/smaller models
     ai_max_retries: int = 2  # Max retries for failed AI calls
     
-    # AI Budget
-    ai_daily_limit_usd: float = 10.0
+    # AI Budget (nur App-seitig: stoppt Batch bei Überschreitung; OpenAI-Limit separat unter platform.openai.com einstellen)
+    ai_daily_limit_usd: float = 50.0
     ai_monthly_limit_usd: float = 200.0
     
     # AI Model Configuration

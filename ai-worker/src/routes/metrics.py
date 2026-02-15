@@ -8,26 +8,11 @@ from fastapi import APIRouter, Depends
 
 from src.queue import job_queue, QUEUE_CRAWL, QUEUE_CLASSIFY, QUEUE_SCORE, QUEUE_GEOCODE
 from src.queue.job_queue import get_ingest_dlq_count
-from src.monitoring.ai_cost_tracker import AICostTracker, BudgetStatus
+from src.monitoring.ai_cost_tracker import get_cost_tracker, BudgetStatus
 from src.config import get_settings
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 logger = logging.getLogger(__name__)
-
-# Global cost tracker (should be shared with worker)
-_cost_tracker: Optional[AICostTracker] = None
-
-
-def get_cost_tracker() -> AICostTracker:
-    """Get or create cost tracker instance."""
-    global _cost_tracker
-    if _cost_tracker is None:
-        settings = get_settings()
-        _cost_tracker = AICostTracker(
-            daily_limit_usd=settings.ai_daily_limit_usd,
-            monthly_limit_usd=settings.ai_monthly_limit_usd
-        )
-    return _cost_tracker
 
 
 @router.get("")
@@ -104,6 +89,100 @@ async def get_metrics():
             "dlq": {"error": "Redis unavailable"},
             "budget": {"error": "Unable to check"},
         }
+
+
+@router.get("/cost-today")
+async def get_cost_today():
+    """
+    Live-View: Heutige AI-Kosten (UTC).
+    Zeigt Gesamtsumme, Aufteilung nach Modell/Operation und die letzten Anfragen.
+    """
+    try:
+        cost_tracker = get_cost_tracker()
+        summary = cost_tracker.get_today_summary()
+        budget = cost_tracker.check_budget()
+        summary["daily_limit_usd"] = budget.daily_limit
+        summary["daily_remaining_usd"] = round(budget.daily_remaining, 4)
+        summary["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        return summary
+    except Exception as e:
+        logger.error(f"Failed to get cost-today: {e}")
+        return {
+            "error": str(e),
+            "date_utc": datetime.utcnow().strftime("%Y-%m-%d"),
+            "total_cost_usd": 0,
+            "total_calls": 0,
+            "by_model": {},
+            "by_operation": {},
+            "recent": [],
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+
+@router.get("/cost-today/page", include_in_schema=False)
+async def get_cost_today_page():
+    """
+    Live-View als HTML-Seite (Auto-Refresh alle 10 Sekunden).
+    Aufruf: http://localhost:5000/metrics/cost-today/page
+    """
+    from fastapi.responses import HTMLResponse
+    html = """<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>AI-Kosten heute (Live)</title>
+  <meta http-equiv="refresh" content="10">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.25rem; }
+    .card { background: #f5f5f5; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    .total { font-size: 1.5rem; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.25rem 0.5rem; }
+    .time { color: #666; }
+    .error { color: #c00; }
+  </style>
+</head>
+<body>
+  <h1>AI-Kosten heute (UTC) – Live-View</h1>
+  <p>Aktualisierung alle 10 Sekunden.</p>
+  <div id="root">Lade…</div>
+  <script>
+    async function load() {
+      try {
+        const r = await fetch('/metrics/cost-today');
+        const d = await r.json();
+        if (d.error) {
+          document.getElementById('root').innerHTML = '<p class="error">' + d.error + '</p>';
+          return;
+        }
+        let html = '<div class="card"><span class="total">Heute: ' + d.total_cost_usd + ' USD</span>';
+        html += ' &nbsp;(' + d.total_calls + ' Anfragen)';
+        html += ' &nbsp;| Limit: ' + d.daily_limit_usd + ' USD, verbleibend: ' + d.daily_remaining_usd + ' USD';
+        html += '<br><small>Stand: ' + (d.updated_at || '') + '</small></div>';
+        if (Object.keys(d.by_operation || {}).length) {
+          html += '<div class="card"><strong>Nach Operation</strong><pre>' + JSON.stringify(d.by_operation, null, 2) + '</pre></div>';
+        }
+        if (Object.keys(d.by_model || {}).length) {
+          html += '<div class="card"><strong>Nach Modell</strong><pre>' + JSON.stringify(d.by_model, null, 2) + '</pre></div>';
+        }
+        if ((d.recent || []).length) {
+          html += '<div class="card"><strong>Letzte Anfragen</strong><table><tr><th>Uhrzeit</th><th>Operation</th><th>Modell</th><th>Kosten (USD)</th><th>Tokens</th></tr>';
+          d.recent.slice(0, 20).forEach(function(e) {
+            html += '<tr><td class="time">' + e.time + '</td><td>' + e.operation + '</td><td>' + e.model + '</td><td>' + e.cost_usd + '</td><td>' + e.in_tokens + ' / ' + e.out_tokens + '</td></tr>';
+          });
+          html += '</table></div>';
+        }
+        document.getElementById('root').innerHTML = html;
+      } catch (e) {
+        document.getElementById('root').innerHTML = '<p class="error">Fehler: ' + e.message + '</p>';
+      }
+    }
+    load();
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
 @router.get("/prometheus")

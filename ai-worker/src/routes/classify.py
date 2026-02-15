@@ -45,6 +45,9 @@ class ClassificationResult(BaseModel):
     confidence: float
     used_ai: bool
     
+    # Model info – "fallback" when AI was unavailable (quota, network, etc.)
+    model: Optional[str] = None
+    
     # Legacy fields (kept for backward compatibility)
     description_short: Optional[str] = None
     family_reason: Optional[str] = None
@@ -82,6 +85,8 @@ class ScoringResult(BaseModel):
     fun_score: Optional[int] = None
     confidence: float
     reasoning: Optional[dict] = None
+    # Model info – "fallback" when AI was unavailable
+    model: Optional[str] = None
 
 
 @router.post("/event", response_model=ClassificationResult)
@@ -92,11 +97,34 @@ async def classify_event(event: EventInput):
     Always runs AI to get summary and extraction; rule filter only overrides
     is_relevant / rule_matched when it has a clear decision.
     """
+    # #region agent log
+    try:
+        import json as _json, os as _os, time as _time
+        _log_path = r"c:\02_Kiezling\.cursor\debug.log"
+        _os.makedirs(_os.path.dirname(_log_path), exist_ok=True)
+        from src.config import get_settings as _gs
+        _s = _gs()
+        _payload = {"id": f"log_{int(_time.time()*1000)}", "timestamp": int(_time.time()*1000), "location": "classify.py:before_classify", "message": "AI config check", "hypothesisId": "H1", "data": {"enable_ai": _s.enable_ai, "has_openai_key": bool(_s.openai_api_key), "openai_key_prefix": (_s.openai_api_key or "")[:10], "has_anthropic_key": bool(_s.anthropic_api_key), "cwd": _os.getcwd(), "title": (event.title or "")[:50]}}
+        with open(_log_path, "a", encoding="utf-8") as _f:
+            _f.write(_json.dumps(_payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
+
     # Always run AI for summary, extraction, categories, etc.
     try:
         ai_result = await classifier.classify(event.dict())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
+
+    # #region agent log
+    try:
+        _payload2 = {"id": f"log_{int(_time.time()*1000)}", "timestamp": int(_time.time()*1000), "location": "classify.py:after_classify", "message": "ai_result after classify", "hypothesisId": "H1", "data": {"title": (event.title or "")[:50], "model": ai_result.model, "confidence": ai_result.confidence, "ai_summary_short": (ai_result.ai_summary_short or "")[:80], "categories": ai_result.categories, "has_price_type": ai_result.extracted_price_type is not None, "extracted_price_type": ai_result.extracted_price_type, "price_confidence": ai_result.price_confidence, "parse_error": ai_result.parse_error, "retry_count": ai_result.retry_count}}
+        with open(_log_path, "a", encoding="utf-8") as _f:
+            _f.write(_json.dumps(_payload2, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
 
     rule_result = rule_filter.check(event.dict())
     # Override only is_relevant and rule_matched when rule made a decision
@@ -115,6 +143,7 @@ async def classify_event(event: EventInput):
         is_outdoor=ai_result.is_outdoor,
         confidence=confidence,
         used_ai=True,
+        model=ai_result.model,
         description_short=ai_result.description_short,
         family_reason=ai_result.family_reason,
         age_rating=ai_result.age_rating,
@@ -140,6 +169,17 @@ async def score_event(event: EventInput):
     """
     try:
         result = await scorer.score(event.dict())
+        # #region agent log
+        try:
+            import json as _json, os as _os, time as _time
+            _log_path = r"c:\02_Kiezling\.cursor\debug.log"
+            _os.makedirs(_os.path.dirname(_log_path), exist_ok=True)
+            _payload = {"id": f"log_{int(_time.time()*1000)}", "timestamp": int(_time.time()*1000), "location": "classify.py:score_event", "message": "scorer result", "hypothesisId": "H4", "data": {"title": (event.title or "")[:50], "family_fit": result.family_fit_score, "relevance": result.relevance_score, "quality": result.quality_score, "stressfree": result.stressfree_score, "fun": result.fun_score, "model": result.model, "reasoning_note": (result.reasoning or {}).get("note", "")[:80] if isinstance(result.reasoning, dict) else ""}}
+            with open(_log_path, "a", encoding="utf-8") as _f:
+                _f.write(_json.dumps(_payload, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+        # #endregion
         return ScoringResult(
             relevance_score=result.relevance_score,
             quality_score=result.quality_score,
@@ -147,7 +187,8 @@ async def score_event(event: EventInput):
             stressfree_score=result.stressfree_score,
             fun_score=result.fun_score,
             confidence=result.confidence,
-            reasoning=result.reasoning or {}
+            reasoning=result.reasoning or {},
+            model=result.model,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scoring failed: {str(e)}")

@@ -21,6 +21,7 @@ import logging
 from src.config import get_settings
 from src.lib.pii_redactor import PIIRedactor
 from src.lib.schema_validator import validate_classification, try_parse_json
+from src.monitoring.ai_cost_tracker import get_cost_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -422,6 +423,10 @@ class EventClassifier:
             logger.error(f"AI classification error: {e}")
             result = self._default_classification(event)
             result.parse_error = str(e)
+            err_str = str(e).lower()
+            if "429" in err_str or "insufficient_quota" in err_str or "quota" in err_str:
+                result.ai_summary_short = "--leer-- (API-Kontingent überschritten)"
+                result.ai_fit_blurb = "--leer-- (OpenAI-Kontingent aufgebraucht, Billing prüfen)"
         
         # Cache result
         self._cache[cache_key] = result
@@ -506,6 +511,14 @@ class EventClassifier:
                 )
                 
                 raw_response = response.choices[0].message.content or ""
+                try:
+                    usage = getattr(response, "usage", None)
+                    if usage is not None:
+                        inp = getattr(usage, "prompt_tokens", 0) or getattr(usage, "input_tokens", 0)
+                        out = getattr(usage, "completion_tokens", 0) or getattr(usage, "output_tokens", 0)
+                        get_cost_tracker().log_usage(model=model, operation="classify", input_tokens=inp, output_tokens=out)
+                except Exception:
+                    pass
                 
                 success, data, parse_error = try_parse_json(raw_response)
                 
@@ -563,6 +576,14 @@ class EventClassifier:
                 )
                 
                 raw_response = response.content[0].text
+                try:
+                    usage = getattr(response, "usage", None)
+                    if usage is not None:
+                        inp = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
+                        out = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
+                        get_cost_tracker().log_usage(model=model, operation="classify", input_tokens=inp, output_tokens=out)
+                except Exception:
+                    pass
                 
                 success, data, parse_error = try_parse_json(raw_response)
                 
@@ -676,32 +697,31 @@ class EventClassifier:
     
     def _default_classification(self, event: dict) -> ClassificationResult:
         """Return default classification when AI is unavailable."""
-        title = (event.get("title", "") or "")[:150]
         return ClassificationResult(
-            categories=["workshop"],
-            age_min=6,
-            age_max=12,
-            is_indoor=True,
+            categories=[],
+            age_min=None,
+            age_max=None,
+            is_indoor=False,
             is_outdoor=False,
-            is_family_friendly=True,
-            confidence=0.3,
-            age_rating="6+",
-            age_fit_buckets={"0_2": 30, "3_5": 50, "6_9": 70, "10_12": 60, "13_15": 40},
-            age_recommendation_text="Empfohlen ab 6 Jahren",
+            is_family_friendly=False,
+            confidence=0.0,
+            age_rating=None,
+            age_fit_buckets={"0_2": 0, "3_5": 0, "6_9": 0, "10_12": 0, "13_15": 0},
+            age_recommendation_text=None,
             sibling_friendly=None,
-            language="Deutsch",
-            complexity_level="moderate",
+            language=None,
+            complexity_level=None,
             noise_level=None,
             has_seating=None,
             typical_wait_minutes=None,
             food_drink_allowed=None,
-            ai_summary_short=title if title else "Familienaktivität",
+            ai_summary_short="--leer-- (AI nicht verfügbar)",
             ai_summary_highlights=[],
-            ai_fit_blurb="Aktivität für Familien mit Kindern",
-            summary_confidence=0.3,
+            ai_fit_blurb="--leer-- (AI nicht verfügbar)",
+            summary_confidence=0.0,
             flags={"sensitive_content": False, "needs_escalation": True},
-            description_short=title,
-            family_reason="Aktivität für Kinder",
+            description_short=None,
+            family_reason=None,
             model="fallback",
             temperature=0.0,
             prompt_version=self.settings.classifier_prompt_version

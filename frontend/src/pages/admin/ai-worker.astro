@@ -69,6 +69,27 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         </div>
       </div>
 
+      <!-- Kosten heute (Live) -->
+      <div class="bg-white rounded-2xl shadow-card p-4 border border-purple-100">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-gray-800">Kosten heute (AI-Anfragen)</h2>
+          <span id="cost-today-updated" class="text-xs text-gray-400">--</span>
+        </div>
+        <div id="cost-today-root" class="flex flex-wrap gap-4 items-baseline">
+          <div class="flex items-baseline gap-2">
+            <span id="cost-today-total" class="text-2xl font-bold text-purple-600">$0.00</span>
+            <span id="cost-today-calls" class="text-sm text-gray-500">0 Anfragen</span>
+          </div>
+          <span id="cost-today-remaining" class="text-sm text-gray-500">Verbleibend: --</span>
+          <div id="cost-today-by-op" class="text-sm text-gray-600 hidden"></div>
+        </div>
+        <div id="cost-today-recent-wrap" class="mt-3 hidden">
+          <p class="text-xs font-medium text-gray-500 mb-1">Letzte Anfragen</p>
+          <div id="cost-today-recent" class="max-h-32 overflow-y-auto rounded-lg bg-gray-50 p-2 text-xs font-mono"></div>
+        </div>
+        <p id="cost-today-error" class="mt-2 text-sm text-red-600 hidden"></p>
+      </div>
+
       <!-- Batch Processing Controls -->
       <div class="bg-white rounded-2xl shadow-card p-6">
         <div class="flex flex-col gap-4">
@@ -746,6 +767,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   let poll503Count = 0;
   const POLL_503_MAX = 2;
 
+  // OpenAI: Block Batch if no connection or quota exceeded
+  let openaiOk = true;
+  let lastPendingCount = 0;
+
   // Heartbeat tracking for reliability
   let lastHeartbeatStatus = 'healthy'; // 'healthy' | 'warning' | 'critical'
   let lastHeartbeatAge = 0; // seconds since last heartbeat
@@ -953,6 +978,60 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   });
 
   // ========================================
+  // KOSTEN HEUTE (LIVE)
+  // ========================================
+  let costTodayInterval = null;
+  async function refreshCostToday() {
+    const root = document.getElementById('cost-today-root');
+    const totalEl = document.getElementById('cost-today-total');
+    const callsEl = document.getElementById('cost-today-calls');
+    const remainingEl = document.getElementById('cost-today-remaining');
+    const byOpEl = document.getElementById('cost-today-by-op');
+    const recentWrap = document.getElementById('cost-today-recent-wrap');
+    const recentEl = document.getElementById('cost-today-recent');
+    const updatedEl = document.getElementById('cost-today-updated');
+    const errEl = document.getElementById('cost-today-error');
+    if (!root) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ai-worker/cost-today`, { headers: { Authorization: `Bearer ${token}` } });
+      if (errEl) { errEl.classList.add('hidden'); errEl.textContent = ''; }
+      if (!res.ok) {
+        if (totalEl) totalEl.textContent = '--';
+        if (callsEl) callsEl.textContent = 'Fehler';
+        if (updatedEl) updatedEl.textContent = '';
+        return;
+      }
+      const json = await res.json();
+      const d = json.data || json;
+      const total = typeof d.total_cost_usd === 'number' ? d.total_cost_usd : 0;
+      const calls = d.total_calls || 0;
+      const remaining = typeof d.daily_remaining_usd === 'number' ? d.daily_remaining_usd : null;
+      const limit = typeof d.daily_limit_usd === 'number' ? d.daily_limit_usd : null;
+      if (totalEl) totalEl.textContent = '$' + total.toFixed(4);
+      if (callsEl) callsEl.textContent = calls + ' Anfragen';
+      if (remainingEl) remainingEl.textContent = (remaining != null && limit != null) ? ('Verbleibend: $' + remaining.toFixed(2) + ' / ' + limit) : 'Verbleibend: --';
+      if (updatedEl) updatedEl.textContent = d.updated_at ? 'Stand ' + d.updated_at.slice(11, 19) + ' UTC' : '';
+      const byOp = d.by_operation || {};
+      if (byOpEl && Object.keys(byOp).length) {
+        byOpEl.classList.remove('hidden');
+        byOpEl.textContent = Object.entries(byOp).map(([k, v]) => k + ': $' + Number(v).toFixed(4)).join(' · ');
+      } else if (byOpEl) byOpEl.classList.add('hidden');
+      const recent = d.recent || [];
+      if (recentWrap && recentEl) {
+        if (recent.length) {
+          recentWrap.classList.remove('hidden');
+          recentEl.innerHTML = recent.slice(0, 15).map(function (e) {
+            return e.time + ' ' + e.operation + ' ' + e.model + ' $' + e.cost_usd + ' (' + e.in_tokens + '/' + e.out_tokens + ')';
+          }).join('<br>');
+        } else recentWrap.classList.add('hidden');
+      }
+    } catch (e) {
+      const errMsg = e && e.message ? e.message : String(e);
+      if (errEl) { errEl.classList.remove('hidden'); errEl.textContent = 'Kosten konnten nicht geladen werden: ' + errMsg; }
+    }
+  }
+
+  // ========================================
   // LOAD INITIAL DATA
   // ========================================
   async function loadData() {
@@ -1052,6 +1131,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
       el.loadingState.classList.add('hidden');
       el.content.classList.remove('hidden');
+
+      // Kosten heute (Live) einmal laden und alle 15s aktualisieren
+      refreshCostToday();
+      if (costTodayInterval) clearInterval(costTodayInterval);
+      costTodayInterval = setInterval(refreshCostToday, 15000);
 
       // Nach Refresh: Aktiven Job vom SERVER abfragen (nicht sessionStorage)
       // Dies ist die vertrauenswuerdige Quelle - DB-basiert mit Heartbeat
@@ -1242,13 +1326,18 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   }
 
   function updateButtonState(pendingCount) {
-    if (pendingCount === 0) {
-      el.startBatchBtn.disabled = true;
-      el.btnHint.textContent = 'Keine Events in der Queue';
-      el.btnHint.classList.remove('hidden');
-    } else if (isProcessing) {
+    lastPendingCount = pendingCount;
+    if (isProcessing) {
       el.startBatchBtn.disabled = true;
       el.btnHint.textContent = 'Verarbeitung laeuft...';
+      el.btnHint.classList.remove('hidden');
+    } else if (!openaiOk) {
+      el.startBatchBtn.disabled = true;
+      el.btnHint.textContent = 'OpenAI nicht verfuegbar – Batch nicht moeglich';
+      el.btnHint.classList.remove('hidden');
+    } else if (pendingCount === 0) {
+      el.startBatchBtn.disabled = true;
+      el.btnHint.textContent = 'Keine Events in der Queue';
       el.btnHint.classList.remove('hidden');
     } else {
       el.startBatchBtn.disabled = false;
@@ -1289,6 +1378,29 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         'AI Worker-Status konnte nicht geprueft werden.\n\nTrotzdem Batch starten?'
       );
       if (!goAnyway) return;
+    }
+
+    // OpenAI: Keine Verbindung oder Kontingent ausgeschoepft → Batch blockieren, Fehler anzeigen
+    try {
+      const diagRes = await fetch(`${API_URL}/api/admin/ai-worker/diagnostics`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (diagRes.ok) {
+        const { data } = await diagRes.json();
+        const openaiCheck = data?.checks?.openai;
+        if (openaiCheck && openaiCheck.status !== 'ok') {
+          const err = (openaiCheck.error || '').toLowerCase();
+          const isQuota = err.includes('429') || err.includes('quota') || err.includes('insufficient_quota');
+          const msg = isQuota
+            ? 'Das OpenAI-Kontingent ist ausgeschoepft.\n\nBitte pruefen Sie Ihr Billing unter platform.openai.com und erhoehen Sie das Limit oder laden Sie Guthaben auf.\n\nEin Start des Batches ist derzeit nicht moeglich.'
+            : 'Es besteht keine Verbindung zu OpenAI (API-Key, Netzwerk oder Service ausgefallen).\n\nBitte pruefen Sie die Konfiguration des AI Workers (OPENAI_API_KEY) und die Erreichbarkeit von api.openai.com.\n\nEin Start des Batches ist derzeit nicht moeglich.';
+          alert(msg);
+          return;
+        }
+      }
+    } catch (e) {
+      alert('Die OpenAI-Verfuegbarkeit konnte nicht geprueft werden. Bitte versuchen Sie es spaeter erneut.');
+      return;
     }
 
     isProcessing = true;
@@ -2597,19 +2709,25 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         if (redisEl) redisEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-xs';
       }
 
-      // OpenAI (inline)
+      // OpenAI (inline) – fuer Button-Sperre und Fehlermeldung
       const openaiCheck = data.checks?.openai;
+      openaiOk = openaiCheck?.status === 'ok';
       if (openaiCheck?.status === 'ok') {
         if (openaiDot) openaiDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500';
         if (openaiStatus) openaiStatus.textContent = 'Ok';
         if (openaiEl) openaiEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-xs';
       } else {
-        if (openaiDot) openaiDot.className = 'w-1.5 h-1.5 rounded-full bg-gray-400';
-        if (openaiStatus) openaiStatus.textContent = '–';
-        if (openaiEl) openaiEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-xs';
+        const err = (openaiCheck?.error || '').toLowerCase();
+        const isQuota = err.includes('429') || err.includes('quota') || err.includes('insufficient_quota');
+        if (openaiDot) openaiDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500';
+        if (openaiStatus) openaiStatus.textContent = isQuota ? 'Kontingent' : 'Nicht verfuegbar';
+        if (openaiEl) openaiEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-xs';
       }
+      updateButtonState(lastPendingCount);
     } catch (e) {
       console.error('Diagnostics error:', e);
+      openaiOk = false;
+      updateButtonState(lastPendingCount);
       if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500';
       if (workerStatus) workerStatus.textContent = 'Fehler';
       if (workerEl) workerEl.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 text-xs';

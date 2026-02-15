@@ -26,17 +26,15 @@ function normalizeAIWorker404Message(rawMessage: string): string {
 
 // #region agent log
 const _debugLog = (data: Record<string, unknown>) => {
-  const payload = { ...data, timestamp: Date.now(), sessionId: 'debug-session' };
+  const payload = { ...data, timestamp: Date.now() };
   logger.info('[BATCH-DEBUG] ' + JSON.stringify(payload));
-  (async () => {
-    try {
-      const { appendFileSync, mkdirSync } = await import('fs');
-      const { dirname, join } = await import('path');
-      const logPath = join(process.cwd(), '..', '.cursor', 'debug.log');
-      mkdirSync(dirname(logPath), { recursive: true });
-      appendFileSync(logPath, JSON.stringify(payload) + '\n');
-    } catch (_) { /* ignore */ }
-  })();
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const logPath = 'c:\\02_Kiezling\\.cursor\\debug.log';
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.appendFileSync(logPath, JSON.stringify(payload) + '\n');
+  } catch (_) { /* ignore */ }
   fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
 };
 // #endregion
@@ -3202,6 +3200,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             throw { step: 'classification', message: `Classification failed: ${classifyRes.status} - ${errorText}` };
           }
           const classification = await classifyRes.json() as any;
+          // #region agent log
+          _debugLog({ location: 'admin.ts:classification-response', message: 'classification response fields', hypothesisId: 'H1', data: { eventId: event.id, hasPrice: !!classification.extracted_price_type, priceType: classification.extracted_price_type, priceMin: classification.extracted_price_min, priceConf: classification.price_confidence, hasVenue: !!classification.extracted_venue_name, venueName: classification.extracted_venue_name, allKeys: Object.keys(classification), eventPriceType: (event as any).price_type, eventPriceMin: event.price_min } });
+          // #endregion
           
           // Step 2: Scoring (with timeout)
           const scoreRes = await fetch(`${AI_WORKER_URL}/classify/score`, {
@@ -3220,12 +3221,44 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             throw { step: 'scoring', message: `Scoring failed: ${scoreRes.status} - ${errorText}` };
           }
           const scores = await scoreRes.json() as any;
+          // #region agent log
+          _debugLog({ location: 'admin.ts:scores-response', message: 'scoring response', hypothesisId: 'H3', data: { eventId: event.id, eventTitle: (event.title || '').slice(0, 60), familyFit: scores.family_fit_score, relevance: scores.relevance_score, quality: scores.quality_score, stressfree: scores.stressfree_score, fun: scores.fun_score, confidence: scores.confidence, model: scores.model } });
+          // #endregion
+          
+          // ── Guard: skip event when AI returned fallback (quota / network error) ──
+          const classifyIsFallback = classification.model === 'fallback';
+          const scoreIsFallback = scores.model === 'fallback';
+          if (classifyIsFallback || scoreIsFallback) {
+            const reason = classifyIsFallback
+              ? (classification.ai_summary_short || 'AI fallback')
+              : (scores.reasoning?.note || 'Scorer fallback');
+            logger.warn(`Event ${event.id}: AI returned fallback – skipping DB update. Reason: ${reason}`);
+            // #region agent log
+            _debugLog({ location: 'admin.ts:fallback-skip', message: 'skipping event due to AI fallback', hypothesisId: 'H1,H3', data: { eventId: event.id, classifyModel: classification.model, scoreModel: scores.model, reason } });
+            // #endregion
+            
+            // Keep event as pending_ai so it can be retried later
+            await prisma.canonicalEvent.update({
+              where: { id: event.id },
+              data: { status: 'pending_ai' },
+            });
+            
+            await updateAIJobEventStatus(jobId, event.id, {
+              processing_status: 'failed',
+              error: `AI fallback: ${reason}`,
+            });
+            summary.failed++;
+            continue;
+          }
           
           // Step 3: Determine new status based on AI scores
           let newStatus = determineStatusFromAIScores(
             scores.family_fit_score,
             classification.confidence
           );
+          // #region agent log
+          _debugLog({ location: 'admin.ts:after-determineStatus', message: 'status + key values', hypothesisId: 'H1,H2,H3', data: { eventId: event.id, eventTitle: (event.title || '').slice(0, 50), newStatus, familyFit: scores.family_fit_score, confidence: classification.confidence, aiSummary: (classification.ai_summary_short || '').slice(0, 60), model: classification.model || 'unknown', isFallback: (classification.model === 'fallback' || scores.model === 'fallback' || classification.confidence === 0), classKeys: Object.keys(classification).length, scoreKeys: Object.keys(scores).length } });
+          // #endregion
           
           // Handle extracted datetime/location from AI
           const extractedStartDatetime = classification.extracted_start_datetime;
@@ -3335,6 +3368,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           }
           updateData.field_provenance = newProvenance;
           
+          // #region agent log
+          _debugLog({ location: 'admin.ts:before-db-update', message: 'updateData summary', hypothesisId: 'H2,H4,H5', data: { eventId: event.id, status: updateData.status, aiSummaryShort: (updateData.ai_summary_short || '').slice(0, 60), familyFitInUpdate: updateData.family_fit_score ?? 'n/a', priceType: updateData.price_type ?? 'NOT_IN_UPDATE', changedFieldsCount: Object.entries(diff).filter(([_, d]: any) => d.type !== 'unchanged').length, updateKeys: Object.keys(updateData).join(',') } });
+          // #endregion
           // Update the event
           await prisma.canonicalEvent.update({
             where: { id: event.id },
@@ -3961,6 +3997,34 @@ router.get('/ai-worker/health', async (_req: Request, res: Response, next: NextF
       success: false,
       error: errorMessage,
       data: { status: 'unreachable' }
+    });
+  }
+});
+
+// GET /api/admin/ai-worker/cost-today - Proxy to AI Worker metrics cost-today (Live-View)
+router.get('/ai-worker/cost-today', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const response = await fetch(`${AI_WORKER_URL}/metrics/cost-today`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      return res.json({
+        success: false,
+        error: `AI Worker returned ${response.status}`,
+        data: null
+      });
+    }
+    const data = await response.json();
+    res.json({ success: true, data });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.warn(`AI Worker cost-today failed: ${msg}`);
+    res.json({
+      success: false,
+      error: msg,
+      data: null
     });
   }
 });
