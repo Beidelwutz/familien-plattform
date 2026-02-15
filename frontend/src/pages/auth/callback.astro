@@ -82,11 +82,12 @@
     <div class="error" id="error"></div>
   </div>
 
-  <!-- Inline script + CDN: no bundled chunk = no 404 after deploy/cache. Supabase loaded from esm.sh at runtime. -->
+  <!-- Inline: kein Bundle, läuft zuverlässig. Hash sofort auslesen (erste Zeile), bevor etwas ihn entfernt. -->
   <script type="module" is:inline define:vars={{ supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL || '', supabaseAnonKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY || '', apiBase: import.meta.env.PUBLIC_API_URL || '' }}>
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } });
-    const API_BASE = apiBase || (typeof window !== 'undefined' ? `https://api.${window.location.hostname}` : '');
+    const savedHash = typeof window !== 'undefined' ? window.location.hash.substring(1) : '';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false } });
+    const API_BASE = apiBase || (window.location.hostname === 'localhost' ? 'http://localhost:4000' : `https://api.${window.location.hostname}`);
 
     function getErrorCode(message) {
       const lowerMessage = message.toLowerCase();
@@ -215,9 +216,13 @@
       let errorCode = 'auth_failed';
 
       try {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hashString = (savedHash && savedHash.length > 0) ? savedHash : window.location.hash.substring(1);
+        const hashParams = new URLSearchParams(hashString);
         const queryParams = new URLSearchParams(window.location.search);
-        
+        const queryKeys = [...queryParams.keys()];
+        const hashKeys = [...hashParams.keys()];
+        const hasCode = queryParams.has('code');
+        const hasAccessToken = hashParams.has('access_token');
         // Debug: log what we received in the URL
         console.log('[Callback] URL:', window.location.href);
         console.log('[Callback] Query params:', Object.fromEntries(queryParams.entries()));
@@ -236,8 +241,18 @@
         let session = null;
         
         if (code) {
+          if (messageEl) messageEl.textContent = 'Code wird getauscht...';
           console.log('[Callback] PKCE flow: exchanging code for session');
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const exchangePromise = supabase.auth.exchangeCodeForSession(code);
+          const timeoutMs = 20000;
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase-Antwort ausstehend (Timeout). Bitte erneut von der Login-Seite versuchen.')), timeoutMs));
+          let exchangeResult;
+          try {
+            exchangeResult = await Promise.race([exchangePromise, timeoutPromise]);
+          } catch (raceErr) {
+            throw raceErr;
+          }
+          const { data, error: exchangeError } = exchangeResult;
           if (exchangeError) {
             console.error('[Callback] Code exchange failed:', exchangeError);
             throw exchangeError;
@@ -249,17 +264,10 @@
           const accessToken = hashParams.get('access_token');
           const refreshToken = hashParams.get('refresh_token');
           if (accessToken) {
-            console.log('[Callback] Implicit flow: setting session from hash');
-            const { data, error: setErr } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken || ''
-            });
-            if (setErr) {
-              console.error('[Callback] setSession failed:', setErr);
-              throw setErr;
-            }
-            session = data.session;
-            console.log('[Callback] setSession successful, session:', !!session);
+            if (messageEl) messageEl.textContent = 'Token wird übernommen...';
+            console.log('[Callback] Implicit flow: using tokens from hash (setSession umgangen, verhindert Hänger)');
+            // setSession() kann bei Implicit Flow dauerhaft hängen (Supabase-Client/Netz). Tokens aus Hash direkt nutzen.
+            session = { access_token: accessToken, refresh_token: refreshToken || '' };
           } else {
             // No code and no access_token - check if Supabase already has a session
             // (e.g. from detectSessionInUrl or a previous login)

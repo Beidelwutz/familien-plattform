@@ -555,6 +555,13 @@ const API_URL = getApiBase();
   const token = localStorage.getItem('auth_token');
   const BULK_LIMIT = 200;
 
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:pageInit', message: 'Quellen page init', data: { API_URL: typeof API_URL !== 'undefined' ? String(API_URL).slice(0, 80) : 'undef', apiBase: typeof apiBase !== 'undefined' ? String(apiBase).slice(0, 80) : 'undef', hasToken: !!token }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(function() {});
+    if (!token) fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:pageInit', message: 'Token null at load', data: {}, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(function() {});
+  } catch (e) {}
+  // #endregion
+
   // Status config
   const statusConfig = {
     healthy: { color: 'green', label: 'Healthy', dotClass: 'healthy' },
@@ -566,6 +573,11 @@ const API_URL = getApiBase();
 
   // API helper
   async function apiFetch(endpoint, options = {}) {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:apiFetch:start', message: 'apiFetch called', data: { endpoint: String(endpoint).slice(0, 60), apiBase: String(apiBase).slice(0, 80), hasToken: !!token }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(function() {});
+    } catch (e) {}
+    // #endregion
     const res = await fetch(`${apiBase}${endpoint}`, {
       ...options,
       headers: {
@@ -575,11 +587,26 @@ const API_URL = getApiBase();
       },
     });
     if (res.status === 401 || res.status === 403) {
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:apiFetch:401', message: '401/403 redirect to login', data: { status: res.status, endpoint: String(endpoint).slice(0, 60) }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(function() {});
+      } catch (e) {}
+      // #endregion
       localStorage.removeItem('auth_token');
       window.location.href = '/login?redirect=/admin/sources';
       throw new Error('Unauthorized');
     }
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:apiFetch:jsonFail', message: 'res.json() threw', data: { status: res.status, err: String(parseErr && parseErr.message) }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(function() {});
+      } catch (e) {}
+      // #endregion
+      throw parseErr;
+    }
     // Throw error for non-success responses so they're caught in try/catch
     if (!res.ok && data.error) {
       throw new Error(data.error.message || `HTTP ${res.status}`);
@@ -618,6 +645,11 @@ const API_URL = getApiBase();
 
   // Load sources
   async function loadSources() {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:loadSources:start', message: 'loadSources started', data: {}, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(function() {});
+    } catch (e) {}
+    // #endregion
     document.getElementById('loading-state').classList.remove('hidden');
     document.getElementById('source-table').classList.add('hidden');
     document.getElementById('empty-state').classList.add('hidden');
@@ -661,6 +693,11 @@ const API_URL = getApiBase();
 
       applyFilters();
     } catch (e) {
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'sources.astro:loadSources:catch', message: 'loadSources error', data: { err: String(e && e.message) }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(function() {});
+      } catch (e2) {}
+      // #endregion
       console.error('Load error:', e);
       const errState = document.getElementById('error-state');
       const errMsg = document.getElementById('error-state-message');

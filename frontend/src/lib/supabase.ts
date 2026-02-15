@@ -24,6 +24,7 @@ export const supabase = createClient(clientUrl, clientKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    // Kein flowType: 'pkce' – Implicit Flow (Hash). Callback liest Hash sofort aus, bevor er verloren geht.
   },
 });
 
