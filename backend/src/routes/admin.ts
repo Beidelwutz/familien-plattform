@@ -3244,8 +3244,8 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             });
             
             await updateAIJobEventStatus(jobId, event.id, {
-              processing_status: 'failed',
-              error: `AI fallback: ${reason}`,
+              processing_status: 'error',
+              error: { type: 'ai_fallback', message: `AI fallback: ${reason}`, step: 'classify_or_score', retryable: true },
             });
             summary.failed++;
             continue;
