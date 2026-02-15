@@ -377,6 +377,9 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
     const { id } = req.params;
     const dryRun = !!(req.body && (req.body as { dry_run?: boolean }).dry_run);
     const enableAi = (req.body && (req.body as { enable_ai?: boolean }).enable_ai) ?? false;
+    const maxEvents = req.body && typeof (req.body as { max_events?: number }).max_events === 'number' && (req.body as { max_events: number }).max_events > 0
+      ? (req.body as { max_events: number }).max_events
+      : undefined;
 
     const source = await prisma.source.findUnique({
       where: { id }
@@ -400,6 +403,9 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       enable_ai: enableAi,
       fetch_event_pages: fetchEventPages,
     };
+    if (maxEvents !== undefined) {
+      body.max_events = maxEvents;
+    }
     if (source.type === 'scraper' && source.scraper_config) {
       body.scraper_config = source.scraper_config as object;
     }

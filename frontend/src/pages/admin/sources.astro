@@ -1000,6 +1000,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
                     <input type="checkbox" id="enable-ai-${source.id}" class="enable-ai-checkbox rounded border-gray-300 text-primary-500 focus:ring-primary-500" data-id="${source.id}" />
                     <span>KI beim Import (langsamer)</span>
                   </label>
+                  <div class="flex items-center gap-2 py-1.5">
+                    <label for="max-events-${source.id}" class="text-sm text-gray-600 whitespace-nowrap">Max. Events (Test):</label>
+                    <input type="number" id="max-events-${source.id}" min="1" placeholder="Alle" class="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+                  </div>
                   <button 
                     class="trigger-btn w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     data-id="${source.id}"
@@ -1301,7 +1305,12 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
 
     try {
       const enableAi = document.getElementById(`enable-ai-${id}`)?.checked ?? false;
-      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST', body: JSON.stringify({ enable_ai: enableAi }) });
+      const maxEventsInput = document.getElementById(`max-events-${id}`);
+      const maxEventsRaw = maxEventsInput?.value?.trim();
+      const maxEvents = maxEventsRaw ? parseInt(maxEventsRaw, 10) : undefined;
+      const body = { enable_ai: enableAi };
+      if (maxEvents !== undefined && !isNaN(maxEvents) && maxEvents > 0) body.max_events = maxEvents;
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST', body: JSON.stringify(body) });
       
       if (response.success && response.data?.ingest_run_id) {
         importStatus?.classList.remove('hidden');
@@ -2035,10 +2044,15 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
     const content = document.getElementById('dryrun-content');
     content.innerHTML = '<p class="text-gray-500">Dry-Run läuft (kann bis zu 2 Min. dauern)...</p>';
     document.getElementById('dryrun-modal').classList.remove('hidden');
+    const maxEventsInput = document.getElementById(`max-events-${sourceId}`);
+    const maxEventsRaw = maxEventsInput?.value?.trim();
+    const maxEvents = maxEventsRaw ? parseInt(maxEventsRaw, 10) : undefined;
+    const dryRunBody = { dry_run: true };
+    if (maxEvents !== undefined && !isNaN(maxEvents) && maxEvents > 0) dryRunBody.max_events = maxEvents;
     try {
       const res = await apiFetch(`/api/sources/${sourceId}/trigger`, {
         method: 'POST',
-        body: JSON.stringify({ dry_run: true }),
+        body: JSON.stringify(dryRunBody),
       });
       const d = res.data || res;
       const found = d.events_found ?? 0;

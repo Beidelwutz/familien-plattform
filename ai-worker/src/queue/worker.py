@@ -542,6 +542,7 @@ async def process_crawl_job(payload: dict) -> dict:
     fetch_event_pages = payload.get("fetch_event_pages", False)  # Selective Deep-Fetch
     detail_page_config = payload.get("detail_page_config")  # Source-specific selectors for RSS deep-fetch
     dry_run = payload.get("dry_run", False)
+    max_events = payload.get("max_events")  # Limit events to import (for testing); None = no limit
 
     # Create IngestRun when Worker actually starts (Backend no longer creates it at trigger time)
     if not dry_run and not ingest_run_id and source_id:
@@ -646,11 +647,10 @@ async def process_crawl_job(payload: dict) -> dict:
     # Only for RSS feeds (ICS usually has all data) and only if enabled
     if fetch_event_pages and source_type == "rss" and unique_events:
         n_events = len(unique_events)
-        max_detail_fetches = 50  # Safety limit per run
         if ingest_run_id:
             await update_ingest_run(
                 ingest_run_id,
-                progress_message=f"Anreichern (Detailseiten) 0/{max_detail_fetches} (von {n_events} Events) …",
+                progress_message=f"Anreichern (Detailseiten) 0/{n_events} (von {n_events} Events) …",
             )
         logger.info("Running selective deep-fetch for RSS events...")
         try:
@@ -678,7 +678,7 @@ async def process_crawl_job(payload: dict) -> dict:
             unique_events = await selective_deep_fetch(
                 unique_events,
                 config=deep_fetch_config,
-                max_fetches=max_detail_fetches,
+                max_fetches=None,  # Kein Limit – alle Events mit fehlenden Feldern werden angereichert
                 detail_page_config=detail_page_config,
                 progress_callback=_detail_progress_cb,
             )
@@ -707,6 +707,12 @@ async def process_crawl_job(payload: dict) -> dict:
         logger.info("Running AI enrichment...")
         candidates = await enrich_with_ai(candidates)
     
+    # Optional: Limit number of events to import (for testing)
+    if max_events is not None and max_events > 0 and len(candidates) > max_events:
+        original_count = len(candidates)
+        candidates = candidates[:max_events]
+        logger.info(f"Import limit: using first {max_events} of {original_count} candidates for import")
+
     # Step 5: Dry-run → return candidates without ingesting
     if dry_run:
         logger.info("Dry-run: skipping batch ingest, returning candidates")

@@ -30,6 +30,7 @@ class CrawlRequest(BaseModel):
     enable_ai: bool = False  # Enable AI classification/scoring
     fetch_event_pages: bool = False  # Selective Deep-Fetch for RSS events
     ingest_run_id: Optional[str] = None  # Backend IngestRun ID for status updates
+    max_events: Optional[int] = None  # Limit events to import (for testing); None = no limit
 
 
 class CrawlStatus(BaseModel):
@@ -93,6 +94,7 @@ async def trigger_crawl(
         "enable_ai": request.enable_ai,
         "fetch_event_pages": request.fetch_event_pages,  # Selective Deep-Fetch
         "ingest_run_id": request.ingest_run_id,
+        "max_events": request.max_events,
     }
     
     # Dry-run: run pipeline synchronously and return candidates (no ingest, no queue)
