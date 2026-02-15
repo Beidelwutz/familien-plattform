@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
 import { requireAuth, requireAdmin, requireServiceToken, type AuthRequest } from '../middleware/auth.js';
@@ -3418,8 +3419,8 @@ router.put('/settings/homepage-teaser', async (req: Request, res: Response, next
     if (teaserThemeClass !== undefined) value.teaserThemeClass = teaserThemeClass;
     const row = await prisma.siteSetting.upsert({
       where: { key: HOMEPAGE_TEASER_KEY },
-      create: { key: HOMEPAGE_TEASER_KEY, value },
-      update: { value },
+      create: { key: HOMEPAGE_TEASER_KEY, value: value as Prisma.InputJsonValue },
+      update: { value: value as Prisma.InputJsonValue },
     });
     const data = { ...HOMEPAGE_TEASER_DEFAULTS, ...(row.value as Record<string, unknown>) };
     res.json({ success: true, data });
