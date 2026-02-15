@@ -1288,6 +1288,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
     function updateRunningUI(run) {
       const eventsFound = run.events_found ?? 0;
+      const progressStep = run.progress_message ? run.progress_message : '';
       const elapsed = formatElapsed();
       const stuckHint = (Date.now() - pollStartTime[sourceId]) > 30000
         ? ' – Bei langer Wartezeit: AI-Worker prüfen (läuft er? Queue?)'
@@ -1295,6 +1296,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       if (importDetails) {
         importDetails.innerHTML = `
           <span>${eventsFound} Events gefunden</span>
+          ${progressStep ? `<span class="text-gray-600"> · ${progressStep}</span>` : ''}
           <span class="text-blue-600"> · Läuft seit ${elapsed}</span>
           ${stuckHint ? `<br><span class="text-amber-600 text-xs">${stuckHint}</span>` : ''}
         `;

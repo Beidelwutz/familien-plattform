@@ -76,10 +76,12 @@ router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: 
       error_details,
       needs_attention,
       finished_at,
+      progress_message,
     } = req.body;
 
     const updateData: Record<string, any> = {};
     if (status !== undefined) updateData.status = status;
+    if (progress_message !== undefined) updateData.progress_message = progress_message;
     if (events_found !== undefined) updateData.events_found = events_found;
     if (events_created !== undefined) updateData.events_created = events_created;
     if (events_updated !== undefined) updateData.events_updated = events_updated;

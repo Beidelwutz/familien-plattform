@@ -367,6 +367,8 @@ async def send_batch_to_backend(
                 for key in all_results:
                     all_results[key] += summary.get(key, 0)
                 logger.info(f"[BATCH] Sub-batch {batch_num}/{total_batches} OK: +{summary.get('created', 0)} created")
+                if run_id:
+                    await update_ingest_run(run_id, progress_message=f"Importiere in Datenbank … Batch {batch_num}/{total_batches}")
                 # #region agent log
                 if batch_num == 1:
                     _agent_log("worker.py:first_batch_ok", "first batch response OK", {"batch_num": batch_num, "summary": summary, "status_code": 200}, "H2,H4")
@@ -415,35 +417,44 @@ async def send_batch_to_backend(
 
 async def update_ingest_run(
     ingest_run_id: str,
-    status: str,
-    events_found: int = 0,
-    events_created: int = 0,
-    events_updated: int = 0,
-    events_skipped: int = 0,
+    status: str = None,
+    events_found: int = None,
+    events_created: int = None,
+    events_updated: int = None,
+    events_skipped: int = None,
     error_message: str = None,
     error_details: dict = None,
+    progress_message: str = None,
 ):
-    """Update the IngestRun status in the backend (legacy endpoint)."""
+    """Update the IngestRun status in the backend. Pass only the fields to update."""
     if not ingest_run_id:
         return
-    
+
     client = await get_http_client()
-    
-    payload = {
-        "status": status,
-        "events_found": events_found,
-        "events_created": events_created,
-        "events_updated": events_updated,
-        "events_skipped": events_skipped,
-        "finished_at": None if status == "running" else "now",
-    }
-    
-    if error_message:
+
+    payload = {}
+    if status is not None:
+        payload["status"] = status
+        payload["finished_at"] = None if status == "running" else "now"
+    if events_found is not None:
+        payload["events_found"] = events_found
+    if events_created is not None:
+        payload["events_created"] = events_created
+    if events_updated is not None:
+        payload["events_updated"] = events_updated
+    if events_skipped is not None:
+        payload["events_skipped"] = events_skipped
+    if error_message is not None:
         payload["error_message"] = error_message
         payload["needs_attention"] = True
-    if error_details:
+    if error_details is not None:
         payload["error_details"] = error_details
-    
+    if progress_message is not None:
+        payload["progress_message"] = progress_message
+
+    if not payload:
+        return
+
     headers = {"Content-Type": "application/json"}
     if settings.service_token:
         headers["Authorization"] = f"Bearer {settings.service_token}"
@@ -575,9 +586,10 @@ async def process_crawl_job(payload: dict) -> dict:
     # Progress: tell backend how many events we found (so UI can show "X Events gefunden")
     if ingest_run_id:
         await update_ingest_run(
-            ingest_run_id, "running",
+            ingest_run_id, status="running",
             events_found=len(parsed_events),
             events_created=0, events_updated=0, events_skipped=0,
+            progress_message="Events gefunden, bereite Import vor…",
         )
     # #region agent log
     _agent_log("worker.py:after_events_found", "ingest_run updated with events_found", {"events_found": len(parsed_events), "ingest_run_id": ingest_run_id, "source_id": source_id}, "H1")
@@ -592,6 +604,8 @@ async def process_crawl_job(payload: dict) -> dict:
     # Step 2.5: Selective Deep-Fetch (enrich events by fetching their detail pages)
     # Only for RSS feeds (ICS usually has all data) and only if enabled
     if fetch_event_pages and source_type == "rss" and unique_events:
+        if ingest_run_id:
+            await update_ingest_run(ingest_run_id, progress_message="Anreichern (Detailseiten)…")
         logger.info("Running selective deep-fetch for RSS events...")
         try:
             # Configure deep-fetch (can be customized per source later)
@@ -628,6 +642,8 @@ async def process_crawl_job(payload: dict) -> dict:
     
     # Step 4: Optional AI Enrichment
     if enable_ai:
+        if ingest_run_id:
+            await update_ingest_run(ingest_run_id, progress_message="KI-Anreicherung…")
         logger.info("Running AI enrichment...")
         candidates = await enrich_with_ai(candidates)
     
@@ -644,6 +660,8 @@ async def process_crawl_job(payload: dict) -> dict:
         })
     
     # Step 5 (normal): Batch Ingest to Backend
+    if ingest_run_id:
+        await update_ingest_run(ingest_run_id, progress_message="Importiere in Datenbank…")
     # #region agent log
     _agent_log("worker.py:before_send_batch", "calling send_batch_to_backend", {"candidates_count": len(candidates), "ingest_run_id": ingest_run_id}, "H2")
     # #endregion
