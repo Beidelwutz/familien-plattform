@@ -542,7 +542,15 @@ async def process_crawl_job(payload: dict) -> dict:
     fetch_event_pages = payload.get("fetch_event_pages", False)  # Selective Deep-Fetch
     detail_page_config = payload.get("detail_page_config")  # Source-specific selectors for RSS deep-fetch
     dry_run = payload.get("dry_run", False)
-    max_events = payload.get("max_events")  # Limit events to import (for testing); None = no limit
+    _max = payload.get("max_events")  # Limit events to import (for testing); None = no limit
+    max_events = None
+    if _max is not None:
+        try:
+            max_events = int(_max)
+        except (TypeError, ValueError):
+            pass
+    if max_events is not None and max_events <= 0:
+        max_events = None
 
     # Create IngestRun when Worker actually starts (Backend no longer creates it at trigger time)
     if not dry_run and not ingest_run_id and source_id:
@@ -642,6 +650,18 @@ async def process_crawl_job(payload: dict) -> dict:
     unique_events = deduplicator.dedupe(parsed_events)
     
     logger.info(f"After in-run dedupe: {len(unique_events)} unique events (removed {deduplicator.stats.duplicates_removed})")
+
+    # Apply max_events limit early so we only enrich/import that many (saves time and API calls)
+    if max_events is not None and max_events > 0 and len(unique_events) > max_events:
+        original_count = len(unique_events)
+        unique_events = unique_events[:max_events]
+        logger.info(f"Import limit: using first {max_events} of {original_count} events for this run")
+        if ingest_run_id:
+            await update_ingest_run(
+                ingest_run_id, status="running",
+                events_found=len(unique_events),
+                progress_message=f"Events gefunden ({original_count}), importiert werden {len(unique_events)} (Limit) …",
+            )
     
     # Step 2.5: Selective Deep-Fetch (enrich events by fetching their detail pages)
     # Only for RSS feeds (ICS usually has all data) and only if enabled
@@ -706,12 +726,6 @@ async def process_crawl_job(payload: dict) -> dict:
             await update_ingest_run(ingest_run_id, progress_message="KI-Anreicherung…")
         logger.info("Running AI enrichment...")
         candidates = await enrich_with_ai(candidates)
-    
-    # Optional: Limit number of events to import (for testing)
-    if max_events is not None and max_events > 0 and len(candidates) > max_events:
-        original_count = len(candidates)
-        candidates = candidates[:max_events]
-        logger.info(f"Import limit: using first {max_events} of {original_count} candidates for import")
 
     # Step 5: Dry-run → return candidates without ingesting
     if dry_run:

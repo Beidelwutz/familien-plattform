@@ -1270,9 +1270,13 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
   // Quick trigger fetch (from table row button) – no enable_ai checkbox here, default is false (fast import)
   async function triggerFetchQuick(id) {
     const source = sources.find(s => s.id === id);
-    
+    const body = { enable_ai: false };
+    const maxEventsInput = document.getElementById(`max-events-${id}`);
+    const maxEventsRaw = maxEventsInput?.value?.trim();
+    const maxEvents = maxEventsRaw ? parseInt(maxEventsRaw, 10) : undefined;
+    if (maxEvents !== undefined && !isNaN(maxEvents) && maxEvents > 0) body.max_events = maxEvents;
     try {
-      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST', body: JSON.stringify({ enable_ai: false }) });
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST', body: JSON.stringify(body) });
       
       if (response.success && response.data?.ingest_run_id) {
         await updateActiveRuns();
