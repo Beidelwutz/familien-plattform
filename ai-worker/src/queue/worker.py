@@ -429,6 +429,8 @@ async def update_ingest_run(
     events_created: int = None,
     events_updated: int = None,
     events_skipped: int = None,
+    events_unchanged: int = None,
+    events_ignored: int = None,
     error_message: str = None,
     error_details: dict = None,
     progress_message: str = None,
@@ -451,6 +453,10 @@ async def update_ingest_run(
         payload["events_updated"] = events_updated
     if events_skipped is not None:
         payload["events_skipped"] = events_skipped
+    if events_unchanged is not None:
+        payload["events_unchanged"] = events_unchanged
+    if events_ignored is not None:
+        payload["events_ignored"] = events_ignored
     if error_message is not None:
         payload["error_message"] = error_message
         payload["needs_attention"] = True
@@ -768,6 +774,8 @@ async def process_crawl_job(payload: dict) -> dict:
             events_created=summary.get("created", 0),
             events_updated=summary.get("updated", 0),
             events_skipped=summary.get("unchanged", 0) + summary.get("ignored", 0),
+            events_unchanged=summary.get("unchanged", 0),
+            events_ignored=summary.get("ignored", 0),
         )
         _agent_log("worker.py:final_ingest_run_update", "IngestRun finalized", {
             "ingest_run_id": ingest_run_id,

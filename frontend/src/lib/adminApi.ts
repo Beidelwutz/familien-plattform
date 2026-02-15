@@ -225,6 +225,10 @@ export interface IngestRun {
   events_created: number;
   events_updated: number;
   events_skipped: number;
+  /** Anzahl Events, die bereits existierten und unverändert blieben */
+  events_unchanged?: number;
+  /** Anzahl Events, die ignoriert wurden (z. B. Filter, Priorität) */
+  events_ignored?: number;
   error_message?: string;
   needs_attention: boolean;
   source?: {

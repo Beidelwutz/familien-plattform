@@ -424,9 +424,14 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                   <p class="text-lg font-semibold text-blue-600">${updated}</p>
                   <p class="text-xs text-gray-500">Aktualisiert</p>
                 </div>
-                <div class="text-center">
+                <div class="text-center" title="${(run.events_unchanged != null || run.events_ignored != null) ? `${run.events_unchanged ?? 0} unverändert, ${run.events_ignored ?? 0} ignoriert` : ''}">
                   <p class="text-lg font-semibold text-gray-400">${run.events_skipped || 0}</p>
                   <p class="text-xs text-gray-500">Übersprungen</p>
+                  ${(run.events_unchanged != null || run.events_ignored != null) && (run.events_unchanged > 0 || run.events_ignored > 0) ? `
+                    <p class="text-[10px] text-gray-400 mt-0.5">
+                      ${run.events_unchanged ?? 0} unverändert · ${run.events_ignored ?? 0} ignoriert
+                    </p>
+                  ` : ''}
                 </div>
               </div>
               

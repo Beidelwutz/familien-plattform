@@ -72,6 +72,8 @@ router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: 
       events_created,
       events_updated,
       events_skipped,
+      events_unchanged,
+      events_ignored,
       error_message,
       error_details,
       needs_attention,
@@ -86,6 +88,8 @@ router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: 
     if (events_created !== undefined) updateData.events_created = events_created;
     if (events_updated !== undefined) updateData.events_updated = events_updated;
     if (events_skipped !== undefined) updateData.events_skipped = events_skipped;
+    if (events_unchanged !== undefined) updateData.events_unchanged = events_unchanged;
+    if (events_ignored !== undefined) updateData.events_ignored = events_ignored;
     if (error_message !== undefined) updateData.error_message = error_message;
     if (error_details !== undefined) updateData.error_details = error_details;
     if (needs_attention !== undefined) updateData.needs_attention = needs_attention;
