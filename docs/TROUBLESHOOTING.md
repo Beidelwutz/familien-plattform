@@ -300,11 +300,16 @@ npx prisma db pull
 
 ---
 
-### Google-Anmeldung erstellt keinen Account in Supabase
+### Google-Anmeldung funktioniert nicht / erstellt keinen Account
 
-**Symptom:** Nach Klick auf „Mit Google anmelden" wird zur Google-Anmeldeseite weitergeleitet, aber danach erscheint kein User in Supabase (Authentication → Users).
+**Symptom:** Nach Klick auf „Mit Google anmelden" passiert nichts, oder nach der Google-Weiterleitung erscheint eine Fehlermeldung / kein User in Supabase (Authentication → Users).
 
-**Ursache:** Der OAuth-Flow bricht zwischen Google und Supabase ab (falsche Redirect-URI, Provider nicht eingerichtet).
+**Schnell-Check (Browser-Konsole):** Nach dem Klick auf „Mit Google anmelden" wirst du zu Google und dann zu `/auth/callback` weitergeleitet. Öffne die **Developer Tools (F12) → Console**. Dort siehst du z. B.:
+- `[Callback] URL: ...` – die volle Callback-URL (mit `?code=...` bei PKCE oder `#access_token=...` bei Implicit)
+- `[Callback] PKCE flow: exchanging code for session` oder `Implicit flow: using tokens from hash`
+- Bei Fehlern: `[Callback] Code exchange failed:` oder `[Callback] Sync response: 503` etc.
+
+**Häufige Ursachen:** OAuth bricht ab (falsche Redirect-URI, Provider nicht eingerichtet), oder Backend-Sync schlägt fehl (Supabase/DB nicht konfiguriert).
 
 **Checkliste:**
 

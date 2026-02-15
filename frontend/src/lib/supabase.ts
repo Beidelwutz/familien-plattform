@@ -24,7 +24,8 @@ export const supabase = createClient(clientUrl, clientKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    // Kein flowType: 'pkce' – Implicit Flow (Hash). Callback liest Hash sofort aus, bevor er verloren geht.
+    // PKCE: Redirect enthält ?code=... (wird mitgeschickt). Implicit (Hash) geht bei Redirects oft verloren.
+    flowType: 'pkce',
   },
 });
 

@@ -290,8 +290,13 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
       localStorage.setItem('auth_redirect', redirectTo);
       localStorage.setItem('auth_remember', rememberCheckbox?.checked ? 'true' : 'false');
       
-      await signInWithGoogle();
-      // User will be redirected to Google, then to /auth/callback
+      const data = await signInWithGoogle();
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      showError('Google-Anmeldung: Keine Weiterleitung erhalten. Bitte erneut versuchen.');
+      setLoading(googleBtn, false);
     } catch (err: any) {
       showError('Google-Anmeldung fehlgeschlagen. Bitte versuche es erneut.');
       setLoading(googleBtn, false);
