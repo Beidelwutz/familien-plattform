@@ -600,13 +600,33 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     loadingEl?.classList.remove('hidden');
     subtitle.textContent = 'Run-Details werden geladen…';
 
-    try {
-      const res = await apiFetch(`/api/admin/ingest-runs/${runId}`);
-      const run = res.data;
-      const skipped = run.skipped_items || [];
-      const sourceName = run.source?.name || 'Unbekannte Quelle';
+    const hideLoading = () => loadingEl?.classList.add('hidden');
 
-      loadingEl?.classList.add('hidden');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const token = getToken();
+      if (!token) throw new Error('Nicht angemeldet');
+      const res = await fetch(`${API_URL}/api/admin/ingest-runs/${runId}`, {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login?redirect=/admin/runs';
+        return;
+      }
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json?.message || json?.error || `Fehler ${res.status}`);
+      }
+
+      const run = json.data;
+      const skipped = (run && run.skipped_items) ? run.skipped_items : [];
+      const sourceName = (run && run.source?.name) ? run.source.name : 'Unbekannte Quelle';
+
       subtitle.textContent = `${sourceName} · ${skipped.length} übersprungene Event(s)`;
 
       if (skipped.length === 0) {
@@ -615,7 +635,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         listEl.classList.remove('hidden');
         listEl.innerHTML = skipped.map(item => {
           const statusLabel = item.status === 'ignored' ? 'Ignoriert' : 'Unverändert';
-          const reasonsHtml = (item.reason_summary || []).map(r => `<li class="text-gray-600 text-sm">${escapeHtml(r)}</li>`).join('');
+          const rawReasons = (item.reason_summary || []).filter(r => r != null && String(r).trim() !== '');
+          const displayReasons = rawReasons.length > 0 ? rawReasons : ['Event existiert bereits, keine weiteren Details.'];
+          const reasonsHtml = displayReasons.map(r => `<li class="text-gray-600 text-sm">${escapeHtml(r)}</li>`).join('');
           return `
             <div class="bg-gray-50 rounded-lg p-3 border border-gray-100">
               <p class="font-medium text-gray-900">${escapeHtml(item.title || 'Unbekannt')}</p>
@@ -628,10 +650,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         }).join('');
       }
     } catch (e) {
-      loadingEl?.classList.add('hidden');
       subtitle.textContent = 'Fehler beim Laden';
       listEl.classList.remove('hidden');
-      listEl.innerHTML = `<p class="text-red-600 text-sm">${escapeHtml(e.message || 'Unbekannter Fehler')}</p>`;
+      listEl.innerHTML = `<p class="text-red-600 text-sm">${escapeHtml(e.name === 'AbortError' ? 'Zeitüberschreitung – Bitte erneut versuchen.' : (e.message || 'Unbekannter Fehler'))}</p>`;
+    } finally {
+      hideLoading();
     }
   }
 

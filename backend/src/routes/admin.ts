@@ -2143,8 +2143,15 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
       new_field: 'Neues Feld',
     };
 
-    function buildReasonSummary(ingestResult: unknown): string[] {
-      const reasons = (ingestResult as { merge_reasons?: Array<{ field: string; reason: string; candidate_source?: string }> })?.merge_reasons || [];
+    function buildReasonSummary(ingestResult: unknown, ingestStatus?: string | null): string[] {
+      const raw = ingestResult as {
+        merge_reasons?: Array<{ field: string; reason: string; candidate_source?: string }>;
+        mergeReasons?: Array<{ field: string; reason: string; candidate_source?: string }>;
+        ignored_fields?: string[];
+        ignoredFields?: string[];
+      } | null;
+      const reasons = raw?.merge_reasons ?? raw?.mergeReasons ?? [];
+      const ignoredFields = raw?.ignored_fields ?? raw?.ignoredFields ?? [];
       const lines: string[] = [];
       for (const r of reasons) {
         const label = mergeReasonLabels[r.reason] || r.reason;
@@ -2155,8 +2162,15 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
           lines.push(`${label}${fieldPart}`);
         }
       }
+      if (lines.length === 0 && ignoredFields.length > 0) {
+        lines.push(`Felder nicht übernommen: ${ignoredFields.join(', ')}`);
+      }
       if (lines.length === 0) {
-        lines.push('Keine Details gespeichert');
+        if (ingestStatus === 'ignored') {
+          lines.push('Import übersprungen (z. B. Fehler oder Filter).');
+        } else {
+          lines.push('Event existiert bereits, keine Änderungen an den Feldern.');
+        }
       }
       return lines;
     }
@@ -2196,7 +2210,7 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
           status: item.ingest_status,
           title: (item.extracted_fields as any)?.title || 'Unbekannt',
           merge_reasons: (item.ingest_result as any)?.merge_reasons || [],
-          reason_summary: buildReasonSummary(item.ingest_result),
+          reason_summary: buildReasonSummary(item.ingest_result, item.ingest_status),
         })),
       }
     });
