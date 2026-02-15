@@ -1326,6 +1326,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
 
   // Poll for run status (with elapsed time and stuck hint)
   const pollStartTime = {}; // sourceId -> timestamp when polling started
+  const lastProgressMessage = {}; // sourceId -> last run.progress_message
+  const lastProgressChangeTime = {}; // sourceId -> when progress_message last changed
 
   async function pollRunStatus(sourceId, runId) {
     if (activePolling[sourceId]) {
@@ -1349,21 +1351,34 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
       const eventsFound = run.events_found ?? 0;
       const progressStep = run.progress_message ? run.progress_message : '';
       const elapsed = formatElapsed();
+
+      if (progressStep !== lastProgressMessage[sourceId]) {
+        lastProgressMessage[sourceId] = progressStep;
+        lastProgressChangeTime[sourceId] = Date.now();
+      }
+      const progressUnchangedMs = lastProgressChangeTime[sourceId]
+        ? Date.now() - lastProgressChangeTime[sourceId]
+        : 0;
       const stuckHint = (Date.now() - pollStartTime[sourceId]) > 30000
         ? ' – Bei langer Wartezeit: AI-Worker prüfen (läuft er? Queue?)'
         : '';
+      const stepStuckHint = run.status === 'running' && progressStep && progressUnchangedMs > 90000
+        ? 'Dieser Schritt läuft ungewöhnlich lange – Worker-Logs prüfen.'
+        : '';
+
       if (importDetails) {
         importDetails.innerHTML = `
           <span>${eventsFound} Events gefunden</span>
           ${progressStep ? `<span class="text-gray-600"> · ${progressStep}</span>` : ''}
           <span class="text-blue-600"> · Läuft seit ${elapsed}</span>
           ${stuckHint ? `<br><span class="text-amber-600 text-xs">${stuckHint}</span>` : ''}
+          ${stepStuckHint ? `<br><span class="text-amber-600 text-xs">${stepStuckHint}</span>` : ''}
         `;
       }
     }
 
     let pollCount = 0;
-    const maxPolls = 90; // 90 * 2s = 3 min
+    const maxPolls = 300; // 300 * 2s = 10 min (Anreichern kann lange dauern)
 
     activePolling[sourceId] = setInterval(async () => {
       pollCount++;
@@ -1372,6 +1387,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
         clearInterval(activePolling[sourceId]);
         delete activePolling[sourceId];
         delete pollStartTime[sourceId];
+        delete lastProgressMessage[sourceId];
+        delete lastProgressChangeTime[sourceId];
         if (importStatus) {
           importStatus.innerHTML = `
             <div class="flex items-center gap-2">
@@ -1391,6 +1408,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
           clearInterval(activePolling[sourceId]);
           delete activePolling[sourceId];
           delete pollStartTime[sourceId];
+          delete lastProgressMessage[sourceId];
+          delete lastProgressChangeTime[sourceId];
 
           const statusConfig = {
             success: { icon: '✓', color: 'green', label: 'Erfolgreich' },

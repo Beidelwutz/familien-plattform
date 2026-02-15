@@ -16,7 +16,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 from urllib.parse import urlparse
 from collections import defaultdict
 
@@ -439,54 +439,74 @@ class SelectiveDeepFetcher:
         return event
     
     async def enrich_events(
-        self, 
+        self,
         events: list[ParsedEvent],
-        max_fetches: Optional[int] = None
+        max_fetches: Optional[int] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> list[ParsedEvent]:
         """
         Selectively enrich events by fetching their detail pages.
-        
+
         Args:
             events: List of ParsedEvents (should be already deduplicated)
             max_fetches: Optional limit on number of fetches (for testing/safety)
-        
+            progress_callback: Optional (done_count, total_count) called as each fetch completes
         Returns:
             List of events with enriched data where applicable
         """
         self.stats = DeepFetchStats(total_events=len(events))
-        
+
         # Identify events that need deep-fetch
         events_to_fetch: list[tuple[int, ParsedEvent]] = []
-        
+
         for i, event in enumerate(events):
             if not event.source_url:
                 self.stats.skipped_no_url += 1
                 continue
-            
+
             if self.needs_deep_fetch(event):
                 events_to_fetch.append((i, event))
-        
+
         self.stats.events_needing_fetch = len(events_to_fetch)
         logger.info(f"Selective deep-fetch: {len(events_to_fetch)}/{len(events)} events need enrichment")
-        
+
         if not events_to_fetch:
+            if progress_callback:
+                progress_callback(0, 0)
             return events
-        
+
         # Apply max_fetches limit
         if max_fetches and len(events_to_fetch) > max_fetches:
             logger.info(f"Limiting deep-fetch to {max_fetches} events")
             events_to_fetch = events_to_fetch[:max_fetches]
-        
+
+        total_to_fetch = len(events_to_fetch)
+        done_count = 0
+
+        if progress_callback:
+            progress_callback(0, total_to_fetch)
+
+        def on_fetch_done() -> None:
+            nonlocal done_count
+            done_count += 1
+            if progress_callback:
+                progress_callback(done_count, total_to_fetch)
+
         # Fetch with bounded concurrency
         semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
-        
+
         async def fetch_one(idx: int, event: ParsedEvent) -> tuple[int, Optional[ExtractedEvent]]:
             async with semaphore:
                 extracted = await self.fetch_and_extract(event.source_url)
                 return idx, extracted
-        
+
+        async def fetch_one_with_progress(idx: int, event: ParsedEvent) -> tuple[int, Optional[ExtractedEvent]]:
+            result = await fetch_one(idx, event)
+            on_fetch_done()
+            return result
+
         # Run fetches concurrently (bounded by semaphore)
-        tasks = [fetch_one(idx, event) for idx, event in events_to_fetch]
+        tasks = [fetch_one_with_progress(idx, event) for idx, event in events_to_fetch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Merge results back
@@ -519,21 +539,24 @@ async def selective_deep_fetch(
     config: Optional[DeepFetchConfig] = None,
     max_fetches: Optional[int] = None,
     detail_page_config: Optional[dict] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> list[ParsedEvent]:
     """
     Convenience function to run selective deep-fetch on parsed events.
-    
+
     Args:
         parsed_events: List of ParsedEvents (ideally already deduplicated)
         config: Optional DeepFetchConfig to customize behavior
         max_fetches: Optional limit on number of detail page fetches
         detail_page_config: Optional per-source selectors (custom CSS) for detail pages
-    
+        progress_callback: Optional (done_count, total_count) called as each fetch completes
     Returns:
         List of events with enriched data where applicable
     """
     fetcher = SelectiveDeepFetcher(config=config, detail_page_config=detail_page_config)
     try:
-        return await fetcher.enrich_events(parsed_events, max_fetches)
+        return await fetcher.enrich_events(
+            parsed_events, max_fetches, progress_callback=progress_callback
+        )
     finally:
         await fetcher.close()

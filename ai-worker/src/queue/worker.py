@@ -645,8 +645,13 @@ async def process_crawl_job(payload: dict) -> dict:
     # Step 2.5: Selective Deep-Fetch (enrich events by fetching their detail pages)
     # Only for RSS feeds (ICS usually has all data) and only if enabled
     if fetch_event_pages and source_type == "rss" and unique_events:
+        n_events = len(unique_events)
+        max_detail_fetches = 50  # Safety limit per run
         if ingest_run_id:
-            await update_ingest_run(ingest_run_id, progress_message="Anreichern (Detailseiten)…")
+            await update_ingest_run(
+                ingest_run_id,
+                progress_message=f"Anreichern (Detailseiten) 0/{max_detail_fetches} (von {n_events} Events) …",
+            )
         logger.info("Running selective deep-fetch for RSS events...")
         try:
             # Configure deep-fetch (can be customized per source later)
@@ -658,11 +663,24 @@ async def process_crawl_job(payload: dict) -> dict:
                 min_delay_per_domain_ms=1000,
                 max_concurrent_requests=3,
             )
+
+            def _detail_progress_cb(done: int, total: int) -> None:
+                if not ingest_run_id:
+                    return
+                if total == 0:
+                    msg = "Anreichern (Detailseiten) – keine nötig (Ort/Endzeit/Bild bereits aus Feed)"
+                else:
+                    msg = f"Anreichern (Detailseiten) {done}/{total} (von {n_events} Events) …"
+                asyncio.create_task(
+                    update_ingest_run(ingest_run_id, progress_message=msg)
+                )
+
             unique_events = await selective_deep_fetch(
                 unique_events,
                 config=deep_fetch_config,
-                max_fetches=50,  # Safety limit per run
+                max_fetches=max_detail_fetches,
                 detail_page_config=detail_page_config,
+                progress_callback=_detail_progress_cb,
             )
             # Count how many were enriched
             enriched_count = sum(1 for e in unique_events if e.deep_fetched)
