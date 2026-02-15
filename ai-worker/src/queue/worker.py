@@ -342,7 +342,8 @@ async def send_batch_to_backend(
     Returns:
         Backend response with results and summary
     """
-    logger.info(f"[BATCH] send_batch_to_backend: source_id={source_id}, total={len(candidates)}, batch_size={BATCH_SIZE}")
+    total_candidates = len(candidates)
+    logger.info(f"[BATCH] send_batch_to_backend: source_id={source_id}, total={total_candidates}, batch_size={BATCH_SIZE}")
     
     client = await get_http_client()
     
@@ -368,7 +369,13 @@ async def send_batch_to_backend(
                     all_results[key] += summary.get(key, 0)
                 logger.info(f"[BATCH] Sub-batch {batch_num}/{total_batches} OK: +{summary.get('created', 0)} created")
                 if run_id:
-                    await update_ingest_run(run_id, progress_message=f"Importiere in Datenbank … Batch {batch_num}/{total_batches}")
+                    done_events = min(batch_num * BATCH_SIZE, total_candidates)
+                    await update_ingest_run(
+                        run_id,
+                        progress_message=f"Importiere in Datenbank … {done_events}/{total_candidates}",
+                        events_created=all_results["created"],
+                        events_updated=all_results["updated"],
+                    )
                 # #region agent log
                 if batch_num == 1:
                     _agent_log("worker.py:first_batch_ok", "first batch response OK", {"batch_num": batch_num, "summary": summary, "status_code": 200}, "H2,H4")
@@ -617,12 +624,13 @@ async def process_crawl_job(payload: dict) -> dict:
         return _content_type_result(result)
     
     # Progress: tell backend how many events we found (so UI can show "X Events gefunden")
+    n_events = len(parsed_events)
     if ingest_run_id:
         await update_ingest_run(
             ingest_run_id, status="running",
-            events_found=len(parsed_events),
+            events_found=n_events,
             events_created=0, events_updated=0, events_skipped=0,
-            progress_message="Events gefunden, bereite Import vor…",
+            progress_message=f"Events gefunden ({n_events}), bereite Import vor…",
         )
     # #region agent log
     _agent_log("worker.py:after_events_found", "ingest_run updated with events_found", {"events_found": len(parsed_events), "ingest_run_id": ingest_run_id, "source_id": source_id}, "H1")
@@ -694,10 +702,11 @@ async def process_crawl_job(payload: dict) -> dict:
         })
     
     # Step 5 (normal): Batch Ingest to Backend
+    total_candidates = len(candidates)
     if ingest_run_id:
-        await update_ingest_run(ingest_run_id, progress_message="Importiere in Datenbank…")
+        await update_ingest_run(ingest_run_id, progress_message=f"Importiere in Datenbank … 0/{total_candidates}")
     # #region agent log
-    _agent_log("worker.py:before_send_batch", "calling send_batch_to_backend", {"candidates_count": len(candidates), "ingest_run_id": ingest_run_id}, "H2")
+    _agent_log("worker.py:before_send_batch", "calling send_batch_to_backend", {"candidates_count": total_candidates, "ingest_run_id": ingest_run_id}, "H2")
     # #endregion
     result = await send_batch_to_backend(source_id, candidates, ingest_run_id)
     summary = result.get("summary", {})
