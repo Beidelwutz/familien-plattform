@@ -510,9 +510,28 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
   }
 
   // Load dashboard via single aggregate endpoint (1 HTTP call, backend coordinates DB load)
+  let dashboardCallCount = 0;
+  let dashboardLoadInFlight = false;
   async function loadDashboardData() {
+    if (dashboardLoadInFlight) {
+      // #region agent log
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin/index.astro:loadDashboardData', message: 'loadDashboardData skipped (already in flight)', data: {}, timestamp: Date.now(), hypothesisId: 'H1', runId: 'post-fix' }) }).catch(() => {});
+      // #endregion
+      return;
+    }
+    dashboardLoadInFlight = true;
+    dashboardCallCount += 1;
+    const callId = dashboardCallCount;
+    const fetchStart = Date.now();
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin/index.astro:loadDashboardData', message: 'loadDashboardData called', data: { callId, totalCalls: dashboardCallCount }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+    // #endregion
     try {
       const res = await fetchWithAuth(`${API_URL}/api/admin/dashboard`);
+      // #region agent log
+      const fetchMs = Date.now() - fetchStart;
+      fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin/index.astro:afterFetch', message: 'dashboard fetch completed', data: { callId, fetchMs }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+      // #endregion
       const d = res.data;
 
       const setText = (id: string, value: string | number) => {
@@ -584,6 +603,8 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
           errorMsg.textContent = 'Backend nicht erreichbar. Bitte prüfe, ob der Server läuft.';
         }
       }
+    } finally {
+      dashboardLoadInFlight = false;
     }
   }
 
@@ -683,6 +704,9 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
       return;
     }
 
+    // #region agent log
+    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin/index.astro:initDashboard', message: 'about to call loadDashboardData', data: { readyState: document.readyState }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
+    // #endregion
     await loadDashboardData();
     void updateHealthWidget();
     setInterval(() => void updateHealthWidget(), 30000);

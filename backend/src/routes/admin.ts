@@ -217,6 +217,10 @@ const TRENDS_CITY = 'karlsruhe';
 
 // GET /api/admin/dashboard - Aggregat für Startansicht (1 HTTP-Call, koordinierte Queries)
 router.get('/dashboard', async (_req: Request, res: Response, next: NextFunction) => {
+  // #region agent log
+  const t0 = Date.now();
+  fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin.ts:dashboard', message: 'dashboard handler start', data: { t0 }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+  // #endregion
   try {
     const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
 
@@ -289,6 +293,11 @@ router.get('/dashboard', async (_req: Request, res: Response, next: NextFunction
     (sources as { health_status: string; _count: number }[]).forEach((s) => {
       sourceHealth[s.health_status as keyof typeof sourceHealth] = s._count;
     });
+
+    // #region agent log
+    const t1 = Date.now();
+    fetch('http://127.0.0.1:7245/ingest/5d9bb467-7a30-458e-a7a6-30ea6b541c63', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'admin.ts:afterPromiseAll', message: 'after Promise.all', data: { totalMs: t1 - t0 }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+    // #endregion
 
     const teaserDefaults = {
       authorName: 'Pepe',
