@@ -36,11 +36,11 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
           <form id="teaser-form" class="space-y-3 max-w-xl">
             <div>
               <label for="teaser-authorName" class="block text-sm font-medium text-gray-700">Autor-Name</label>
-              <input type="text" id="teaser-authorName" name="authorName" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="WENKE" />
+              <input type="text" id="teaser-authorName" name="authorName" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Pepe" />
             </div>
             <div>
               <label for="teaser-message" class="block text-sm font-medium text-gray-700">Nachricht</label>
-              <textarea id="teaser-message" name="message" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Heute Abend gibt's ein kleines Geheimkonzert …"></textarea>
+              <textarea id="teaser-message" name="message" rows="3" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Kurz mal raus: Spaziergang in der Günther-Klotz-Anlage – lohnt sich!"></textarea>
             </div>
             <div>
               <label for="teaser-avatarSrc" class="block text-sm font-medium text-gray-700">Profilbild-URL</label>
@@ -68,7 +68,8 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
               <button type="submit" id="teaser-save-btn" class="px-4 py-2 rounded-md bg-primary-600 text-white text-sm font-medium hover:bg-primary-700">Speichern</button>
             </div>
           </form>
-          <p id="teaser-save-status" class="mt-2 text-sm text-green-600 hidden">Gespeichert.</p>
+          <p id="teaser-save-status" class="mt-2 text-sm hidden" role="status"></p>
+          <p id="teaser-preview-status" class="mt-2 text-sm text-gray-600 hidden" role="status">Vorschau aktualisiert.</p>
           </div>
         </details>
         <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -472,7 +473,7 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
   function updateTeaserPreview() {
     const iframe = document.getElementById('teaser-preview-iframe') as HTMLIFrameElement;
     if (!iframe) return;
-    const authorName = (document.getElementById('teaser-authorName') as HTMLInputElement)?.value || 'WENKE';
+    const authorName = (document.getElementById('teaser-authorName') as HTMLInputElement)?.value || 'Pepe';
     const message = (document.getElementById('teaser-message') as HTMLTextAreaElement)?.value || '';
     const avatarSrc = (document.getElementById('teaser-avatarSrc') as HTMLInputElement)?.value || '';
     const countdownEndDate = (document.getElementById('teaser-countdownEndDate') as HTMLInputElement)?.value || '';
@@ -493,6 +494,12 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
     if (teaserIcon) params.set('teaserIcon', teaserIcon);
     if (teaserThemeClass) params.set('teaserThemeClass', teaserThemeClass);
     iframe.src = `/admin/teaser-preview?${params.toString()}`;
+    const previewStatus = document.getElementById('teaser-preview-status');
+    if (previewStatus) {
+      previewStatus.classList.remove('hidden');
+      previewStatus.textContent = 'Vorschau aktualisiert.';
+      setTimeout(() => previewStatus.classList.add('hidden'), 2000);
+    }
   }
 
   // Load all dashboard data
@@ -709,34 +716,57 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
     document.getElementById('teaser-form')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const form = e.target as HTMLFormElement;
-      const countdownVal = (document.getElementById('teaser-countdownEndDate') as HTMLInputElement)?.value;
-      const payload = {
-        authorName: (form.authorName as HTMLInputElement)?.value,
-        message: (form.message as HTMLTextAreaElement)?.value,
-        avatarSrc: (form.avatarSrc as HTMLInputElement)?.value,
-        countdownEndDate: countdownVal ? countdownVal.replace(' ', 'T') : undefined,
-        variant: parseInt((form.variant as HTMLInputElement)?.value || '7', 10),
-        contentVariant: parseInt((form.contentVariant as HTMLInputElement)?.value || '16', 10),
-        teaserLabel: (form.teaserLabel as HTMLInputElement)?.value ?? undefined,
-        teaserIcon: (form.teaserIcon as HTMLInputElement)?.value ?? undefined,
-        teaserThemeClass: (form.teaserThemeClass as HTMLInputElement)?.value ?? undefined,
-      };
-      const putRes = await fetch(`${API_URL}/api/admin/settings/homepage-teaser`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!putRes.ok) throw new Error(`HTTP ${putRes.status}`);
-      const json = await putRes.json();
-      fillTeaserForm(json.data ?? null);
-      updateTeaserPreview();
+      const saveBtn = document.getElementById('teaser-save-btn') as HTMLButtonElement;
       const statusEl = document.getElementById('teaser-save-status');
-      if (statusEl) {
+      const showStatus = (message: string, isError: boolean) => {
+        if (!statusEl) return;
+        statusEl.textContent = message;
+        statusEl.className = `mt-2 text-sm ${isError ? 'text-red-600' : 'text-green-600'}`;
         statusEl.classList.remove('hidden');
-        setTimeout(() => statusEl.classList.add('hidden'), 3000);
+        if (!isError) setTimeout(() => statusEl.classList.add('hidden'), 3000);
+      };
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Wird gespeichert…';
+      }
+      try {
+        const countdownVal = (document.getElementById('teaser-countdownEndDate') as HTMLInputElement)?.value;
+        const payload = {
+          authorName: (form.authorName as HTMLInputElement)?.value,
+          message: (form.message as HTMLTextAreaElement)?.value,
+          avatarSrc: (form.avatarSrc as HTMLInputElement)?.value,
+          countdownEndDate: countdownVal ? countdownVal.replace(' ', 'T') : undefined,
+          variant: parseInt((form.variant as HTMLInputElement)?.value || '7', 10),
+          contentVariant: parseInt((form.contentVariant as HTMLInputElement)?.value || '16', 10),
+          teaserLabel: (form.teaserLabel as HTMLInputElement)?.value ?? undefined,
+          teaserIcon: (form.teaserIcon as HTMLInputElement)?.value ?? undefined,
+          teaserThemeClass: (form.teaserThemeClass as HTMLInputElement)?.value ?? undefined,
+        };
+        const putRes = await fetch(`${API_URL}/api/admin/settings/homepage-teaser`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!putRes.ok) {
+          const errBody = await putRes.json().catch(() => ({}));
+          const errMsg = (errBody as { message?: string })?.message || `HTTP ${putRes.status}`;
+          throw new Error(errMsg);
+        }
+        const json = await putRes.json();
+        fillTeaserForm(json.data ?? null);
+        updateTeaserPreview();
+        showStatus('Gespeichert.', false);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        showStatus(`Fehler beim Speichern. ${message} Bitte erneut versuchen.`, true);
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Speichern';
+        }
       }
     });
 

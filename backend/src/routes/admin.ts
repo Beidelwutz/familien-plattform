@@ -3380,9 +3380,9 @@ router.get('/pending-ai-count', async (_req: Request, res: Response, next: NextF
 // GET /api/admin/settings/homepage-teaser - Teaser-Box-Konfiguration (Admin)
 const HOMEPAGE_TEASER_KEY = 'homepage_teaser';
 const HOMEPAGE_TEASER_DEFAULTS = {
-  authorName: 'WENKE',
-  message: "Heute Abend gibt's ein kleines Geheimkonzert – schau in die Tagestipps!",
-  avatarSrc: 'https://i.pravatar.cc/96?u=wenke',
+  authorName: 'Pepe',
+  message: 'Kurz mal raus: Spaziergang in der Günther-Klotz-Anlage – lohnt sich!',
+  avatarSrc: 'https://i.pravatar.cc/96?u=pepe',
   countdownEndDate: '2025-08-16T20:00:00',
   variant: 7,
   contentVariant: 16,

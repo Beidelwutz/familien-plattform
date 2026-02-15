@@ -8,9 +8,9 @@ import TeaserPreviewLayout from '../../layouts/TeaserPreviewLayout.astro';
 import TagestippTeaserBox from '../../components/sections/TagestippTeaserBox.astro';
 
 const q = Astro.url.searchParams;
-const authorName = q.get('authorName') || 'WENKE';
-const message = q.get('message') || "Heute Abend gibt's ein kleines Geheimkonzert – schau in die Tagestipps!";
-const avatarSrc = q.get('avatarSrc') || 'https://i.pravatar.cc/96?u=wenke';
+const authorName = q.get('authorName') || 'Pepe';
+const message = q.get('message') || 'Kurz mal raus: Spaziergang in der Günther-Klotz-Anlage – lohnt sich!';
+const avatarSrc = q.get('avatarSrc') || 'https://i.pravatar.cc/96?u=pepe';
 const countdownEndDate = q.get('countdownEndDate') || '2025-08-16T20:00:00';
 const variant = Math.min(30, Math.max(1, parseInt(q.get('variant') || '7', 10))) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30;
 const contentVariant = Math.min(30, Math.max(1, parseInt(q.get('contentVariant') || '16', 10))) as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 | 29 | 30;
