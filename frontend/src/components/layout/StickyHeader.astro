@@ -372,13 +372,15 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
   }
 
   async function checkAuthState() {
-    let token = localStorage.getItem('auth_token');
+    // Token kann in localStorage („Angemeldet bleiben“) oder sessionStorage liegen
+    let token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
     
     // Start with loading state
     setAuthState('loading');
 
     if (!token) {
       token = await syncAuthToken();
+      if (!token) token = sessionStorage.getItem('auth_token');
     }
 
     if (!token) {
@@ -398,8 +400,9 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
         // Token invalid or user not found in DB
         console.log('[Auth] Token invalid, response status:', response.status);
         
-        // Clear invalid token and sign out of Supabase
+        // Clear invalid token (beide Speicher) and sign out of Supabase
         localStorage.removeItem('auth_token');
+        sessionStorage.removeItem('auth_token');
         try {
           const { supabase } = await import('../../lib/supabase');
           await supabase.auth.signOut();
@@ -427,11 +430,11 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
     }
   }
 
-  // Logout function - clears both localStorage and Supabase session
+  // Logout function - clears both storages and Supabase session
   async function handleLogout() {
     try {
-      // Clear local storage
       localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
       
       // Try to sign out from Supabase dynamically
       try {
@@ -447,6 +450,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
       console.error('Logout error:', error);
       // Still clear token and redirect on error
       localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
       window.location.href = '/';
     }
   }
