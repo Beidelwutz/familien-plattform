@@ -201,6 +201,9 @@ AUFGABEN:
       * "ab 14h" / "14h-16h"
       * "Di, 10:30-11:15"
       * "bis 16 Uhr" (nur Endzeit)
+      * "zwischen 21-23 Uhr" -> Start = 21:00, Ende = 23:00 (NICHT den Mittelwert nehmen!)
+      * "kommt zwischen X und Y Uhr vorbei" -> Start = X:00, Ende = Y:00
+    - Bei Zeitbereichen IMMER die erste Zahl als Start und die zweite als Ende nehmen
     - Wenn Endzeit < Startzeit (z.B. "22-01 Uhr"): Endzeit ist am Folgetag
     - Bei wiederkehrenden Events: Das HEUTIGE DATUM ist {current_date}. Berechne das nächste vorkommende Datum.
     - null falls kein Datum/Zeit erkennbar
@@ -222,6 +225,7 @@ AUFGABEN:
     - price_confidence: 0.0-1.0
     - Suche nach: "Kostenfrei", "kostenlos", "5 Euro", "Eintritt: 3€", "Spendenbasis", "gegen Gebühr"
     - "Spendenbasis"/"pay what you want" = "donation" mit price_min 0
+    - "Spendendose", "Wertschätzung", "Hutsammlung", "freiwillige Spende", "freiwilliger Beitrag" = "donation" mit price_min 0
 
 17. VENUE/ORT-NAME EXTRAKTION (WICHTIG - trenne Veranstaltungsort von Adresse):
     - extracted_venue_name: Name des Veranstaltungsortes (z.B. "Kinder- und Jugendbibliothek", "ZKM", "Stadtpark")

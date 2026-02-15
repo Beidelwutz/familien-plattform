@@ -321,6 +321,8 @@ class EventNormalizer:
         DONATION_KEYWORDS = [
             'auf spendenbasis', 'spende erbeten', 'pay what you want',
             'gegen spende', 'hutsammlung', 'freiwilliger beitrag',
+            'spendendose', 'wertschätzung', 'pay what you can',
+            'freiwillige spende',
         ]
         
         if price_type == 'unknown':
@@ -511,7 +513,8 @@ class EventNormalizer:
         
         # Pattern 1: Time range - "Uhr" am Ende OPTIONAL wenn Minuten vorhanden
         # Matcht: "16 bis 16.15", "11 bis 12 Uhr", "von 14:00 bis 15:30", "14-16 Uhr", "14h-16h"
-        time_range_pattern = r'(?:von\s+)?(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)?\s*(?:bis|[-–])\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)?'
+        # Matcht auch: "zwischen 21-23 Uhr", "zwischen 10 und 12 Uhr"
+        time_range_pattern = r'(?:(?:von|zwischen)\s+)?(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)?\s*(?:bis|und|[-–])\s*(\d{1,2})(?:[:\.]\s*(\d{2}))?\s*(?:uhr|h)?'
         match = re.search(time_range_pattern, text_lower)
         if match:
             start_hour = int(match.group(1))

@@ -97,8 +97,9 @@ class HeuristicExtractor:
     )
 
     _RE_TIME_RANGE = re.compile(
+        r'(?:(?:von|zwischen)\s+)?'
         r'(\d{1,2})[:\.]?(\d{2})?\s*'
-        r'(?:bis|–|—|-)\s*'
+        r'(?:bis|und|–|—|-)\s*'
         r'(\d{1,2})[:\.]?(\d{2})?\s*(?:Uhr)?',
         re.IGNORECASE,
     )
@@ -141,7 +142,9 @@ class HeuristicExtractor:
     )
 
     _RE_PRICE_DONATION = re.compile(
-        r'(?:Spende|auf\s+Spendenbasis|pay\s+what\s+you\s+(?:can|want))',
+        r'(?:Spende(?:ndose)?|auf\s+Spendenbasis|pay\s+what\s+you\s+(?:can|want)|'
+        r'Hutsammlung|freiwillige[rn]?\s+(?:Beitrag|Spende)|'
+        r'Wertsch.tzung|gegen\s+Spende|Spende\s+erbeten)',
         re.IGNORECASE,
     )
 
