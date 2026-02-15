@@ -711,13 +711,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
       
       activeRunsBySource = newActiveRunsBySource;
       
-      // Update the active fetches banner
+      // Only update the banner – do not re-render the table (would reset "Letzte Fetches" to "Lade..." every 5s)
       updateActiveFetchesBanner(activeRuns);
-      
-      // Re-render table if active runs changed
-      if (hadActiveRuns || hasActiveRuns) {
-        renderTable();
-      }
     } catch (e) {
       console.error('Failed to fetch active runs:', e);
     }
@@ -742,21 +737,22 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
       const elapsed = run.elapsed_seconds || 0;
       const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
       const sourceName = run.source?.name || 'Unbekannte Quelle';
-      const eventsFound = run.events_found || 0;
-      
+      const eventsFound = run.events_found ?? 0;
+      const progressMsg = (run.progress_message || '').trim();
       return `
-        <div class="flex items-center justify-between bg-white rounded-lg p-3 border border-blue-100">
-          <div class="flex items-center gap-3">
-            <svg class="w-4 h-4 text-blue-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-lg p-3 border border-blue-100">
+          <div class="flex items-center gap-3 min-w-0">
+            <svg class="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <div>
+            <div class="min-w-0">
               <span class="font-medium text-gray-900">${sourceName}</span>
               <span class="text-sm text-gray-500 ml-2">Läuft seit ${elapsedStr}</span>
+              ${progressMsg ? `<div class="text-xs text-blue-600 mt-0.5">${progressMsg}</div>` : ''}
             </div>
           </div>
-          <div class="flex items-center gap-3">
-            <span class="text-sm text-blue-600">${eventsFound} Events gefunden</span>
+          <div class="flex items-center gap-3 flex-shrink-0">
+            <span class="text-sm text-blue-600 font-medium">${eventsFound} Events</span>
             <button 
               class="cancel-btn-banner px-3 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
               data-id="${run.source_id}"
@@ -964,8 +960,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
 
                 <div>
                   <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Letzte Fetches</h4>
-                  <div id="fetch-history-${source.id}" class="bg-white rounded-lg border border-gray-200 p-3 text-sm text-gray-500">
-                    Lade...
+                  <div id="fetch-history-${source.id}" class="bg-white rounded-lg border border-gray-200 p-3 text-sm text-gray-500 min-h-[3rem] flex items-center gap-2">
+                    <span class="animate-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-primary-500 rounded-full"></span>
+                    <span>Fetches werden geladen…</span>
                   </div>
                 </div>
               </div>
@@ -1211,16 +1208,16 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
         const statusColor = statusColors[run.status] || 'bg-gray-100 text-gray-700';
         const date = formatRelativeTime(run.started_at);
         const eventsInfo = run.status === 'running'
-          ? `${run.events_found ?? 0} gefunden, läuft...`
+          ? `${run.events_found ?? 0} Events${(run.progress_message || '').trim() ? ' · ' + run.progress_message : ''}`
           : `${run.events_created || 0} neu, ${run.events_updated || 0} aktualisiert`;
 
         return `
-          <div class="flex items-center justify-between py-1 ${runs.indexOf(run) > 0 ? 'border-t border-gray-100' : ''}">
-            <span class="text-gray-600">${date}</span>
-            <div class="flex items-center gap-2">
-              <span class="text-xs">${eventsInfo}</span>
+          <div class="py-1.5 ${runs.indexOf(run) > 0 ? 'border-t border-gray-100' : ''}">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-gray-600">${date}</span>
               <span class="px-2 py-0.5 text-xs rounded-full ${statusColor}">${run.status}</span>
             </div>
+            <div class="text-xs text-gray-500 mt-0.5">${eventsInfo}</div>
           </div>
         `;
       }).join('');
