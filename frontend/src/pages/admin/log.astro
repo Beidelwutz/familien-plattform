@@ -22,6 +22,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || '';
   </div>
 
   <div id="meta" class="mb-3 hidden text-sm text-gray-500"></div>
+  <div id="empty-hint" class="mb-3 hidden rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"></div>
   <div id="error-banner" class="mb-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"></div>
   <pre id="log-content" class="max-h-[70vh] overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono text-sm text-gray-800 whitespace-pre-wrap">Lade...</pre>
 </AdminLayout>
@@ -30,6 +31,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || '';
   const logEl = document.getElementById('log-content');
   const metaEl = document.getElementById('meta');
   const errorBanner = document.getElementById('error-banner');
+  const emptyHintEl = document.getElementById('empty-hint');
   const refreshBtn = document.getElementById('refresh-btn');
 
   async function loadLog(tail = 500) {
@@ -37,6 +39,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || '';
     logEl.textContent = 'Lade...';
     metaEl?.classList.add('hidden');
     errorBanner?.classList.add('hidden');
+    emptyHintEl?.classList.add('hidden');
     try {
       const res = await fetch(`${API_URL}/api/admin/debug-log?tail=${tail}`, { credentials: 'include' });
       const data = await res.json().catch(() => ({}));
@@ -46,7 +49,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL || '';
       }
       if (data.path) {
         metaEl?.classList.remove('hidden');
-        if (metaEl) metaEl.textContent = `Pfad: ${data.path}`;
+        if (metaEl) metaEl.textContent = data.source === 'buffer' ? 'Quelle: vom Worker gesendet' : `Pfad: ${data.path}`;
+      }
+      if (data.emptyHint) {
+        emptyHintEl?.classList.remove('hidden');
+        if (emptyHintEl) emptyHintEl.textContent = data.emptyHint;
       }
       logEl.textContent = data.content || '(leer oder nicht vorhanden)';
     } catch (e) {

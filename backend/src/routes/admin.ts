@@ -43,6 +43,24 @@ const _debugLog = (data: Record<string, unknown>) => {
 
 const router = Router();
 
+// In-memory buffer for debug log lines pushed by AI-Worker (when worker runs on different host)
+const DEBUG_LOG_BUFFER_MAX = 1000;
+const debugLogBuffer: string[] = [];
+
+// POST /api/admin/debug-log-push - Worker pushes one log line (SERVICE_TOKEN)
+router.post('/debug-log-push', requireServiceToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const line = typeof req.body?.line === 'string' ? req.body.line : '';
+    if (line) {
+      debugLogBuffer.push(line);
+      if (debugLogBuffer.length > DEBUG_LOG_BUFFER_MAX) debugLogBuffer.shift();
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // PATCH /api/admin/ingest-runs/:id - Update ingest run (called by AI-Worker with SERVICE_TOKEN)
 // Must be registered BEFORE router.use(requireAuth, requireAdmin) so it accepts Bearer SERVICE_TOKEN
 router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: Response, next: NextFunction) => {
@@ -126,13 +144,14 @@ router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: 
 // All admin routes require auth + admin role
 router.use(requireAuth, requireAdmin);
 
-// GET /api/admin/debug-log - Read debug log file (RSS-Import / Worker)
+// GET /api/admin/debug-log - Read debug log (file or buffer from Worker)
 router.get('/debug-log', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const logPath = process.env.DEBUG_LOG_PATH || path.join(process.cwd(), '..', '.cursor', 'debug.log');
     const tail = Math.min(Math.max(0, parseInt(String(req.query.tail), 10) || 500), 5000);
     let content = '';
     let error: string | undefined;
+    let source: 'file' | 'buffer' = 'file';
     try {
       const raw = await fs.readFile(logPath, 'utf-8');
       const lines = raw.split('\n').filter(Boolean);
@@ -144,7 +163,14 @@ router.get('/debug-log', async (req: Request, res: Response, next: NextFunction)
         error = e?.message || 'Fehler beim Lesen';
       }
     }
-    res.json({ content, path: logPath, error });
+    if (!content && debugLogBuffer.length > 0) {
+      content = debugLogBuffer.slice(-tail).join('\n');
+      source = 'buffer';
+    }
+    const emptyHint = !content && !error
+      ? 'Log ist leer. AI-Worker starten und RSS-Fetch auslösen. Bei getrenntem Host sendet der Worker Zeilen an dieses Backend.'
+      : undefined;
+    res.json({ content, path: logPath, error, source, emptyHint });
   } catch (err) {
     next(err);
   }

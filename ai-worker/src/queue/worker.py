@@ -40,6 +40,7 @@ def _agent_log(location: str, message: str, data: dict, hypothesis_id: str = "")
     import json
     import os
     payload = {"id": f"log_{int(__import__('time').time()*1000)}", "timestamp": int(__import__('time').time()*1000), "location": location, "message": message, "data": data, "hypothesisId": hypothesis_id}
+    line = json.dumps(payload, ensure_ascii=False) + "\n"
     try:
         log_path = os.environ.get("DEBUG_LOG_PATH")
         if not log_path:
@@ -48,9 +49,29 @@ def _agent_log(location: str, message: str, data: dict, hypothesis_id: str = "")
             log_path = os.path.join(repo_root, ".cursor", "debug.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         with open(log_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            f.write(line)
     except Exception:
         pass
+    if settings.backend_url and settings.service_token:
+        def _push():
+            try:
+                import httpx
+                with httpx.Client(timeout=5.0) as client:
+                    client.post(
+                        f"{settings.backend_url}/api/admin/debug-log-push",
+                        json={"line": line},
+                        headers={"Authorization": f"Bearer {settings.service_token}", "Content-Type": "application/json"},
+                    )
+            except Exception:
+                pass
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.run_in_executor(None, _push)
+            else:
+                _push()
+        except Exception:
+            _push()
 # #endregion
 
 # Version tracking
@@ -457,10 +478,16 @@ async def process_crawl_job(payload: dict) -> dict:
     Returns:
         Result dict with summary
     """
-    # #region agent log - Production debug logging
-    logger.info(f"[CRAWL] process_crawl_job STARTED with payload: {payload}")
+    # #region agent log
+    _agent_log(
+        "worker.py:process_crawl_job_start",
+        "job started",
+        {"source_id": payload.get("source_id"), "source_url": payload.get("source_url"), "ingest_run_id": payload.get("ingest_run_id")},
+        "H0",
+    )
     # #endregion
-    
+    logger.info(f"[CRAWL] process_crawl_job STARTED with payload: {payload}")
+
     source_id = payload.get("source_id")
     source_url = payload.get("source_url")
     source_type = payload.get("source_type", "rss")
@@ -633,6 +660,24 @@ async def process_crawl_job(payload: dict) -> dict:
                 error_message=str(err)[:500],
             )
         raise RuntimeError(f"Backend batch ingest failed: {err}")
+
+    # Finalize IngestRun with accumulated totals from ALL batches
+    if ingest_run_id:
+        await update_ingest_run(
+            ingest_run_id, "success",
+            events_found=len(parsed_events),
+            events_created=summary.get("created", 0),
+            events_updated=summary.get("updated", 0),
+            events_skipped=summary.get("unchanged", 0) + summary.get("ignored", 0),
+        )
+        _agent_log("worker.py:final_ingest_run_update", "IngestRun finalized", {
+            "ingest_run_id": ingest_run_id,
+            "events_found": len(parsed_events),
+            "created": summary.get("created", 0),
+            "updated": summary.get("updated", 0),
+            "unchanged": summary.get("unchanged", 0),
+            "ignored": summary.get("ignored", 0),
+        }, "H3")
 
     return _content_type_result({
         "source_id": source_id,
