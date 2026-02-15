@@ -431,12 +431,12 @@ export async function processSingleCandidate(
         fieldMappings.push({ candidateField: 'ai_postal_code', dbField: 'postal_code', value: ai.extracted_postal_code });
       }
       
-      // AI-extracted price (use == null, not falsy!)
+      // AI-extracted price (override if no price known OR price_type still "unknown")
       const priceConfidence = ai.price_confidence || 0;
-      if (ai.extracted_price_type && priceConfidence >= 0.7 && (existingEvent as any).price_min == null) {
+      if (ai.extracted_price_type && priceConfidence >= 0.7 && ((existingEvent as any).price_min == null || (existingEvent as any).price_type === 'unknown')) {
         if (ai.extracted_price_type === 'free' || ai.extracted_price_type === 'donation') {
           fieldMappings.push({ candidateField: 'ai_price_min', dbField: 'price_min', value: 0 });
-          fieldMappings.push({ candidateField: 'ai_price_type', dbField: 'price_type', value: 'free' });
+          fieldMappings.push({ candidateField: 'ai_price_type', dbField: 'price_type', value: ai.extracted_price_type === 'donation' ? 'donation' : 'free' });
         } else if (ai.extracted_price_min != null) {
           fieldMappings.push({ candidateField: 'ai_price_min', dbField: 'price_min', value: ai.extracted_price_min });
           fieldMappings.push({ candidateField: 'ai_price_type', dbField: 'price_type', value: 'paid' });
@@ -611,10 +611,10 @@ export async function processSingleCandidate(
     priceType = priceMin === 0 ? 'free' : 'paid';
   }
   
-  // AI-extracted price (only if normalizer didn't detect it -- use == null!)
-  if (priceMin == null && aiClassification?.extracted_price_type && (aiClassification.price_confidence ?? 0) >= 0.7) {
+  // AI-extracted price (if normalizer didn't detect it OR price_type is still "unknown")
+  if ((priceMin == null || priceType === 'unknown') && aiClassification?.extracted_price_type && (aiClassification.price_confidence ?? 0) >= 0.7) {
     if (aiClassification.extracted_price_type === 'free' || aiClassification.extracted_price_type === 'donation') {
-      priceType = aiClassification.extracted_price_type === 'donation' ? 'free' : 'free';
+      priceType = aiClassification.extracted_price_type === 'donation' ? 'donation' : 'free';
       priceMin = 0;
     } else if (aiClassification.extracted_price_min != null) {
       priceType = 'paid';
@@ -704,7 +704,7 @@ export async function processSingleCandidate(
       if (!candidate.data.city && aiClassification.extracted_city) aiExtractedFields.add('city');
       if (!candidate.data.postal_code && aiClassification.extracted_postal_code) aiExtractedFields.add('postal_code');
     }
-    if ((aiClassification.price_confidence ?? 0) >= 0.7 && candidate.data.price_min == null) {
+    if ((aiClassification.price_confidence ?? 0) >= 0.7 && (candidate.data.price_min == null || priceType === 'unknown')) {
       aiExtractedFields.add('price_min');
       aiExtractedFields.add('price_type');
     }
