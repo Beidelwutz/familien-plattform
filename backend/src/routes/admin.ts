@@ -2133,6 +2133,51 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
       }
     });
 
+    // Human-readable labels for merge reasons (why an event was skipped)
+    const mergeReasonLabels: Record<string, string> = {
+      locked: 'Feld gesperrt',
+      source_priority_lower: 'Quelle hat niedrigere Priorität',
+      stale_data: 'Bestehende Daten veraltet (Stale)',
+      null_value: 'Kein Wert (null)',
+      unchanged: 'Wert unverändert',
+      new_field: 'Neues Feld',
+    };
+
+    function buildReasonSummary(ingestResult: unknown): string[] {
+      const reasons = (ingestResult as { merge_reasons?: Array<{ field: string; reason: string; candidate_source?: string }> })?.merge_reasons || [];
+      const lines: string[] = [];
+      for (const r of reasons) {
+        const label = mergeReasonLabels[r.reason] || r.reason;
+        const fieldPart = r.field && r.field !== '*' ? ` (${r.field})` : '';
+        if (r.reason === 'locked' && r.candidate_source && r.candidate_source !== 'error') {
+          lines.push(`Fehler: ${r.candidate_source}`);
+        } else {
+          lines.push(`${label}${fieldPart}`);
+        }
+      }
+      if (lines.length === 0) {
+        lines.push('Keine Details gespeichert');
+      }
+      return lines;
+    }
+
+    // Get skipped items (unchanged + ignored) for "why was this event skipped" view
+    const skippedItems = await prisma.rawEventItem.findMany({
+      where: {
+        run_id: id,
+        ingest_status: { in: ['unchanged', 'ignored'] },
+      },
+      take: 200,
+      orderBy: { created_at: 'asc' },
+      select: {
+        id: true,
+        fingerprint: true,
+        ingest_status: true,
+        ingest_result: true,
+        extracted_fields: true,
+      }
+    });
+
     res.json({
       success: true,
       data: {
@@ -2144,6 +2189,14 @@ router.get('/ingest-runs/:id', async (req: Request, res: Response, next: NextFun
           status: item.ingest_status,
           title: (item.extracted_fields as any)?.title || 'Unknown',
           merge_reasons: (item.ingest_result as any)?.merge_reasons || [],
+        })),
+        skipped_items: skippedItems.map(item => ({
+          id: item.id,
+          fingerprint: item.fingerprint,
+          status: item.ingest_status,
+          title: (item.extracted_fields as any)?.title || 'Unbekannt',
+          merge_reasons: (item.ingest_result as any)?.merge_reasons || [],
+          reason_summary: buildReasonSummary(item.ingest_result),
         })),
       }
     });
