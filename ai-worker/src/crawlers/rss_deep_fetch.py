@@ -202,7 +202,34 @@ class SelectiveDeepFetcher:
         if self._client:
             await self._client.aclose()
             self._client = None
-    
+
+    @staticmethod
+    def _extract_visible_text(soup) -> Optional[str]:
+        """Extract cleaned visible text from a page, removing nav/footer/scripts.
+
+        Returns up to 6000 chars of content-relevant text that can be passed
+        to the AI classifier as additional context.
+        """
+        import re as _re
+        from bs4 import BeautifulSoup as _BS
+
+        clone = _BS(str(soup), 'html.parser')
+        for tag_name in ('script', 'style', 'nav', 'footer', 'aside',
+                         'noscript', 'iframe', 'svg', 'form', 'header'):
+            for el in clone.find_all(tag_name):
+                el.decompose()
+        for el in clone.find_all(True, attrs={
+            'class': _re.compile(r'cookie|consent|banner|popup|modal|gdpr|breadcrumb|footer|navigation', _re.I),
+        }):
+            el.decompose()
+        for el in clone.find_all(True, attrs={
+            'id': _re.compile(r'cookie|consent|banner|popup|modal|gdpr|breadcrumb|footer|navigation', _re.I),
+        }):
+            el.decompose()
+        text = clone.get_text(separator='\n', strip=True)
+        text = _re.sub(r'\n{3,}', '\n\n', text)
+        return text[:6000] if text and len(text) > 30 else None
+
     def needs_deep_fetch(self, event: ParsedEvent) -> bool:
         """
         Check if event needs deep-fetch based on missing fields.
@@ -297,18 +324,23 @@ class SelectiveDeepFetcher:
                 logger.debug(f"No structured data found on {url}")
                 return None
             
-            # OG-Image fallback: if no image from extraction, try og:image
-            if not event.image_url:
-                try:
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(html, 'html.parser')
+            # Extract full visible text from the page for AI context
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, 'html.parser')
+
+                # OG-Image fallback
+                if not event.image_url:
                     og_image = soup.find('meta', property='og:image')
                     if og_image and og_image.get('content'):
                         img_url = og_image['content']
                         if img_url.startswith(('http://', 'https://')):
                             event.image_url = img_url
-                except Exception:
-                    pass  # Best-effort, don't fail on og:image extraction
+
+                # Store cleaned visible text so AI has full context
+                event.full_text = self._extract_visible_text(soup)
+            except Exception:
+                pass
             
             return event
             
@@ -341,6 +373,7 @@ class SelectiveDeepFetcher:
             organizer_name=pick(custom.organizer_name, structured.organizer_name),
             price=pick_f(custom.price, structured.price),
             currency=custom.currency or structured.currency,
+            full_text=pick(custom.full_text, structured.full_text),
         )
     
     def validate_extracted_date(
@@ -385,10 +418,15 @@ class SelectiveDeepFetcher:
         - Structured data dates override RSS 'published' dates
         - Validate dates before using
         """
-        # Description: only if RSS is empty or very short
+        # Description: prefer the richer/longer text (detail page usually has more
+        # info than the short RSS summary – price, registration, meeting point, etc.)
         if extracted.description:
-            if not event.description or len(event.description) < 50:
-                event.description = extracted.description[:5000]
+            if not event.description:
+                event.description = extracted.description[:8000]
+            elif len(extracted.description) > len(event.description) * 1.5:
+                event.description = extracted.description[:8000]
+            elif len(event.description) < 100:
+                event.description = extracted.description[:8000]
         
         # Start datetime: prefer structured data if valid
         if extracted.start_datetime:
@@ -432,6 +470,10 @@ class SelectiveDeepFetcher:
         # Organizer: only if missing
         if not event.organizer_name and extracted.organizer_name:
             event.organizer_name = extracted.organizer_name
+
+        # Full page text: carry over from deep-fetch for AI context
+        if extracted.full_text:
+            event.detail_page_text = extracted.full_text
         
         # Mark as deep-fetched
         event.deep_fetched = True

@@ -40,6 +40,8 @@ class ParsedEvent:
     organizer_name: Optional[str] = None
     price: Optional[float] = None
     currency: Optional[str] = None
+    # Full visible text from the detail page (set by deep-fetch)
+    detail_page_text: Optional[str] = None
     # Flag to track if deep-fetch was attempted/successful
     deep_fetched: bool = False
 

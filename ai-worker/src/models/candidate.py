@@ -76,12 +76,20 @@ class CandidateData:
     booking_url: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
+
+    # Full visible text from the event detail page (for AI context only,
+    # not persisted to the database). Allows the AI to extract price,
+    # registration status, meeting point etc. even when the description
+    # field is incomplete.
+    detail_page_text: Optional[str] = None
     
     def to_dict(self) -> dict:
-        """Convert to dict, excluding None values."""
+        """Convert to dict, excluding None values and AI-only fields."""
         result = {}
+        # detail_page_text is AI-internal context, not sent to the backend
+        skip_fields = {'detail_page_text'}
         for key, value in asdict(self).items():
-            if value is not None:
+            if value is not None and key not in skip_fields:
                 result[key] = value
         return result
 

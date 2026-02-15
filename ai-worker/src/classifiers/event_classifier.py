@@ -129,8 +129,10 @@ CLASSIFICATION_PROMPT_V4 = """Analysiere das Event für Familien mit Kindern.
 EVENT-DATEN:
 Titel: {title}
 Beschreibung: {description}
-Ort: {location}
+{detail_page_section}Ort: {location}
 Preis: {price}
+
+WICHTIG: Wenn ein "Vollständiger Seitentext" vorhanden ist, nutze ihn als zusätzliche Informationsquelle. Er enthält oft Details zu Preis, Anmeldung, Treffpunkt, Kontakt etc. die in der Beschreibung fehlen. Extrahiere alle relevanten Fakten daraus.
 
 AUFGABEN:
 
@@ -329,8 +331,9 @@ class EventClassifier:
     
     # Maximum input lengths to prevent token overflow
     MAX_TITLE_LENGTH = 200
-    MAX_DESCRIPTION_LENGTH = 5000
+    MAX_DESCRIPTION_LENGTH = 8000
     MAX_LOCATION_LENGTH = 300
+    MAX_DETAIL_PAGE_TEXT_LENGTH = 4000
     
     # Confidence thresholds for model escalation
     ESCALATE_CONFIDENCE_MIN = 0.60
@@ -364,16 +367,28 @@ class EventClassifier:
         title = self._sanitize_input(event.get("title", ""), self.MAX_TITLE_LENGTH)
         description = self._sanitize_input(event.get("description", ""), self.MAX_DESCRIPTION_LENGTH)
         location = self._sanitize_input(event.get("location_address", ""), self.MAX_LOCATION_LENGTH)
+        detail_page_text = self._sanitize_input(
+            event.get("detail_page_text", ""), self.MAX_DETAIL_PAGE_TEXT_LENGTH
+        )
         
         # Redact PII
         title = PIIRedactor.redact_for_ai(title)
         description = PIIRedactor.redact_for_ai(description)
+        if detail_page_text:
+            detail_page_text = PIIRedactor.redact_for_ai(detail_page_text)
+
+        # Build the optional detail page section for the prompt
+        if detail_page_text and len(detail_page_text) > 50:
+            detail_page_section = f"Vollständiger Seitentext (Detail-Seite):\n{detail_page_text}\n\n"
+        else:
+            detail_page_section = ""
         
         # Prepare user prompt with current date for datetime extraction
         current_date = datetime.now().strftime("%Y-%m-%d")
         user_prompt = CLASSIFICATION_PROMPT_V4.format(
             title=title or "Unbekannt",
             description=description or "Keine Beschreibung",
+            detail_page_section=detail_page_section,
             location=location or "Unbekannt",
             price=self._format_price(event),
             current_date=current_date

@@ -451,25 +451,55 @@ class HeuristicExtractor:
 
     # ── Description ────────────────────────────────────────────────
 
+    # Event content container selectors (shared with structured_data.py)
+    _EVENT_CONTENT_SELECTORS = [
+        '.vevent',
+        '#description',
+        '.event-detail',
+        '.event-content',
+        '.event-description',
+        'article.event',
+        '[itemtype*="Event"]',
+        '.detail-contents',
+    ]
+
     def _extract_description(self, soup: BeautifulSoup) -> Optional[str]:
-        og = soup.find('meta', property='og:description')
-        if og and og.get('content'):
-            desc = og['content'].strip()
-            if len(desc) > 20:
-                return desc[:5000]
-        meta = soup.find('meta', attrs={'name': 'description'})
-        if meta and meta.get('content'):
-            desc = meta['content'].strip()
-            if len(desc) > 20:
-                return desc[:5000]
+        """Extract full event description from page content.
+
+        Strategy (in priority order):
+        1. Event-specific content containers (e.g. .vevent, #description)
+        2. All <p> tags from main/article/body combined
+        3. og:description / meta description (only if > 80 chars, to skip
+           generic site-level descriptions)
+        """
+        # 1. Look for known event content containers
+        for selector in self._EVENT_CONTENT_SELECTORS:
+            container = soup.select_one(selector)
+            if container:
+                text = container.get_text(separator='\n', strip=True)
+                if len(text) > 50:
+                    return text[:8000]
+
+        # 2. Collect ALL paragraphs from main content area
         main = soup.find('main') or soup.find('article') or soup.find('body')
         if main:
             paragraphs = main.find_all('p')
             if paragraphs:
-                longest = max(paragraphs, key=lambda p: len(p.get_text(strip=True)))
-                text = longest.get_text(strip=True)
-                if len(text) > 30:
-                    return text[:5000]
+                parts = [p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 10]
+                combined = '\n'.join(parts)
+                if len(combined) > 50:
+                    return combined[:8000]
+
+        # 3. Fallback: og:description / meta description (only if specific enough)
+        for meta_tag in [
+            soup.find('meta', property='og:description'),
+            soup.find('meta', attrs={'name': 'description'}),
+        ]:
+            if meta_tag and meta_tag.get('content'):
+                desc = meta_tag['content'].strip()
+                if len(desc) > 80:
+                    return desc[:8000]
+
         return None
 
     # ── Price (new) ────────────────────────────────────────────────

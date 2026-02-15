@@ -176,6 +176,9 @@ def parsed_event_to_candidate(
         elif not description:
             description = f"Veranstalter: {organizer_name.strip()}"
 
+    # Detail page text: full visible content from the deep-fetched event page
+    detail_page_text = getattr(event, 'detail_page_text', None)
+
     # Build CandidateData with ALL available fields for AI and backend
     data = CandidateData(
         title=event.title,
@@ -198,6 +201,7 @@ def parsed_event_to_candidate(
         booking_url=event.source_url or raw.get("url") or raw.get("booking_url"),
         contact_email=contact_email,
         contact_phone=contact_phone,
+        detail_page_text=detail_page_text,
     )
     
     # Compute raw hash from data
@@ -245,6 +249,7 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 'description': candidate.data.description,
                 'location_address': candidate.data.address,
                 'price_type': getattr(candidate.data, 'price_type', None),
+                'detail_page_text': candidate.data.detail_page_text,
             }
             
             # Step 1: Rule-Filter BEFORE AI
