@@ -76,6 +76,7 @@ class CandidateData:
     booking_url: Optional[str] = None
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
+    organizer_website: Optional[str] = None  # Veranstalter-Webseite (nicht Kalender-Link)
 
     # Full visible text from the event detail page (for AI context only,
     # not persisted to the database). Allows the AI to extract price,
@@ -137,9 +138,20 @@ class AIClassification:
     extracted_city: Optional[str] = None
     extracted_postal_code: Optional[str] = None
     venue_confidence: float = 0.0
-    
+
+    # AI-extracted contact / organizer
+    extracted_organizer_website: Optional[str] = None  # URL der Veranstalter-Webseite
+    extracted_contact_email: Optional[str] = None
+    extracted_contact_phone: Optional[str] = None
+    contact_confidence: float = 0.0
+    extracted_organizer_directions: Optional[str] = None  # Wegbeschreibung vom Veranstalter
+
     # AI-extracted cancellation / availability
     is_cancelled_or_postponed: Optional[bool] = None
+    
+    # AI-improved description for event page (simple HTML)
+    improved_description: Optional[str] = None
+    description_improvement_confidence: float = 0.0
     
     # AI-generated summaries
     ai_summary_short: Optional[str] = None  # max 300 chars

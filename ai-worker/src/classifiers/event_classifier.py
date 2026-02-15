@@ -91,8 +91,19 @@ class ClassificationResult:
     extracted_postal_code: Optional[str] = None
     venue_confidence: float = 0.0
     
+    # AI-extracted contact / organizer
+    extracted_organizer_website: Optional[str] = None  # URL der Veranstalter-Webseite (nicht Kalender-Link)
+    extracted_contact_email: Optional[str] = None
+    extracted_contact_phone: Optional[str] = None
+    contact_confidence: float = 0.0
+    extracted_organizer_directions: Optional[str] = None  # Wegbeschreibung vom Veranstalter (z. B. "direkt zwischen X und Y")
+    
     # AI-extracted cancellation / availability
     is_cancelled_or_postponed: Optional[bool] = None
+    
+    # AI-improved description for event page (grammar, structure, emphasis, no filler)
+    improved_description: Optional[str] = None  # Simple HTML: <p>, <strong>, <br/>
+    description_improvement_confidence: float = 0.0
     
     # Flags for processing
     flags: dict = field(default_factory=lambda: {
@@ -237,9 +248,28 @@ AUFGABEN:
     - Beispiel: "Prinz-Max-Palais, Karlstraße 10, 76133 Karlsruhe"
       -> venue_name: "Prinz-Max-Palais", address_line: "Karlstraße 10", city: "Karlsruhe", postal_code: "76133"
 
-18. ABSAGE-ERKENNUNG:
+18. VERANSTALTER-WEBSEITE & KONTAKT (aus Beschreibung/Veranstalter-Block):
+    - extracted_organizer_website: URL der Webseite des Veranstalters (z.B. www.verein.de), NICHT Kalender-/Aggregator-Links (z.B. karlsruhe.de, veranstaltungskalender). null wenn nur Kalender-Link oder unbekannt.
+    - extracted_contact_email: E-Mail-Adresse des Veranstalters (nur wenn klar erkennbar). null sonst.
+    - extracted_contact_phone: Telefonnummer des Veranstalters (nur wenn klar erkennbar). null sonst.
+    - contact_confidence: 0.0-1.0
+    - extracted_organizer_directions: Wegbeschreibung oder Ortsbeschreibung vom Veranstalter (z. B. "direkt zwischen Altem Schlachthof und Otto-D.-Park", "am Alten Gaswerk Ost", Anfahrtshinweise). Nur aus Veranstalter-Abschnitt oder Beschreibung extrahieren. null wenn nicht vorhanden.
+
+19. ABSAGE-ERKENNUNG:
     - is_cancelled_or_postponed: true/false
     - Suche nach: "abgesagt", "entfällt", "verschoben", "ausverkauft", "fällt aus"
+
+20. BESCHREIBUNG FÜR EVENTSEITE ÜBERARBEITEN (improved_description):
+    - Überarbeite die Event-Beschreibung so, dass sie auf der Eventseite gut lesbar ist.
+    - Korrigiere Grammatik und Rechtschreibung.
+    - Hebe wichtige Begriffe (z.B. Veranstaltungstitel, Ort, Altersangabe, Besonderheiten) mit <strong>...</strong> hervor.
+    - Gliedere in klare Absätze: umschließe jeden Absatz mit <p>...</p>. Mehrere Absätze nacheinander.
+    - Entferne Fülltexte, Wiederholungen und Sinnloses – jeder Satz soll Mehrwert haben.
+    - Behalte alle sachlichen Infos (Datum, Uhrzeit, Ort, Anmeldung, Preis, Kontakt, Altersangabe).
+    - Ausgabe NUR mit erlaubten Tags: <p>, </p>, <strong>, </strong>, <br/>. Keine anderen HTML-Tags.
+    - improved_description: die überarbeitete Beschreibung als einfaches HTML (max 6000 Zeichen).
+    - description_improvement_confidence: 0.0-1.0 wie gut die Überarbeitung gelungen ist.
+    - Wenn die Originalbeschreibung schon sehr kurz oder unbrauchbar ist, gib null für improved_description und 0.0 für description_improvement_confidence.
 
 Antworte NUR mit diesem JSON:
 {{
@@ -280,7 +310,14 @@ Antworte NUR mit diesem JSON:
   "extracted_city": "Karlsruhe",
   "extracted_postal_code": "76131",
   "venue_confidence": 0.85,
-  "is_cancelled_or_postponed": false
+  "extracted_organizer_website": "https://www.bibliothek.karlsruhe.de",
+  "extracted_contact_email": "info@example.de",
+  "extracted_contact_phone": null,
+  "contact_confidence": 0.8,
+  "extracted_organizer_directions": "Im Prinz-Max-Palais, Eingang über den Innenhof.",
+  "is_cancelled_or_postponed": false,
+  "improved_description": "<p>Die <strong>Kinder- und Jugendbibliothek</strong> im Prinz-Max-Palais lädt ein.</p><p>Ort: Kaiserstraße 42, 76131 Karlsruhe. <strong>Eintritt frei.</strong></p>",
+  "description_improvement_confidence": 0.85
 }}"""
 
 
@@ -327,7 +364,14 @@ Bitte antworte NUR mit validem JSON im korrekten Format:
   "extracted_city": null,
   "extracted_postal_code": null,
   "venue_confidence": 0.0,
-  "is_cancelled_or_postponed": false
+  "extracted_organizer_website": null,
+  "extracted_contact_email": null,
+  "extracted_contact_phone": null,
+  "contact_confidence": 0.0,
+  "extracted_organizer_directions": null,
+  "is_cancelled_or_postponed": false,
+  "improved_description": null,
+  "description_improvement_confidence": 0.0
 }}"""
 
 
@@ -685,6 +729,15 @@ class EventClassifier:
             extracted_city=data.get("extracted_city"),
             extracted_postal_code=data.get("extracted_postal_code"),
             venue_confidence=data.get("venue_confidence", 0.0),
+            # Contact / organizer
+            extracted_organizer_website=data.get("extracted_organizer_website"),
+            extracted_contact_email=data.get("extracted_contact_email"),
+            extracted_contact_phone=data.get("extracted_contact_phone"),
+            contact_confidence=data.get("contact_confidence", 0.0),
+            extracted_organizer_directions=data.get("extracted_organizer_directions"),
+            # Improved description for event page
+            improved_description=data.get("improved_description"),
+            description_improvement_confidence=data.get("description_improvement_confidence", 0.0),
             # Cancellation
             is_cancelled_or_postponed=data.get("is_cancelled_or_postponed"),
             # Metadata

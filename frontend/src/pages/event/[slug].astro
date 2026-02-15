@@ -497,8 +497,8 @@ const completenessMsg = event ? getCompletenessMessage(event.completeness_score)
               )}
             </div>
 
-            {/* Veranstalter & Kontakt */}
-            {(event.provider || event.contact_email || event.contact_phone || event.booking_url) && (
+            {/* Veranstalter & Kontakt – alle vorhandenen Infos als mehrere Einträge */}
+            {(event.provider || event.organizer_website || event.contact_email || event.contact_phone || event.booking_url || event.organizer_directions) && (
               <div class="bg-white rounded-2xl shadow-card p-6">
                 <h3 class="font-semibold text-gray-900 mb-3">Veranstalter & Kontakt</h3>
                 
@@ -512,6 +512,12 @@ const completenessMsg = event ? getCompletenessMessage(event.completeness_score)
                 )}
                 
                 <ul class="space-y-2 text-sm text-gray-600">
+                  {event.organizer_website && (
+                    <li class="flex items-center gap-2">
+                      <span>🌐</span>
+                      <a href={event.organizer_website} target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:underline">Zur Website</a>
+                    </li>
+                  )}
                   {event.contact_email && (
                     <li class="flex items-center gap-2">
                       <span>✉️</span>
@@ -531,6 +537,12 @@ const completenessMsg = event ? getCompletenessMessage(event.completeness_score)
                     </li>
                   )}
                 </ul>
+                {event.organizer_directions && (
+                  <div class="mt-3 pt-3 border-t border-gray-100">
+                    <h4 class="font-medium text-gray-900 mb-1 text-sm">Wegbeschreibung vom Veranstalter</h4>
+                    <p class="text-sm text-gray-600 whitespace-pre-line">{event.organizer_directions}</p>
+                  </div>
+                )}
               </div>
             )}
 

@@ -104,16 +104,8 @@ class Geocoder:
             return None
     
     def _normalize_address(self, address: str) -> str:
-        """Normalize address for better matching."""
-        # Basic normalization
-        address = address.strip()
-        
-        # Add Karlsruhe if not present and looks like a local address
-        if 'karlsruhe' not in address.lower() and 'ka-' not in address.lower():
-            if any(char.isdigit() for char in address):  # Looks like street address
-                address = f"{address}, Karlsruhe, Deutschland"
-        
-        return address
+        """Normalize address for better matching (no city/region fallback)."""
+        return address.strip()
     
     def _calculate_confidence(self, location) -> float:
         """Calculate confidence score based on result type."""

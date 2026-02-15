@@ -35,6 +35,31 @@ from src.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Domains/Keywords that indicate a calendar/aggregator page – not used as booking_url
+_CALENDAR_AGGREGATOR_PATTERNS = (
+    "karlsruhe.de",
+    "kalender",
+    "veranstaltungskalender",
+    "eventkalender",
+    "events.karlsruhe",
+)
+
+
+def _is_calendar_aggregator_url(url: Optional[str]) -> bool:
+    """Return True if url looks like a calendar/aggregator (e.g. Stadt Karlsruhe Kalender), not a booking page."""
+    if not url or not isinstance(url, str):
+        return False
+    u = url.lower().strip()
+    return any(p in u for p in _CALENDAR_AGGREGATOR_PATTERNS)
+
+
+def _pick_booking_url(source_url: Optional[str], raw_url: Optional[str], raw_booking_url: Optional[str]) -> Optional[str]:
+    """Pick best booking URL: never use calendar/aggregator (e.g. RSS) as booking link."""
+    for u in (raw_booking_url, raw_url, source_url):
+        if u and isinstance(u, str) and u.strip() and not _is_calendar_aggregator_url(u):
+            return u.strip()
+    return None
+
 # #region agent log
 def _agent_log(location: str, message: str, data: dict, hypothesis_id: str = ""):
     import json
@@ -159,10 +184,10 @@ def parsed_event_to_candidate(
     if contact_phone and not isinstance(contact_phone, str):
         contact_phone = None
 
-    # Stadt/PLZ aus raw_data oder Default
-    city = raw.get("city") or "Karlsruhe"
-    if not isinstance(city, str):
-        city = "Karlsruhe"
+    # Stadt/PLZ aus raw_data (kein automatischer Karlsruhe-Fallback)
+    city = raw.get("city")
+    if city is not None and not isinstance(city, str):
+        city = None
     postal_code = raw.get("postal_code")
     if postal_code is not None and not isinstance(postal_code, str):
         postal_code = str(postal_code) if postal_code else None
@@ -198,7 +223,7 @@ def parsed_event_to_candidate(
         age_max=None,
         categories=None,
         images=images,
-        booking_url=event.source_url or raw.get("url") or raw.get("booking_url"),
+        booking_url=_pick_booking_url(event.source_url, raw.get("url"), raw.get("booking_url")),
         contact_email=contact_email,
         contact_phone=contact_phone,
         detail_page_text=detail_page_text,
@@ -325,6 +350,14 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 extracted_city=classification_result.extracted_city,
                 extracted_postal_code=classification_result.extracted_postal_code,
                 venue_confidence=classification_result.venue_confidence or 0.0,
+                # Contact / organizer
+                extracted_organizer_website=classification_result.extracted_organizer_website,
+                extracted_contact_email=classification_result.extracted_contact_email,
+                extracted_contact_phone=classification_result.extracted_contact_phone,
+                contact_confidence=classification_result.contact_confidence or 0.0,
+                extracted_organizer_directions=classification_result.extracted_organizer_directions,
+                improved_description=classification_result.improved_description,
+                description_improvement_confidence=classification_result.description_improvement_confidence or 0.0,
                 # Cancellation
                 is_cancelled_or_postponed=classification_result.is_cancelled_or_postponed,
                 # AI-generated summaries

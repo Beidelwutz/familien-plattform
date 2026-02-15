@@ -394,6 +394,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
                     <p class="text-sm font-medium text-red-700">Fehler bei der Verarbeitung</p>
                     <p id="error-message" class="text-sm text-red-600 mt-1"></p>
                     <p id="error-step" class="text-xs text-red-500 mt-2"></p>
+                    <p id="error-hint" class="text-xs text-amber-700 mt-2 hidden"></p>
                   </div>
                 </div>
 
@@ -769,6 +770,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // OpenAI: Block Batch if no connection or quota exceeded
   let openaiOk = true;
+  let workerReachable = true; // false = diagnostics failed because worker unreachable
   let lastPendingCount = 0;
 
   // Heartbeat tracking for reliability
@@ -1331,6 +1333,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       el.startBatchBtn.disabled = true;
       el.btnHint.textContent = 'Verarbeitung laeuft...';
       el.btnHint.classList.remove('hidden');
+    } else if (!workerReachable) {
+      el.startBatchBtn.disabled = true;
+      el.btnHint.textContent = 'AI Worker nicht erreichbar – Batch nicht moeglich';
+      el.btnHint.classList.remove('hidden');
     } else if (!openaiOk) {
       el.startBatchBtn.disabled = true;
       el.btnHint.textContent = 'OpenAI nicht verfuegbar – Batch nicht moeglich';
@@ -1796,7 +1802,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
         cardClass += ' field-card--changed';
         const oldVal = f.format ? f.format(diffEntry.old_value) : diffEntry.old_value;
         const newVal = f.format ? f.format(diffEntry.new_value) : diffEntry.new_value;
-        valueHtml = `<span class="text-gray-400 line-through text-xs">${escapeHtml(String(oldVal || '--'))}</span> <span class="text-amber-700">${escapeHtml(String(newVal || '--'))}</span>`;
+        valueHtml = `<span class="text-gray-400 line-through">${escapeHtml(String(oldVal || '--'))}</span> <span class="text-green-700 font-medium">${escapeHtml(String(newVal || '--'))}</span>`;
         badges += '<span class="ai-badge">AI</span>';
       } else {
         valueHtml = displayVal === null || displayVal === undefined || displayVal === '' 
@@ -1950,8 +1956,19 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     }
     
     section.classList.remove('hidden');
-    document.getElementById('error-message').textContent = error.message || 'Unbekannter Fehler';
+    const msg = error.message || 'Unbekannter Fehler';
+    const isQuota = error.type === 'ai_fallback' || /Kontingent|quota|429|insufficient_quota/i.test(msg);
+    document.getElementById('error-message').textContent = isQuota
+      ? 'OpenAI-Kontingent erschöpft – die API lehnt Anfragen ab (nicht unser App-Budget).'
+      : msg;
     document.getElementById('error-step').textContent = `Schritt: ${error.step || 'unbekannt'} | ${error.retryable ? 'Wiederholbar' : 'Nicht wiederholbar'}`;
+    const hintEl = document.getElementById('error-hint');
+    if (isQuota && hintEl) {
+      hintEl.textContent = '→ Unter platform.openai.com einloggen → Billing → Zahlungsmethode hinzufügen bzw. Nutzungslimit anheben. Danach Batch erneut starten.';
+      hintEl.classList.remove('hidden');
+    } else if (hintEl) {
+      hintEl.classList.add('hidden');
+    }
   }
 
   // ========================================
@@ -2592,16 +2609,36 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
   // ========================================
   // JOB COMPLETION
   // ========================================
-  function onJobComplete(data) {
+  async function onJobComplete(data) {
     stopPolling();
     stopElapsedTimer();
     isHistoryMode = true;
     try { sessionStorage.removeItem(AI_WORKER_JOB_KEY); } catch (e) { /* ignore */ }
     
-    // Update UI to history mode
+    // Refetch job so event list has final proposed/diff for "Alle Felder" view.
+    // Kurze Verzoegerung, damit Backend die letzten Event-Updates in Redis geschrieben hat.
+    function doRefetch() {
+      if (!currentJobId || !token) return;
+      fetch(`${API_URL}/api/admin/ai-job-status/${currentJobId}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.ok ? res.json() : null)
+        .then(json => {
+          const jobData = json?.data;
+          if (jobData?.events?.length) {
+            events = jobData.events;
+            renderEventList();
+            if (selectedEventId) {
+              renderDetailPanel();
+            }
+          }
+        })
+        .catch(() => {});
+    }
+    setTimeout(doRefetch, 400);
+    // Falls Redis kurz verzögert: zweiter Versuch
+    setTimeout(doRefetch, 1200);
+    
     renderEventList();
     
-    // Hide progress after a moment
     setTimeout(() => {
       el.progressSection.classList.add('hidden');
     }, 2000);
@@ -2689,8 +2726,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const { data, success } = await res.json();
       
       if (!success || !data.reachable) {
+        workerReachable = false;
         throw new Error('AI-Worker nicht erreichbar');
       }
+      workerReachable = true;
 
       // Worker (inline in Header)
       if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500';
@@ -2726,6 +2765,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       updateButtonState(lastPendingCount);
     } catch (e) {
       console.error('Diagnostics error:', e);
+      const isWorkerUnreachable = /nicht erreichbar|failed to fetch|fetch diagnostics/i.test(String(e?.message || e));
+      if (isWorkerUnreachable) workerReachable = false;
       openaiOk = false;
       updateButtonState(lastPendingCount);
       if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500';

@@ -11,6 +11,7 @@ import { sendEventApprovedEmail, sendEventRejectedEmail } from '../lib/email.js'
 import { AI_THRESHOLDS, calculateCompleteness } from '../lib/eventCompleteness.js';
 import { canPublish } from '../lib/eventQuery.js';
 import { logger } from '../lib/logger.js';
+import { sanitizeImprovedDescriptionHtml, stripHtmlToText } from '../lib/merge.js';
 import { redis, isRedisAvailable } from '../lib/redis.js';
 import { logAdminAction, AuditAction } from '../lib/adminAudit.js';
 
@@ -3228,6 +3229,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
           // ── Guard: skip event when AI returned fallback (quota / network error) ──
           const classifyIsFallback = classification.model === 'fallback';
           const scoreIsFallback = scores.model === 'fallback';
+          // #region agent log
+          _debugLog({ location: 'admin.ts:fallback-check', message: 'fallback guard decision', hypothesisId: 'H1,H4', data: { eventId: event.id, classifyModel: classification.model, scoreModel: scores.model, classifyIsFallback, scoreIsFallback, willSkip: classifyIsFallback || scoreIsFallback, aiSummaryLen: (classification.ai_summary_short || '').length, familyFit: scores.family_fit_score } });
+          // #endregion
           if (classifyIsFallback || scoreIsFallback) {
             const reason = classifyIsFallback
               ? (classification.ai_summary_short || 'AI fallback')
@@ -3350,12 +3354,62 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             } catch { /* ignore parse errors */ }
           }
           
-          // Add extracted location if not already present and confidence >= 0.7
-          if (!event.location_address && extractedLocationAddress && locationConfidence >= 0.7) {
-            updateData.location_address = extractedLocationAddress;
+          // Adresse vom AI nur übernehmen wenn: (1) Event hat keine/platzhalter Adresse,
+          // (2) AI-Konfidenz >= 0.7, (3) AI-Wert ist echte Adresse (Ziffer oder Komma), kein Platzhalter wie "siehe Beschreibung".
+          const ADDRESS_PLACEHOLDER = /^(?:siehe\s+beschreibung|s\.\s*beschreibung|siehe\s+text|s\.\s*text|siehe\s+veranstalter|siehe\s+website|siehe\s+homepage|siehe\s+details|entnehmen\s+sie|siehe\s+veranstaltungsseite)$/i;
+          const isAddressPlaceholder = (s: string) => ADDRESS_PLACEHOLDER.test(s.replace(/\s+/g, ' ').trim());
+          const currentAddr = (event.location_address || '').trim();
+          const hasNoRealAddress = !currentAddr || currentAddr.length < 20 || /^(karlsruhe|ka\-?|stadt\s*karlsruhe)$/i.test(currentAddr);
+          const aiAddr = extractedLocationAddress?.trim() || '';
+          const aiConfident = locationConfidence >= 0.7;
+          const aiNotPlaceholder = aiAddr.length > 0 && !isAddressPlaceholder(aiAddr);
+          const aiLooksLikeAddress = aiNotPlaceholder && (/\d/.test(aiAddr) || aiAddr.includes(','));
+          if (aiConfident && hasNoRealAddress && aiAddr && aiLooksLikeAddress) {
+            updateData.location_address = aiAddr;
+          } else if (aiConfident && hasNoRealAddress && aiAddr && aiNotPlaceholder) {
+            // AI lieferte nur Ortsname – nur Stadtteil setzen, Adresse nicht mit Ortsname überschreiben
+            if (extractedLocationDistrict) updateData.location_district = extractedLocationDistrict;
+          } else if (!currentAddr && aiConfident && aiAddr && aiNotPlaceholder) {
+            updateData.location_address = aiAddr;
           }
           if (!event.location_district && extractedLocationDistrict && locationConfidence >= 0.7) {
             updateData.location_district = extractedLocationDistrict;
+          }
+          
+          // Apply AI-extracted price when event has no/unknown price and AI is confident
+          const priceConf = (classification as any).price_confidence ?? 0;
+          const extractedPriceType = (classification as any).extracted_price_type;
+          const extractedPriceMin = (classification as any).extracted_price_min;
+          const eventPriceType = (event as any).price_type;
+          if (priceConf >= 0.7 && extractedPriceType && (eventPriceType == null || eventPriceType === 'unknown')) {
+            updateData.price_type = String(extractedPriceType).toLowerCase();
+            if (extractedPriceMin != null && typeof extractedPriceMin === 'number') {
+              updateData.price_min = extractedPriceMin;
+            } else if (extractedPriceType === 'free') {
+              updateData.price_min = 0;
+            }
+          }
+          const contactConf = (classification as any).contact_confidence ?? 0;
+          if (contactConf >= 0.7) {
+            const extOrgWeb = (classification as any).extracted_organizer_website;
+            const extEmail = (classification as any).extracted_contact_email;
+            const extPhone = (classification as any).extracted_contact_phone;
+            const extDirections = (classification as any).extracted_organizer_directions;
+            if (extOrgWeb && typeof extOrgWeb === 'string' && extOrgWeb.trim()) updateData.organizer_website = extOrgWeb.trim();
+            if (extEmail && typeof extEmail === 'string' && extEmail.trim()) updateData.contact_email = extEmail.trim();
+            if (extPhone && typeof extPhone === 'string' && extPhone.trim()) updateData.contact_phone = extPhone.trim();
+            if (extDirections && typeof extDirections === 'string' && extDirections.trim()) updateData.organizer_directions = extDirections.trim();
+          }
+          const descImproveConf = (classification as any).description_improvement_confidence ?? 0;
+          if (descImproveConf >= 0.6) {
+            const improved = (classification as any).improved_description;
+            if (improved && typeof improved === 'string' && improved.trim()) {
+              const sanitized = sanitizeImprovedDescriptionHtml(improved.trim());
+              if (sanitized) {
+                updateData.description_long = sanitized;
+                updateData.description_short = stripHtmlToText(sanitized).substring(0, 500);
+              }
+            }
           }
           
           // Update field_provenance for AI-set fields
@@ -3365,6 +3419,10 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             if (d.type === 'added' || d.type === 'changed') {
               newProvenance[field] = 'ai_classify';
             }
+          }
+          if (updateData.price_type != null) {
+            newProvenance.price_type = 'ai_classify';
+            if (updateData.price_min !== undefined) newProvenance.price_min = 'ai_classify';
           }
           updateData.field_provenance = newProvenance;
           
@@ -3376,6 +3434,9 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             where: { id: event.id },
             data: updateData
           });
+          // #region agent log
+          _debugLog({ location: 'admin.ts:after-db-update', message: 'canonicalEvent updated', hypothesisId: 'H2,H3', data: { eventId: event.id, status: updateData.status } });
+          // #endregion
           
           // Create EventRevision for audit trail
           const changedFields = Object.entries(diff)

@@ -114,6 +114,8 @@ export interface Event {
   booking_url?: string;
   contact_email?: string;
   contact_phone?: string;
+  organizer_website?: string;
+  organizer_directions?: string;
   
   // Media
   image_urls?: string[];

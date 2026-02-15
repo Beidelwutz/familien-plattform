@@ -37,6 +37,8 @@ model CanonicalEvent {
   booking_url             String?                   @db.VarChar(500)
   contact_email           String?                   @db.VarChar(200)
   contact_phone           String?                   @db.VarChar(50)
+  organizer_website       String?                   @db.VarChar(500)
+  organizer_directions    String?                   @db.VarChar(500)
   image_urls              Json?                     @default("[]")
   primary_source_id       String?                   @unique
   merged_from             Json?                     @default("[]")

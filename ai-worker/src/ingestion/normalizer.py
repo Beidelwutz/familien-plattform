@@ -177,8 +177,9 @@ class EventNormalizer:
         transit_stop = raw_data.get('transit_stop')
         has_parking = self._detect_parking(raw_data, description)
         
-        # Contact
-        booking_url = self._normalize_url(raw_data.get('booking_url') or raw_data.get('url'))
+        # Contact – booking_url nicht setzen wenn es Kalender/Aggregator-URL ist
+        _raw_booking = self._normalize_url(raw_data.get('booking_url') or raw_data.get('url'))
+        booking_url = None if (_raw_booking and self._is_calendar_aggregator_url(_raw_booking)) else _raw_booking
         contact_email = self._extract_email(raw_data)
         contact_phone = self._extract_phone(raw_data)
         
@@ -285,8 +286,25 @@ class EventNormalizer:
         
         return dt
     
+    # Platzhalter-Texte, die keine echte Adresse sind (z. B. aus RSS)
+    _ADDRESS_PLACEHOLDERS = re.compile(
+        r'^(?:siehe\s+beschreibung|s\.\s*beschreibung|siehe\s+text|s\.\s+text|'
+        r'siehe\s+oben|siehe\s+unten|siehe\s+veranstalter|siehe\s+website|siehe\s+homepage|'
+        r's\.\s*u\.|siehe\s+details|details\s+siehe|s\.\s*d\.|siehe\s+angaben|'
+        r'entnehmen\s+sie|siehe\s+veranstaltungsseite|siehe\s+eventbeschreibung|'
+        r's\.\s*b\.|siehe\s+oben\s*\/\s*unten)$',
+        re.IGNORECASE
+    )
+
+    def _is_address_placeholder(self, address: Optional[str]) -> bool:
+        """Return True if the string is a placeholder (e.g. 'siehe Beschreibung'), not a real address."""
+        if not address or not address.strip():
+            return False
+        cleaned = ' '.join(address.split()).strip()
+        return bool(self._ADDRESS_PLACEHOLDERS.match(cleaned))
+
     def _normalize_address(self, address: str) -> Optional[str]:
-        """Clean and normalize address."""
+        """Clean and normalize address. Returns None for placeholders like 'siehe Beschreibung'."""
         if not address:
             return None
         
@@ -297,7 +315,10 @@ class EventNormalizer:
         if len(address) > 300:
             address = address[:300]
         
-        return address.strip() or None
+        address = address.strip() or None
+        if address and self._is_address_placeholder(address):
+            return None
+        return address
     
     def _extract_price(self, raw_data: dict) -> tuple[str, Optional[float], Optional[float]]:
         """Extract price information with free/donation/paid distinction."""
@@ -407,6 +428,17 @@ class EventNormalizer:
         
         return is_indoor or None, is_outdoor or None
     
+    _CALENDAR_AGGREGATOR_PATTERNS = (
+        'karlsruhe.de', 'kalender', 'veranstaltungskalender', 'eventkalender', 'events.karlsruhe',
+    )
+
+    def _is_calendar_aggregator_url(self, url: Optional[str]) -> bool:
+        """Return True if url is a calendar/aggregator page, not a booking page."""
+        if not url or not isinstance(url, str):
+            return False
+        u = url.lower().strip()
+        return any(p in u for p in self._CALENDAR_AGGREGATOR_PATTERNS)
+
     def _normalize_url(self, url: Any) -> Optional[str]:
         """Normalize and validate URL."""
         if not url or not isinstance(url, str):

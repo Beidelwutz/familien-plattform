@@ -31,6 +31,25 @@ function sanitizePriceType(val: string | null | undefined): PriceType {
   return 'unknown';
 }
 
+/** Erlaubt nur <p>, </p>, <strong>, </strong>, <br/> für AI-improved_description. Entfernt alle anderen Tags und Attribute. */
+export function sanitizeImprovedDescriptionHtml(html: string): string {
+  if (!html || typeof html !== 'string') return '';
+  const maxLen = 8000;
+  let s = html.trim().slice(0, maxLen);
+  // 1) Erlaubte Tags behalten, Attribute entfernen
+  s = s.replace(/<\s*p\s*[^>]*>/gi, '<p>').replace(/<\s*\/p\s*[^>]*>/gi, '</p>');
+  s = s.replace(/<\s*strong\s*[^>]*>/gi, '<strong>').replace(/<\s*\/strong\s*[^>]*>/gi, '</strong>');
+  s = s.replace(/<\s*br\s*[^>]*\/?\s*>/gi, '<br/>');
+  // 2) Alle übrigen Tags entfernen (z. B. script, style, div). Lookahead prüft Zeichen direkt nach "<".
+  s = s.replace(/<(?!p>|\/p>|strong>|\/strong>|br\/>)[^>]+>/g, '');
+  return s.trim() || '';
+}
+
+/** Entfernt HTML-Tags für description_short (reiner Text). */
+export function stripHtmlToText(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 const KEY_FIELDS_FOR_FILL_STATUS = ['location_address', 'start_datetime', 'end_datetime', 'ai_summary_short'] as const;
 
 function buildFieldFillStatus(
@@ -87,6 +106,7 @@ export interface CanonicalCandidate {
     booking_url?: string;
     contact_email?: string;
     contact_phone?: string;
+    organizer_website?: string;
     is_indoor?: boolean;
     is_outdoor?: boolean;
     // Extended AI/worker fields (optional)
@@ -140,6 +160,15 @@ export interface CanonicalCandidate {
       extracted_city?: string | null;
       extracted_postal_code?: string | null;
       venue_confidence?: number;
+      // AI-extracted contact / organizer
+      extracted_organizer_website?: string | null;
+      extracted_contact_email?: string | null;
+      extracted_contact_phone?: string | null;
+      contact_confidence?: number;
+      extracted_organizer_directions?: string | null;
+      // AI-improved description for event page (simple HTML)
+      improved_description?: string | null;
+      description_improvement_confidence?: number;
       // AI-extracted cancellation
       is_cancelled_or_postponed?: boolean;
     };
@@ -337,6 +366,7 @@ export async function processSingleCandidate(
       { candidateField: 'booking_url', dbField: 'booking_url', value: candidate.data.booking_url },
       { candidateField: 'contact_email', dbField: 'contact_email', value: candidate.data.contact_email },
       { candidateField: 'contact_phone', dbField: 'contact_phone', value: candidate.data.contact_phone },
+      { candidateField: 'organizer_website', dbField: 'organizer_website', value: candidate.data.organizer_website },
       { candidateField: 'is_indoor', dbField: 'is_indoor', value: candidate.data.is_indoor },
       { candidateField: 'is_outdoor', dbField: 'is_outdoor', value: candidate.data.is_outdoor },
       { candidateField: 'images', dbField: 'image_urls', value: candidate.data.images },
@@ -628,11 +658,22 @@ export async function processSingleCandidate(
   if (!availabilityStatus && aiClassification?.is_cancelled_or_postponed) {
     availabilityStatus = 'cancelled';
   }
+
+  // AI-überarbeitete Beschreibung für Eventseite (Grammatik, Absätze, Hervorhebungen, ohne Fülltext)
+  let descriptionShort = candidate.data.description?.substring(0, 500) || null;
+  let descriptionLong = candidate.data.description || null;
+  if (aiClassification?.improved_description && (aiClassification.description_improvement_confidence ?? 0) >= 0.6) {
+    const sanitized = sanitizeImprovedDescriptionHtml(aiClassification.improved_description);
+    if (sanitized) {
+      descriptionLong = sanitized;
+      descriptionShort = stripHtmlToText(sanitized).substring(0, 500) || descriptionShort;
+    }
+  }
   
   const eventData = {
     title: candidate.data.title,
-    description_short: candidate.data.description?.substring(0, 500) || null,
-    description_long: candidate.data.description || null,
+    description_short: descriptionShort,
+    description_long: descriptionLong,
     start_datetime: startDatetime,
     end_datetime: endDatetime,
     timezone_original: candidate.data.timezone_original || null,
@@ -641,7 +682,7 @@ export async function processSingleCandidate(
     location_lat: candidate.data.lat || candidate.ai?.geocode?.lat || null,
     location_lng: candidate.data.lng || candidate.ai?.geocode?.lng || null,
     venue_name: venueNameResolved,
-    city: cityResolved || 'Karlsruhe',
+    city: cityResolved ?? null,
     postal_code: postalCodeResolved,
     country_code: candidate.data.country_code || 'DE',
     price_min: priceMin,
@@ -655,6 +696,8 @@ export async function processSingleCandidate(
     booking_url: candidate.data.booking_url || null,
     contact_email: candidate.data.contact_email || null,
     contact_phone: candidate.data.contact_phone || null,
+    organizer_website: candidate.data.organizer_website || aiClassification?.extracted_organizer_website || null,
+    organizer_directions: aiClassification?.extracted_organizer_directions || null,
     image_urls: candidate.data.images || [],
     // Extended AI fields
     age_recommendation_text: candidate.data.age_recommendation_text || aiClassification?.age_recommendation_text || null,
