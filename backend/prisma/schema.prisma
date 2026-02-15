@@ -95,6 +95,7 @@ model CanonicalEvent {
 
   @@index([status, start_datetime])
   @@index([start_datetime])
+  @@index([created_at])
   @@index([provider_id])
   @@index([is_cancelled])
   @@index([age_rating])

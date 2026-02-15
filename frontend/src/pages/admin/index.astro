@@ -4,16 +4,14 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
 ---
 
 <AdminLayout title="Dashboard - kiezling Admin" currentPage="dashboard">
-  <!-- Loading State -->
-  <div id="loading-state" class="flex items-center justify-center py-16">
-    <div class="text-center">
-      <div class="animate-spin inline-block w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full mb-4"></div>
-      <p class="text-gray-500">Lade Dashboard...</p>
-    </div>
+  <!-- Loading indicator (dezent, blockiert nicht das Layout) -->
+  <div id="loading-state" class="flex items-center gap-2 py-2 text-sm text-gray-500 mb-2" aria-live="polite">
+    <div class="animate-spin inline-block w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+    <span>Lade Dashboard-Daten…</span>
   </div>
 
-  <!-- Dashboard Content (hidden until loaded) -->
-  <div id="dashboard-content" class="hidden">
+  <!-- Dashboard Content: sofort sichtbar mit Placeholder (—), Daten füllen wenn Response da ist -->
+  <div id="dashboard-content" class="dashboard-skeleton">
     <script type="application/json" id="teaser-presets-json" set:html={JSON.stringify(TEASER_PRESETS).replace(/</g, '\\u003c')}></script>
     <!-- Page Header -->
     <header class="mb-6">
@@ -387,6 +385,15 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
 
   /* Teaser: Einstellungen aufgeklappt = volle Breite für Formular */
   #teaser-settings-details[open] { width: 100%; }
+
+  /* Progressives Rendering: dezente Skeleton-Animation bis Daten da sind */
+  .dashboard-skeleton .kpi-number:not([data-loaded]) {
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
 </style>
 
 <script>
@@ -502,33 +509,30 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
     }
   }
 
-  // Load all dashboard data
+  // Load dashboard via single aggregate endpoint (1 HTTP call, backend coordinates DB load)
   async function loadDashboardData() {
     try {
-      const [statsRes, dupsRes, attentionRes, trendsRes, pendingAiRes, teaserRes] = await Promise.all([
-        fetchWithAuth(`${API_URL}/api/admin/stats`),
-        fetchWithAuth(`${API_URL}/api/admin/duplicates?status=pending&limit=1`).catch(() => ({ pagination: { total: 0 } })),
-        fetchWithAuth(`${API_URL}/api/admin/ingest-runs/needs-attention`).catch(() => ({ total: 0 })),
-        fetchWithAuth(`${API_URL}/api/admin/trends/stats`).catch(() => ({ uniqueTerms: 0, lastComputed: null })),
-        fetchWithAuth(`${API_URL}/api/admin/pending-ai-count`).catch(() => ({ data: { count: 0 } })),
-        fetchWithAuth(`${API_URL}/api/admin/settings/homepage-teaser`).catch(() => ({ data: null })),
-      ]);
+      const res = await fetchWithAuth(`${API_URL}/api/admin/dashboard`);
+      const d = res.data;
 
-      // Update KPI Cards
       const setText = (id: string, value: string | number) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = String(value);
+        if (el) {
+          el.textContent = String(value);
+          el.setAttribute('data-loaded', 'true');
+        }
       };
 
-      setText('kpi-total', statsRes.data.events.total);
-      setText('kpi-published', statsRes.data.events.published);
-      setText('kpi-pending', statsRes.data.events.pending_review);
-      setText('kpi-today', statsRes.data.events.today_imports);
-      setText('kpi-pending-ai', pendingAiRes.data?.count || 0);
-      setText('kpi-duplicates', dupsRes.pagination?.total || 0);
+      const stats = d.stats;
+      const events = stats.events;
+      setText('kpi-total', events.total);
+      setText('kpi-published', events.published);
+      setText('kpi-pending', events.pending_review);
+      setText('kpi-today', events.today_imports);
+      setText('kpi-pending-ai', d.pendingAiCount ?? 0);
+      setText('kpi-duplicates', d.duplicatesTotal ?? 0);
 
-      // Update AI Processing Stats
-      const aiStats = statsRes.data.ai_stats;
+      const aiStats = stats.ai_stats;
       if (aiStats) {
         setText('ai-total-processed', `${aiStats.total_processed} Events verarbeitet`);
         setText('ai-published', aiStats.ai_published);
@@ -536,8 +540,7 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
         setText('ai-rejected', aiStats.ai_rejected);
       }
 
-      // Update Source Health
-      const sources = statsRes.data.sources;
+      const sources = stats.sources;
       const totalSources = Object.values(sources).reduce((a: number, b) => a + (b as number), 0);
       setText('sources-total', `${totalSources} Quellen`);
       setText('sources-healthy', sources.healthy);
@@ -546,42 +549,35 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
       setText('sources-dead', sources.dead);
       setText('sources-unknown', sources.unknown);
 
-      // Update Trends
-      setText('trends-count', trendsRes.uniqueTerms || 0);
-      setText('trends-last-computed', formatRelativeTime(trendsRes.lastComputed));
+      const trends = d.trends ?? {};
+      setText('trends-count', trends.uniqueTerms ?? 0);
+      setText('trends-last-computed', formatRelativeTime(trends.lastComputed ?? null));
 
-      // Update Attention Count
-      const attentionCount = attentionRes.total || 0;
+      const attentionCount = d.attentionTotal ?? 0;
       setText('attention-count', attentionCount);
-      
-      // Update attention container color based on count
+
       const attentionContainer = document.getElementById('attention-container');
-      if (attentionContainer) {
-        if (attentionCount === 0) {
-          attentionContainer.className = 'flex-1 p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50';
-          const countEl = attentionContainer.querySelector('#attention-count');
-          const labelEl = attentionContainer.querySelector('span:last-child');
-          if (countEl) countEl.className = 'block text-3xl font-bold text-green-600';
-          if (labelEl) {
-            labelEl.className = 'text-sm text-green-700';
-            labelEl.textContent = 'alles in Ordnung';
-          }
+      if (attentionContainer && attentionCount === 0) {
+        attentionContainer.className = 'flex-1 p-4 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50';
+        const countEl = attentionContainer.querySelector('#attention-count');
+        const labelEl = attentionContainer.querySelector('span:last-child');
+        if (countEl) countEl.className = 'block text-3xl font-bold text-green-600';
+        if (labelEl) {
+          labelEl.className = 'text-sm text-green-700';
+          labelEl.textContent = 'alles in Ordnung';
         }
       }
 
-      // Show content
       document.getElementById('loading-state')?.classList.add('hidden');
-      document.getElementById('dashboard-content')?.classList.remove('hidden');
+      document.getElementById('dashboard-content')?.classList.remove('dashboard-skeleton');
 
-      // Teaser-Box: Form füllen und Vorschau setzen
-      fillTeaserForm(teaserRes?.data ?? null);
+      fillTeaserForm(d.teaser ?? null);
       updateTeaserPreview();
-
     } catch (e) {
       console.error('Dashboard load error:', e);
       document.getElementById('loading-state')?.classList.add('hidden');
+      document.getElementById('dashboard-content')?.classList.remove('dashboard-skeleton');
       document.getElementById('error-state')?.classList.remove('hidden');
-      
       const errorMsg = document.getElementById('error-message');
       if (errorMsg && e instanceof Error) {
         if (e.message.includes('Failed to fetch')) {
@@ -687,9 +683,9 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
       return;
     }
 
-    // Load initial data
     await loadDashboardData();
-    await updateHealthWidget();
+    void updateHealthWidget();
+    setInterval(() => void updateHealthWidget(), 30000);
 
     // Teaser-Box: Preset-Dropdown – bei Änderung Hidden-Felder setzen und Vorschau aktualisieren
     document.getElementById('teaser-preset')?.addEventListener('change', () => {
@@ -770,11 +766,6 @@ import { TEASER_PRESETS } from '../../lib/teaserPresets';
       }
     });
 
-    // Auto-refresh every 30 seconds
-    setInterval(() => {
-      loadDashboardData();
-      updateHealthWidget();
-    }, 30000);
   }
 
   // Start when DOM is ready

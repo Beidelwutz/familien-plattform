@@ -213,6 +213,124 @@ router.get('/stats', async (_req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+const TRENDS_CITY = 'karlsruhe';
+
+// GET /api/admin/dashboard - Aggregat für Startansicht (1 HTTP-Call, koordinierte Queries)
+router.get('/dashboard', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
+
+    // B-SQL: Eine Raw-Count-Query mit FILTER statt 6 einzelne count()-Roundtrips
+    type EventCountRow = { total: bigint; published: bigint; pending_review: bigint; pending_ai: bigint; rejected: bigint; today_imports: bigint };
+    const eventCountRows = await prisma.$queryRaw<EventCountRow[]>`
+      SELECT
+        count(*)::bigint AS total,
+        count(*) FILTER (WHERE status = 'published')::bigint AS published,
+        count(*) FILTER (WHERE status = 'pending_review')::bigint AS pending_review,
+        count(*) FILTER (WHERE status = 'pending_ai')::bigint AS pending_ai,
+        count(*) FILTER (WHERE status = 'rejected')::bigint AS rejected,
+        count(*) FILTER (WHERE created_at >= ${todayStart})::bigint AS today_imports
+      FROM canonical_events
+    `;
+    const row = eventCountRows[0];
+    const totalEvents = Number(row?.total ?? 0);
+    const publishedEvents = Number(row?.published ?? 0);
+    const pendingReview = Number(row?.pending_review ?? 0);
+    const pendingAi = Number(row?.pending_ai ?? 0);
+    const rejectedEvents = Number(row?.rejected ?? 0);
+    const todayImports = Number(row?.today_imports ?? 0);
+
+    const [sources, aiProcessedWithScores] = await Promise.all([
+      prisma.source.groupBy({ by: ['health_status'], _count: true }),
+      prisma.eventScore.count()
+    ]);
+
+    const [aiPublished, aiRejected] = await Promise.all([
+      prisma.canonicalEvent.count({
+        where: { status: 'published', scores: { isNot: null } }
+      }),
+      prisma.canonicalEvent.count({
+        where: {
+          status: 'rejected',
+          scores: { family_fit_score: { lt: 30 } }
+        }
+      })
+    ]);
+
+    const sourceHealth = { healthy: 0, degraded: 0, failing: 0, dead: 0, unknown: 0 };
+    sources.forEach((s: { health_status: string; _count: number }) => {
+      sourceHealth[s.health_status as keyof typeof sourceHealth] = s._count;
+    });
+
+    const [duplicatesTotal, attentionRuns, trendsData, teaserRow] = await Promise.all([
+      prisma.dupCandidate.count({ where: { resolution: null } }),
+      prisma.ingestRun.findMany({
+        where: { needs_attention: true },
+        orderBy: { started_at: 'desc' },
+        include: { source: { select: { id: true, name: true, type: true } } }
+      }),
+      (async () => {
+        const [uniqueTermsResult, latestCompute] = await Promise.all([
+          prisma.searchQueryLog.groupBy({
+            by: ['queryNorm'],
+            where: { city: TRENDS_CITY }
+          }),
+          prisma.trendingTerm.findFirst({
+            where: { city: TRENDS_CITY },
+            orderBy: { computedAt: 'desc' },
+            select: { computedAt: true }
+          })
+        ]);
+        return { uniqueTerms: uniqueTermsResult.length, lastComputed: latestCompute?.computedAt ?? null };
+      })(),
+      prisma.siteSetting.findUnique({ where: { key: 'homepage_teaser' } })
+    ]);
+
+    const teaserDefaults = {
+      authorName: 'Pepe',
+      message: 'Kurz mal raus: Spaziergang in der Günther-Klotz-Anlage – lohnt sich!',
+      avatarSrc: 'https://i.pravatar.cc/96?u=pepe',
+      countdownEndDate: '2025-08-16T20:00:00',
+      variant: 7,
+      contentVariant: 16,
+      teaserLabel: 'Tipp von',
+      teaserIcon: '',
+      teaserThemeClass: ''
+    };
+    const teaserData = { ...teaserDefaults, ...((teaserRow?.value as Record<string, unknown>) || {}) };
+
+    res.json({
+      success: true,
+      data: {
+        stats: {
+          events: {
+            total: totalEvents,
+            published: publishedEvents,
+            pending_review: pendingReview,
+            pending_ai: pendingAi,
+            rejected: rejectedEvents,
+            today_imports: todayImports
+          },
+          ai_stats: {
+            total_processed: aiProcessedWithScores,
+            ai_published: aiPublished,
+            ai_rejected: aiRejected,
+            ai_pending_review: aiProcessedWithScores - aiPublished - aiRejected
+          },
+          sources: sourceHealth
+        },
+        duplicatesTotal,
+        attentionTotal: attentionRuns.length,
+        trends: trendsData,
+        pendingAiCount: pendingAi,
+        teaser: teaserData
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ============================================
 // REVIEW REASON HELPERS
 // ============================================
