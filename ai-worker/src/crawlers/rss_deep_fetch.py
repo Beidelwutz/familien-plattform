@@ -8,6 +8,7 @@ Features:
 - Domain-based rate limiting
 - Conditional requests (ETag/Last-Modified) for caching
 - Strict merge rules with validation
+- Optional per-source detail_page_config (custom CSS selectors) applied first
 """
 
 import asyncio
@@ -15,7 +16,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from urllib.parse import urlparse
 from collections import defaultdict
 
@@ -97,16 +98,89 @@ class DomainRateLimiter:
             self.last_request_time[domain] = time.time() * 1000
 
 
+def _custom_results_to_extracted_event(results: dict[str, Any], base_url: str = "") -> Optional[ExtractedEvent]:
+    """Build an ExtractedEvent from CustomSelectorExtractor results. Field names: image->image_url, organizer->organizer_name."""
+    if not results:
+        return None
+    title = ""
+    if "title" in results and results["title"].value:
+        title = str(results["title"].value).strip()
+    desc = None
+    if "description" in results and results["description"].value:
+        desc = str(results["description"].value).strip()
+    start_dt = None
+    if "start_datetime" in results and results["start_datetime"].value:
+        v = results["start_datetime"].value
+        if isinstance(v, datetime):
+            start_dt = v
+        elif isinstance(v, str):
+            try:
+                start_dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+    end_dt = None
+    if "end_datetime" in results and results["end_datetime"].value:
+        v = results["end_datetime"].value
+        if isinstance(v, datetime):
+            end_dt = v
+        elif isinstance(v, str):
+            try:
+                end_dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+    loc_name = _v(results, "location_name")
+    loc_addr = _v(results, "location_address")
+    img = _v(results, "image") or _v(results, "image_url")
+    if img and base_url and not img.startswith(("http://", "https://")):
+        from urllib.parse import urljoin
+        img = urljoin(base_url, img)
+    org = _v(results, "organizer") or _v(results, "organizer_name")
+    price_val = None
+    if "price" in results and results["price"].value is not None:
+        try:
+            price_val = float(str(results["price"].value).replace(",", ".").strip())
+        except (ValueError, TypeError):
+            pass
+    return ExtractedEvent(
+        title=title or "Event",
+        description=desc,
+        start_datetime=start_dt,
+        end_datetime=end_dt,
+        location_name=loc_name,
+        location_address=loc_addr,
+        lat=None,
+        lng=None,
+        url=None,
+        image_url=img,
+        organizer_name=org,
+        price=price_val,
+        currency="EUR" if price_val is not None else None,
+    )
+
+
+def _v(results: dict[str, Any], key: str) -> Optional[str]:
+    if key not in results or results[key].value is None:
+        return None
+    s = str(results[key].value).strip()
+    return s if s else None
+
+
 class SelectiveDeepFetcher:
     """
     Selectively fetches event detail pages to enrich RSS data.
     
     Only fetches pages when important fields are missing, respects
     rate limits per domain, and applies strict merge rules.
+    When detail_page_config is set, custom CSS selectors are tried first.
     """
     
-    def __init__(self, config: Optional[DeepFetchConfig] = None):
+    def __init__(
+        self,
+        config: Optional[DeepFetchConfig] = None,
+        detail_page_config: Optional[dict] = None,
+    ):
         self.config = config or DeepFetchConfig()
+        self.detail_page_config = detail_page_config
         self.extractor = StructuredDataExtractor()
         self.rate_limiter = DomainRateLimiter(self.config.min_delay_per_domain_ms)
         self.stats = DeepFetchStats()
@@ -174,7 +248,7 @@ class SelectiveDeepFetcher:
     async def fetch_and_extract(self, url: str) -> Optional[ExtractedEvent]:
         """
         Fetch a URL and extract structured event data.
-        
+        If detail_page_config (custom selectors) is set, use it first, then merge with structured data.
         Returns the best matching ExtractedEvent, or None if failed.
         """
         domain = self.rate_limiter.get_domain(url)
@@ -193,16 +267,37 @@ class SelectiveDeepFetcher:
                 return None
             
             html = response.text
+            custom_event: Optional[ExtractedEvent] = None
+            fields_needed = [
+                "title", "description", "start_datetime", "end_datetime",
+                "location_name", "location_address", "image", "image_url",
+                "organizer", "organizer_name", "price",
+            ]
+            if self.detail_page_config and self.detail_page_config.get("selectors"):
+                try:
+                    from .custom_selector_extractor import CustomSelectorExtractor
+                    custom_extractor = CustomSelectorExtractor()
+                    custom_results = custom_extractor.extract(
+                        html, self.detail_page_config, fields_needed, base_url=url
+                    )
+                    custom_event = _custom_results_to_extracted_event(custom_results, base_url=url)
+                except Exception as e:
+                    logger.debug(f"Custom selector extraction failed for {url}: {e}")
+
             events = self.extractor.extract(html, include_heuristic=True)
-            
-            if not events:
+            structured_event = events[0] if events else None
+
+            if custom_event and structured_event:
+                event = self._merge_extracted(custom_event, structured_event)
+            elif custom_event:
+                event = custom_event
+            elif structured_event:
+                event = structured_event
+            else:
                 logger.debug(f"No structured data found on {url}")
                 return None
             
-            # Return first event (usually there's only one on a detail page)
-            event = events[0]
-            
-            # OG-Image fallback: if no image from structured data, try og:image
+            # OG-Image fallback: if no image from extraction, try og:image
             if not event.image_url:
                 try:
                     from bs4 import BeautifulSoup
@@ -223,6 +318,30 @@ class SelectiveDeepFetcher:
         except Exception as e:
             logger.debug(f"Error fetching {url}: {e}")
             return None
+
+    def _merge_extracted(self, custom: ExtractedEvent, structured: ExtractedEvent) -> ExtractedEvent:
+        """Merge custom selector result with structured result; custom wins where present."""
+        def pick(a: Optional[str], b: Optional[str]) -> Optional[str]:
+            return a if (a and str(a).strip()) else b
+        def pick_dt(a: Optional[datetime], b: Optional[datetime]) -> Optional[datetime]:
+            return a if a is not None else b
+        def pick_f(a: Optional[float], b: Optional[float]) -> Optional[float]:
+            return a if a is not None else b
+        return ExtractedEvent(
+            title=pick(custom.title, structured.title) or "Event",
+            description=pick(custom.description, structured.description),
+            start_datetime=pick_dt(custom.start_datetime, structured.start_datetime),
+            end_datetime=pick_dt(custom.end_datetime, structured.end_datetime),
+            location_name=pick(custom.location_name, structured.location_name),
+            location_address=pick(custom.location_address, structured.location_address),
+            lat=custom.lat if custom.lat is not None else structured.lat,
+            lng=custom.lng if custom.lng is not None else structured.lng,
+            url=pick(custom.url, structured.url),
+            image_url=pick(custom.image_url, structured.image_url),
+            organizer_name=pick(custom.organizer_name, structured.organizer_name),
+            price=pick_f(custom.price, structured.price),
+            currency=custom.currency or structured.currency,
+        )
     
     def validate_extracted_date(
         self, 
@@ -398,7 +517,8 @@ async def selective_deep_fetch(
     parsed_events: list[ParsedEvent],
     *,
     config: Optional[DeepFetchConfig] = None,
-    max_fetches: Optional[int] = None
+    max_fetches: Optional[int] = None,
+    detail_page_config: Optional[dict] = None,
 ) -> list[ParsedEvent]:
     """
     Convenience function to run selective deep-fetch on parsed events.
@@ -407,11 +527,12 @@ async def selective_deep_fetch(
         parsed_events: List of ParsedEvents (ideally already deduplicated)
         config: Optional DeepFetchConfig to customize behavior
         max_fetches: Optional limit on number of detail page fetches
+        detail_page_config: Optional per-source selectors (custom CSS) for detail pages
     
     Returns:
         List of events with enriched data where applicable
     """
-    fetcher = SelectiveDeepFetcher(config)
+    fetcher = SelectiveDeepFetcher(config=config, detail_page_config=detail_page_config)
     try:
         return await fetcher.enrich_events(parsed_events, max_fetches)
     finally:

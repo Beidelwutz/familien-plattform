@@ -505,6 +505,7 @@ async def process_crawl_job(payload: dict) -> dict:
     ingest_run_id = payload.get("ingest_run_id")
     enable_ai = payload.get("enable_ai", False)
     fetch_event_pages = payload.get("fetch_event_pages", False)  # Selective Deep-Fetch
+    detail_page_config = payload.get("detail_page_config")  # Source-specific selectors for RSS deep-fetch
     dry_run = payload.get("dry_run", False)
     
     logger.info(f"Processing crawl job for source {source_id} ({source_type})")
@@ -621,6 +622,7 @@ async def process_crawl_job(payload: dict) -> dict:
                 unique_events,
                 config=deep_fetch_config,
                 max_fetches=50,  # Safety limit per run
+                detail_page_config=detail_page_config,
             )
             # Count how many were enriched
             enriched_count = sum(1 for e in unique_events if e.deep_fetched)

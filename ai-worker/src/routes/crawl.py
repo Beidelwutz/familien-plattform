@@ -24,6 +24,7 @@ class CrawlRequest(BaseModel):
     source_url: Optional[str] = None
     source_type: str = "rss"  # rss | ics | scraper
     scraper_config: Optional[dict] = None  # For source_type=scraper (selectors, strategies, rate_limit_ms, etc.)
+    detail_page_config: Optional[dict] = None  # Source-specific CSS selectors for event detail pages (RSS deep-fetch)
     force: bool = False
     dry_run: bool = False  # If True: crawl and extract but do not ingest; return candidates in response
     enable_ai: bool = False  # Enable AI classification/scoring
@@ -86,6 +87,7 @@ async def trigger_crawl(
         "source_url": request.source_url,
         "source_type": request.source_type,
         "scraper_config": request.scraper_config,
+        "detail_page_config": request.detail_page_config,  # For RSS deep-fetch (custom selectors)
         "force": request.force,
         "dry_run": request.dry_run,
         "enable_ai": request.enable_ai,

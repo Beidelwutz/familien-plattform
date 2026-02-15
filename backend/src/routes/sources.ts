@@ -401,6 +401,10 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
     if (source.type === 'scraper' && source.scraper_config) {
       body.scraper_config = source.scraper_config as object;
     }
+    // RSS Deep-Fetch: Detail-Seiten-Selektoren mitgeben, damit der Worker sie nutzt
+    if (source.detail_page_config) {
+      body.detail_page_config = source.detail_page_config;
+    }
 
     if (dryRun) {
       // Dry-run: run synchronously, no ingest run, return worker result (candidates, events_found, etc.)
