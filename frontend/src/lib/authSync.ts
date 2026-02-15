@@ -25,7 +25,7 @@ export async function syncAuthToken(): Promise<string | null> {
     }
 
     try {
-      let token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      let token = localStorage.getItem('auth_token');
       const session = await getSession();
       if (session?.access_token) {
         // Session exists - update token if different or missing
@@ -40,7 +40,7 @@ export async function syncAuthToken(): Promise<string | null> {
       return token;
     } catch (error) {
       console.error('Auth sync error:', error);
-      return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      return localStorage.getItem('auth_token');
     }
   })();
 
@@ -56,15 +56,12 @@ export async function getAuthToken(): Promise<string | null> {
 }
 
 /**
- * Clear the auth token from localStorage and sessionStorage.
+ * Clear the auth token from localStorage only.
  * For full logout, use logout() instead.
  */
 export function clearAuthToken(): void {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('auth_token');
-  }
-  if (typeof sessionStorage !== 'undefined') {
-    sessionStorage.removeItem('auth_token');
   }
   syncPromise = null;
 }
@@ -80,16 +77,16 @@ export async function logout(redirectUrl: string = '/'): Promise<void> {
   }
 
   try {
+    // Clear localStorage token
     localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('auth_token');
     syncPromise = null;
 
     // Sign out from Supabase (clears session)
     await signOut();
   } catch (error) {
     console.error('Logout error:', error);
+    // Still clear local token even if Supabase signout fails
     localStorage.removeItem('auth_token');
-    sessionStorage.removeItem('auth_token');
   }
 
   // Redirect
@@ -100,13 +97,13 @@ export async function logout(redirectUrl: string = '/'): Promise<void> {
 
 /**
  * Check if user is currently authenticated.
- * Does not verify the token, just checks if one exists (localStorage or sessionStorage).
+ * Does not verify the token, just checks if one exists.
  */
 export function isAuthenticated(): boolean {
-  if (typeof localStorage === 'undefined' && typeof sessionStorage === 'undefined') {
+  if (typeof localStorage === 'undefined') {
     return false;
   }
-  return !!(localStorage?.getItem('auth_token') || sessionStorage?.getItem('auth_token'));
+  return !!localStorage.getItem('auth_token');
 }
 
 // Auto-sync on module load (for pages that import this module)
