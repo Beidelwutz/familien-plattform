@@ -3,7 +3,7 @@
  * Robust fetch wrapper with auth handling, query params, and error management
  */
 
-const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
+import { getApiBase } from './apiBase';
 
 interface FetchOptions extends Omit<RequestInit, 'body'> {
   params?: Record<string, string | number | boolean | undefined | null>;
@@ -33,7 +33,7 @@ export async function adminFetch<T = any>(
     : null;
 
   // Build URL with query params
-  let url = `${API_URL}${endpoint}`;
+  let url = `${getApiBase()}${endpoint}`;
   if (options.params) {
     const searchParams = new URLSearchParams();
     Object.entries(options.params).forEach(([key, value]) => {

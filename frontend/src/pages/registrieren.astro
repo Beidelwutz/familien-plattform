@@ -78,8 +78,9 @@ import StickyHeader from '../components/layout/StickyHeader.astro';
 
 <script>
   import { signInWithGoogle, signUpWithEmail, getSession, isSupabaseConfigured, supabase } from '../lib/supabase';
+  import { getApiBase } from '../lib/apiBase';
 
-  const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
+  const API_BASE = getApiBase();
 
   const form = document.getElementById('register-form') as HTMLFormElement;
   const errorEl = document.getElementById('register-error');

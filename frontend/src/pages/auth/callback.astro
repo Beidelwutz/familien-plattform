@@ -86,7 +86,7 @@
   <script type="module" is:inline define:vars={{ supabaseUrl: import.meta.env.PUBLIC_SUPABASE_URL || '', supabaseAnonKey: import.meta.env.PUBLIC_SUPABASE_ANON_KEY || '', apiBase: import.meta.env.PUBLIC_API_URL || '' }}>
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true } });
-    const API_BASE = apiBase || window.location.origin;
+    const API_BASE = apiBase || (typeof window !== 'undefined' ? `https://api.${window.location.hostname}` : '');
 
     function getErrorCode(message) {
       const lowerMessage = message.toLowerCase();

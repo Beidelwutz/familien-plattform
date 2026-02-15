@@ -234,7 +234,8 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
 
 <script>
   import { syncAuthToken } from '../../lib/authSync';
-  
+  import { getApiBase } from '../../lib/apiBase';
+
   // Mobile menu toggle
   const mobileMenuBtn = document.getElementById('mobile-menu-btn');
   const mobileMenu = document.getElementById('mobile-menu');
@@ -298,7 +299,7 @@ import SearchAutocomplete from '../search/SearchAutocomplete.astro';
   });
 
   // Auth state management - 3 States: loading, authenticated, unauthenticated, connection_error
-  const API_BASE = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http://localhost:4000' : window.location.origin);
+  const API_BASE = getApiBase();
 
   // UI Elements
   const authLoading = document.getElementById('auth-loading');
