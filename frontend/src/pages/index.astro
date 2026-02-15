@@ -1,157 +1,48 @@
 ---
+/**
+ * Landing für Besucher: einladend, Hinweis dass Event-Seite im Aufbau ist.
+ * Eingeloggte Admins werden clientseitig zu /start weitergeleitet.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import StickyHeader from '../components/layout/StickyHeader.astro';
-import TagestippTeaserBox from '../components/sections/TagestippTeaserBox.astro';
-import PickOfTheDaySideBySide from '../components/sections/PickOfTheDaySideBySide.astro';
-import FeedSection from '../components/feed/FeedSection.astro';
-import MapPreview from '../components/map/MapPreview.astro';
-import AvailableNow from '../components/sections/AvailableNow.astro';
-import NewThisWeek from '../components/sections/NewThisWeek.astro';
-import TrendingNearby from '../components/sections/TrendingNearby.astro';
-
-// API Base URL
-const API_BASE = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
-
-// Fetch data in parallel (incl. Tagestipp + Teaser-Konfiguration)
-let topPicks: any[] = [];
-let tagestippEvents: any[] = [];
-let tagestippSubline = 'Top Picks heute';
-let pickOfTheDayEvents: any[] = [];
-let feedEvents: any[] = [];
-let availableEvents: any[] = [];
-let newEvents: any[] = [];
-let trendingEvents: any[] = [];
-let mapPins: any[] = [];
-let teaserConfig: { authorName?: string; message?: string; avatarSrc?: string; countdownEndDate?: string; variant?: number; contentVariant?: number; teaserLabel?: string; teaserIcon?: string; teaserThemeClass?: string } = {};
-
-try {
-  const [tagestippRes, topPicksRes, feedRes, availableRes, newRes, trendingRes, teaserRes] = await Promise.all([
-    fetch(`${API_BASE}/api/events/tagestipp?limit=6`).catch(() => null),
-    fetch(`${API_BASE}/api/events/top-picks?limit=8`).catch(() => null),
-    fetch(`${API_BASE}/api/events?tab=heute&limit=20`).catch(() => null),
-    fetch(`${API_BASE}/api/events/available?limit=12`).catch(() => null),
-    fetch(`${API_BASE}/api/events/new?limit=12`).catch(() => null),
-    fetch(`${API_BASE}/api/events/trending?limit=12`).catch(() => null),
-    fetch(`${API_BASE}/api/settings/homepage-teaser`).catch(() => null),
-  ]);
-
-  if (tagestippRes?.ok) {
-    const data = await tagestippRes.json();
-    tagestippEvents = data.data || [];
-    if (data.subline) tagestippSubline = data.subline;
-  }
-
-  if (topPicksRes?.ok) {
-    const data = await topPicksRes.json();
-    topPicks = data.data || [];
-  }
-  
-  if (feedRes?.ok) {
-    const data = await feedRes.json();
-    feedEvents = data.data || [];
-  }
-  
-  if (availableRes?.ok) {
-    const data = await availableRes.json();
-    availableEvents = data.data || [];
-  }
-  
-  if (newRes?.ok) {
-    const data = await newRes.json();
-    newEvents = data.data || [];
-  }
-  
-  if (trendingRes?.ok) {
-    const data = await trendingRes.json();
-    trendingEvents = data.data || [];
-  }
-
-  if (teaserRes?.ok) {
-    const data = await teaserRes.json();
-    if (data?.data && typeof data.data === 'object') teaserConfig = data.data;
-  }
-
-  pickOfTheDayEvents = tagestippEvents.length > 0 ? tagestippEvents : topPicks;
-
-  // Create map pins from events (Pick of the day + Feed)
-  mapPins = [...pickOfTheDayEvents, ...feedEvents]
-    .filter(e => e.location_lat && e.location_lng)
-    .slice(0, 12)
-    .map(e => ({
-      id: e.id,
-      title: e.title,
-      lat: e.location_lat,
-      lng: e.location_lng,
-    }));
-} catch (error) {
-  console.error('Error fetching data:', error);
-}
-
-// Keine Dummy-/Platzhalter-Events: Es werden nur echte API-Daten angezeigt.
-// Leere Sektionen werden ausgeblendet (AvailableNow, NewThisWeek, TrendingNearby)
-// bzw. zeigen leere Bereiche (TopPicks, FeedSection, MapPreview).
 ---
 
-<BaseLayout title="kiezling - Familienaktivitäten in Karlsruhe">
-  <!-- Sticky Header -->
+<BaseLayout title="kiezling - Familienaktivitäten in Karlsruhe" description="kiezling – Event-Seite im Aufbau. Anmelden für Zugang.">
   <StickyHeader />
+  <script is:inline>
+    (function() {
+      if (typeof window === 'undefined') return;
+      if (localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')) {
+        window.location.replace('/start');
+      }
+    })();
+  </script>
 
-  <!-- Teaser-Box über der Tagestipp-Sektion (Konfiguration aus Admin) -->
-  <div class="tagestipp-section pt-3 px-[18px] pb-0 bg-tagestipp-bg">
-    <div class="max-w-[1220px] mx-auto mb-2">
-      <TagestippTeaserBox
-        variant={Math.min(30, Math.max(1, teaserConfig.variant ?? 7)) as 1}
-        contentVariant={Math.min(30, Math.max(1, teaserConfig.contentVariant ?? 16)) as 16}
-        authorName={teaserConfig.authorName}
-        message={teaserConfig.message}
-        avatarSrc={teaserConfig.avatarSrc}
-        countdownEndDate={teaserConfig.countdownEndDate}
-        labelPrefix={teaserConfig.teaserLabel}
-        icon={teaserConfig.teaserIcon}
-        themeClass={teaserConfig.teaserThemeClass}
-      />
-    </div>
-  </div>
-
-  <!-- Pick of the day – bündige Box, Icon 60, Hover-Animation #4 (Scale) -->
-  <PickOfTheDaySideBySide events={pickOfTheDayEvents} locationName="Karlsruhe" iconId="60" hoverVariant={4} likeBoxVariant={22} />
-
-  <main id="main-content" role="main">
-    <!-- Main Feed (nur bei echten Events) -->
-    {feedEvents.length > 0 && <FeedSection events={feedEvents} />}
-
-    <!-- Section C: Map Preview (nur bei echten Pins) -->
-    {mapPins.length > 0 && <MapPreview pins={mapPins} />}
-
-    <!-- Section D: Available Now -->
-    <AvailableNow events={availableEvents} />
-
-    <!-- Section E: New This Week -->
-    <NewThisWeek events={newEvents} />
-
-    <!-- Section F: Trending Nearby -->
-    <TrendingNearby events={trendingEvents} />
-
-    <!-- Call to Action -->
-    <section class="py-12 md:py-16 bg-gradient-to-br from-primary-500 to-primary-600">
-      <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">
-          Noch nicht das Richtige gefunden?
-        </h2>
-        <p class="text-primary-100 mb-8 max-w-2xl mx-auto">
-          Erstelle einen personalisierten Tagesplan basierend auf dem Alter deiner Kinder, 
-          Budget und verfügbarer Zeit.
-        </p>
-        <a 
-          href="/plan" 
-          class="inline-flex items-center gap-2 px-8 py-4 bg-white text-primary-600 font-semibold rounded-full hover:bg-gray-50 transition-colors shadow-lg"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
-          </svg>
-          Jetzt Plan erstellen
-        </a>
+  <main id="main-content" role="main" class="flex-1 flex flex-col items-center justify-center px-4 py-16 sm:py-24 bg-tagestipp-bg">
+    <div class="w-full max-w-lg bg-tagestipp-card shadow-tagestipp rounded-tagestipp-card p-8 sm:p-10 text-center">
+      <p class="text-sm text-tagestipp-muted mb-4" aria-hidden="true">Bald für dich da</p>
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-100 text-primary-600 mb-6" aria-hidden="true">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
       </div>
-    </section>
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">kiezling</h1>
+      <p class="text-gray-600 mb-6">Familienaktivitäten in Karlsruhe</p>
+      <p class="text-gray-700 mb-3">
+        Unsere Event-Seite entsteht gerade – wir sammeln schon tolle Tipps für Familien in und um Karlsruhe.
+      </p>
+      <p class="text-gray-500 text-sm mb-8">
+        Du kannst dich schon jetzt anmelden und bekommst Zugang, sobald es losgeht.
+      </p>
+      <a
+        href="/login"
+        class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary-500 text-white font-semibold rounded-full hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+        </svg>
+        Anmelden
+      </a>
+    </div>
   </main>
 </BaseLayout>
