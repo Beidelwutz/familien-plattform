@@ -1,0 +1,59 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+const API_URL = import.meta.env.PUBLIC_API_URL || '';
+---
+
+<AdminLayout title="Debug-Log - kiezling Admin" currentPage="log">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Debug-Log</h1>
+      <p class="mt-1 text-sm text-gray-500">RSS-Import / Worker (z. B. .cursor/debug.log)</p>
+    </div>
+    <button
+      type="button"
+      id="refresh-btn"
+      class="flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-600"
+    >
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      <span>Aktualisieren</span>
+    </button>
+  </div>
+
+  <div id="meta" class="mb-3 hidden text-sm text-gray-500"></div>
+  <div id="error-banner" class="mb-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"></div>
+  <pre id="log-content" class="max-h-[70vh] overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono text-sm text-gray-800 whitespace-pre-wrap">Lade...</pre>
+</AdminLayout>
+
+<script define:vars={{ API_URL }}>
+  const logEl = document.getElementById('log-content');
+  const metaEl = document.getElementById('meta');
+  const errorBanner = document.getElementById('error-banner');
+  const refreshBtn = document.getElementById('refresh-btn');
+
+  async function loadLog(tail = 500) {
+    if (!logEl) return;
+    logEl.textContent = 'Lade...';
+    metaEl?.classList.add('hidden');
+    errorBanner?.classList.add('hidden');
+    try {
+      const res = await fetch(`${API_URL}/api/admin/debug-log?tail=${tail}`, { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (data.error) {
+        errorBanner?.classList.remove('hidden');
+        if (errorBanner) errorBanner.textContent = data.error;
+      }
+      if (data.path) {
+        metaEl?.classList.remove('hidden');
+        if (metaEl) metaEl.textContent = `Pfad: ${data.path}`;
+      }
+      logEl.textContent = data.content || '(leer oder nicht vorhanden)';
+    } catch (e) {
+      logEl.textContent = `Fehler: ${e?.message || 'Unbekannt'}`;
+    }
+  }
+
+  refreshBtn?.addEventListener('click', () => loadLog());
+  loadLog();
+</script>

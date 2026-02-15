@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import fs from 'fs/promises';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { createError } from '../middleware/errorHandler.js';
@@ -123,6 +125,30 @@ router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: 
 
 // All admin routes require auth + admin role
 router.use(requireAuth, requireAdmin);
+
+// GET /api/admin/debug-log - Read debug log file (RSS-Import / Worker)
+router.get('/debug-log', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const logPath = process.env.DEBUG_LOG_PATH || path.join(process.cwd(), '..', '.cursor', 'debug.log');
+    const tail = Math.min(Math.max(0, parseInt(String(req.query.tail), 10) || 500), 5000);
+    let content = '';
+    let error: string | undefined;
+    try {
+      const raw = await fs.readFile(logPath, 'utf-8');
+      const lines = raw.split('\n').filter(Boolean);
+      content = lines.slice(-tail).join('\n');
+    } catch (e: any) {
+      if (e?.code === 'ENOENT') {
+        error = 'Datei nicht gefunden';
+      } else {
+        error = e?.message || 'Fehler beim Lesen';
+      }
+    }
+    res.json({ content, path: logPath, error });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/admin/stats - Dashboard statistics
 router.get('/stats', async (_req: Request, res: Response, next: NextFunction) => {
