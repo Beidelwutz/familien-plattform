@@ -472,6 +472,34 @@ async def update_ingest_run(
         logger.error(f"Failed to update ingest run: {e}")
 
 
+async def create_ingest_run(source_id: str, correlation_id: Optional[str] = None) -> Optional[str]:
+    """Create an IngestRun in the backend when the Worker actually starts. Returns run id or None on failure."""
+    client = await get_http_client()
+    headers = {"Content-Type": "application/json"}
+    if settings.service_token:
+        headers["Authorization"] = f"Bearer {settings.service_token}"
+    body = {"source_id": source_id}
+    if correlation_id:
+        body["correlation_id"] = correlation_id
+    try:
+        response = await client.post(
+            f"{settings.backend_url}/api/admin/ingest-runs/start",
+            json=body,
+            headers=headers,
+        )
+        if response.status_code in (200, 201):
+            data = response.json()
+            run_data = data.get("data") or data
+            run_id = run_data.get("id") or run_data.get("run_id")
+            if run_id:
+                logger.info(f"Created ingest run {run_id} for source {source_id}")
+                return run_id
+        logger.warning(f"Failed to create ingest run: {response.status_code} {response.text[:200]}")
+    except Exception as e:
+        logger.error(f"Failed to create ingest run: {e}")
+    return None
+
+
 async def process_crawl_job(payload: dict) -> dict:
     """
     Process a crawl job using the new batch ingest system.
@@ -507,6 +535,10 @@ async def process_crawl_job(payload: dict) -> dict:
     fetch_event_pages = payload.get("fetch_event_pages", False)  # Selective Deep-Fetch
     detail_page_config = payload.get("detail_page_config")  # Source-specific selectors for RSS deep-fetch
     dry_run = payload.get("dry_run", False)
+
+    # Create IngestRun when Worker actually starts (Backend no longer creates it at trigger time)
+    if not dry_run and not ingest_run_id and source_id:
+        ingest_run_id = await create_ingest_run(source_id, payload.get("job_id"))
     
     logger.info(f"Processing crawl job for source {source_id} ({source_type})")
     

@@ -143,6 +143,32 @@ router.patch('/ingest-runs/:id', requireServiceToken, async (req: Request, res: 
   }
 });
 
+// POST /api/admin/ingest-runs/start - Create ingest run when Worker actually starts (SERVICE_TOKEN only)
+router.post('/ingest-runs/start', requireServiceToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { source_id, correlation_id } = req.body || {};
+    if (!source_id || typeof source_id !== 'string') {
+      throw createError('source_id is required', 400, 'VALIDATION_ERROR');
+    }
+    const source = await prisma.source.findUnique({ where: { id: source_id } });
+    if (!source) {
+      throw createError('Source not found', 404, 'NOT_FOUND');
+    }
+    const run = await prisma.ingestRun.create({
+      data: {
+        correlation_id: correlation_id && typeof correlation_id === 'string'
+          ? correlation_id
+          : `worker-${Date.now()}`,
+        source_id,
+        status: 'running',
+      },
+    });
+    res.json({ success: true, message: 'Ingest run started', data: { id: run.id, ...run } });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // All admin routes require auth + admin role
 router.use(requireAuth, requireAdmin);
 

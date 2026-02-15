@@ -992,6 +992,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
                     <div id="import-details-${source.id}" class="text-xs text-blue-600 mt-1"></div>
                   </div>
 
+                  <label class="flex items-center gap-2 py-1.5 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" id="enable-ai-${source.id}" class="enable-ai-checkbox rounded border-gray-300 text-primary-500 focus:ring-primary-500" data-id="${source.id}" />
+                    <span>KI beim Import (langsamer)</span>
+                  </label>
                   <button 
                     class="trigger-btn w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                     data-id="${source.id}"
@@ -1226,19 +1230,47 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
     }
   }
 
-  // Quick trigger fetch (from table row button)
+  // Wait for an ingest run to appear for this source (Worker creates run when it starts), then start status polling
+  const POLL_ACTIVE_INTERVAL_MS = 2000;
+  const WAIT_FOR_RUN_TIMEOUT_MS = 60000;
+
+  async function startWaitForRunThenPoll(sourceId) {
+    await updateActiveRuns();
+    const importStatus = document.getElementById(`import-status-${sourceId}`);
+    const importDetails = document.getElementById(`import-details-${sourceId}`);
+    if (importStatus) importStatus.classList.remove('hidden');
+    if (importDetails) importDetails.textContent = 'Import wird gestartet… Warte auf Worker.';
+    const start = Date.now();
+    const interval = setInterval(async () => {
+      if (Date.now() - start > WAIT_FOR_RUN_TIMEOUT_MS) {
+        clearInterval(interval);
+        if (importDetails) importDetails.innerHTML = 'Import gestartet. Run erscheint, sobald der Worker beginnt. (Seite oder aktive Fetches prüfen.)';
+        return;
+      }
+      try {
+        const data = await apiFetch('/api/admin/ingest-runs/active');
+        const runs = data.data || [];
+        const run = runs.find(r => (r.source_id || r.source?.id) === sourceId);
+        if (run && run.id) {
+          clearInterval(interval);
+          pollRunStatus(sourceId, run.id);
+        }
+      } catch (_) { /* ignore */ }
+    }, POLL_ACTIVE_INTERVAL_MS);
+  }
+
+  // Quick trigger fetch (from table row button) – no enable_ai checkbox here, default is false (fast import)
   async function triggerFetchQuick(id) {
     const source = sources.find(s => s.id === id);
     
     try {
-      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST', body: JSON.stringify({ enable_ai: false }) });
       
       if (response.success && response.data?.ingest_run_id) {
-        // Immediately update active runs to show the fetch started
         await updateActiveRuns();
-        
-        // Also start polling for this specific run
         pollRunStatus(id, response.data.ingest_run_id);
+      } else if (response.success && response.data?.source_id) {
+        startWaitForRunThenPoll(id);
       } else {
         const errorDetail = response.error || response.message || 'Unbekannter Fehler';
         alert(`Import fehlgeschlagen: ${errorDetail}`);
@@ -1264,17 +1296,17 @@ const API_URL = import.meta.env.PUBLIC_API_URL || (import.meta.env.DEV ? 'http:/
     triggerText.textContent = 'Wird gestartet...';
 
     try {
-      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST' });
+      const enableAi = document.getElementById(`enable-ai-${id}`)?.checked ?? false;
+      const response = await apiFetch(`/api/sources/${id}/trigger`, { method: 'POST', body: JSON.stringify({ enable_ai: enableAi }) });
       
       if (response.success && response.data?.ingest_run_id) {
-        // Show import status
         importStatus?.classList.remove('hidden');
         importDetails.textContent = '';
-        
-        // Start polling for status
         pollRunStatus(id, response.data.ingest_run_id);
+      } else if (response.success && response.data?.source_id) {
+        importStatus?.classList.remove('hidden');
+        startWaitForRunThenPoll(id);
       } else {
-        // Show detailed error for debugging
         const errorDetail = response.error || response.message || JSON.stringify(response);
         console.error('Trigger response:', response);
         alert(`Import fehlgeschlagen: ${errorDetail}`);

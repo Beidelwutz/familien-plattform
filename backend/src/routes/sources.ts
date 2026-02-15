@@ -371,10 +371,12 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 });
 
 // POST /api/sources/:id/trigger - Manually trigger a source fetch (optional dry_run: true for test without ingest)
+// IngestRun is created by the Worker when it actually starts (POST /api/admin/ingest-runs/start).
 router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const dryRun = !!(req.body && (req.body as { dry_run?: boolean }).dry_run);
+    const enableAi = (req.body && (req.body as { enable_ai?: boolean }).enable_ai) ?? false;
 
     const source = await prisma.source.findUnique({
       where: { id }
@@ -395,7 +397,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       source_url: source.url,
       source_type: source.type,
       dry_run: dryRun,
-      enable_ai: true,
+      enable_ai: enableAi,
       fetch_event_pages: fetchEventPages,
     };
     if (source.type === 'scraper' && source.scraper_config) {
@@ -428,16 +430,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       }
     }
 
-    // Normal trigger: create ingest run and queue job
-    const ingestRun = await prisma.ingestRun.create({
-      data: {
-        correlation_id: `manual-${Date.now()}`,
-        source_id: id,
-        status: 'running',
-      }
-    });
-    body.ingest_run_id = ingestRun.id;
-
+    // Normal trigger: do not create IngestRun here; Worker creates it when job starts (POST /ingest-runs/start)
     await prisma.source.update({
       where: { id },
       data: { last_fetch_at: new Date() }
@@ -454,20 +447,21 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
       if (!workerResponse.ok) {
         const errorText = await workerResponse.text();
         logger.error(`AI-Worker crawl trigger failed: ${errorText}`);
-        await prisma.ingestRun.update({
-          where: { id: ingestRun.id },
-          data: {
-            status: 'failed',
-            finished_at: new Date(),
-            error_message: `AI-Worker error: ${workerResponse.status}`,
-            needs_attention: true,
-          }
-        });
         throw createError(`AI-Worker error: ${workerResponse.status}`, 502, 'WORKER_ERROR');
       }
 
       const workerData = await workerResponse.json();
       logger.info(`Crawl job triggered for source ${id}: ${JSON.stringify(workerData)}`);
+
+      res.json({
+        success: true,
+        message: 'Fetch job queued',
+        data: {
+          source_id: id,
+          job_id: workerData.job_id ?? null,
+          queued_at: new Date().toISOString(),
+        }
+      });
     } catch (fetchError: any) {
       if (fetchError.code === 'WORKER_ERROR') {
         throw fetchError;
@@ -478,31 +472,12 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
         ? 'Timeout – Worker antwortet nicht innerhalb von 15 Sekunden.'
         : fetchError.message || 'Verbindung fehlgeschlagen';
       logger.error(`Failed to reach AI-Worker at ${workerUrl}: ${errorDetail}`);
-      await prisma.ingestRun.update({
-        where: { id: ingestRun.id },
-        data: {
-          status: 'failed',
-          finished_at: new Date(),
-          error_message: `AI-Worker unreachable: ${errorDetail}. ${hint}`,
-          needs_attention: true,
-        }
-      });
       throw createError(
         `AI-Worker nicht erreichbar (${AI_WORKER_URL}). Bitte AI-Worker starten.`,
         503,
         'WORKER_UNAVAILABLE'
       );
     }
-
-    res.json({
-      success: true,
-      message: 'Fetch job queued',
-      data: {
-        source_id: id,
-        ingest_run_id: ingestRun.id,
-        queued_at: new Date().toISOString(),
-      }
-    });
   } catch (error) {
     next(error);
   }
