@@ -450,7 +450,7 @@ router.post('/:id/trigger', requireAuth, requireAdmin, async (req: Request, res:
         throw createError(`AI-Worker error: ${workerResponse.status}`, 502, 'WORKER_ERROR');
       }
 
-      const workerData = await workerResponse.json();
+      const workerData = await workerResponse.json() as { job_id?: string };
       logger.info(`Crawl job triggered for source ${id}: ${JSON.stringify(workerData)}`);
 
       res.json({

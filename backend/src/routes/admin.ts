@@ -163,7 +163,7 @@ router.post('/ingest-runs/start', requireServiceToken, async (req: Request, res:
         status: 'running',
       },
     });
-    res.json({ success: true, message: 'Ingest run started', data: { id: run.id, ...run } });
+    res.json({ success: true, message: 'Ingest run started', data: run });
   } catch (error) {
     next(error);
   }
