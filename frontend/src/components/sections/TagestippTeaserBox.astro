@@ -83,7 +83,7 @@ const rootClass = cv > 0 ? ` tagestipp-teaser-box--content-${cv}` : '';
 {/* Idee 21: Kompakte Zeile | Idee 30: Minimal-Banner */}
 {(cv === 21 || cv === 30) && (
   <div class={`tagestipp-teaser-box tagestipp-teaser-box-${variant}${rootClass}${themeClassStr}`} role="complementary" aria-label={`${labelText} ${authorName}`}>
-    {showIcon ? <span class="tagestipp-teaser-box__icon-emoji" aria-hidden="true">{iconProp}</span> : <img src={avatarSrc} alt="" class="tagestipp-teaser-box__avatar" width={cv === 24 ? 56 : 44} height={cv === 24 ? 56 : 44} />}
+    {showIcon ? <span class="tagestipp-teaser-box__icon-emoji" aria-hidden="true">{iconProp}</span> : <img src={avatarSrc} alt="" class="tagestipp-teaser-box__avatar" width="44" height="44" />}
     <div class={`tagestipp-teaser-box__bubble tagestipp-teaser-box__bubble--compact${bubbleClass}`}>
       <span class="tagestipp-teaser-box__compact-line">{authorName} {cv === 21 ? 'tippt:' : ':'} {shortMessage}</span>
     </div>
@@ -126,7 +126,7 @@ const rootClass = cv > 0 ? ` tagestipp-teaser-box--content-${cv}` : '';
         {cv === 3 && eventTeaser && <p class="tagestipp-teaser-box__event-teaser">{eventTeaser}</p>}
         {cv === 3 && <p class="tagestipp-teaser-box__message">{message}</p>}
         {cv === 7 && <p class="tagestipp-teaser-box__message tagestipp-teaser-box__message--quote">"{message}"</p>}
-        {(cv === 0 || cv === 1 || cv === 4 || cv === 5 || cv === 6 || cv === 8 || cv === 12 || cv === 13 || cv === 15 || cv === 17 || cv === 18 || cv === 20 || cv === 23 || cv === 24 || cv === 25 || cv === 26 || cv === 28) && cv !== 7 && <p class="tagestipp-teaser-box__message">{message}</p>}
+        {(cv === 0 || cv === 1 || cv === 4 || cv === 5 || cv === 6 || cv === 8 || cv === 12 || cv === 13 || cv === 15 || cv === 17 || cv === 18 || cv === 20 || cv === 23 || cv === 24 || cv === 25 || cv === 26 || cv === 28) && <p class="tagestipp-teaser-box__message">{message}</p>}
         {cv === 27 && <p class="tagestipp-teaser-box__message">{message.split(/[.–]/)[0]}… <span class="tagestipp-teaser-box__more">Mehr lesen</span></p>}
         {cv === 9 && <p class="tagestipp-teaser-box__message">{message}</p>}
         {cv === 9 && socialProof && <p class="tagestipp-teaser-box__social-proof">{socialProof}</p>}
@@ -159,7 +159,7 @@ const rootClass = cv > 0 ? ` tagestipp-teaser-box--content-${cv}` : '';
 )}
 
 <script>
-  function formatCountdown(endIso) {
+  function formatCountdown(endIso: string | undefined) {
     if (!endIso || typeof endIso !== 'string') return '—';
     const end = new Date(endIso);
     if (isNaN(end.getTime())) return '—';
