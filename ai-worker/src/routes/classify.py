@@ -86,8 +86,6 @@ class ClassificationResult(BaseModel):
     extracted_contact_phone: Optional[str] = None
     contact_confidence: Optional[float] = None
     extracted_organizer_directions: Optional[str] = None
-    improved_description: Optional[str] = None
-    description_improvement_confidence: Optional[float] = None
 
 
 class ScoringResult(BaseModel):
@@ -181,8 +179,6 @@ async def classify_event(event: EventInput):
         extracted_contact_phone=ai_result.extracted_contact_phone,
         contact_confidence=ai_result.contact_confidence,
         extracted_organizer_directions=ai_result.extracted_organizer_directions,
-        improved_description=ai_result.improved_description,
-        description_improvement_confidence=ai_result.description_improvement_confidence,
     )
 
 

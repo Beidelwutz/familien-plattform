@@ -64,29 +64,7 @@ CLASSIFICATION_SCHEMA = {
         "extracted_location_address": {"type": ["string", "null"]},
         "extracted_location_district": {"type": ["string", "null"]},
         "datetime_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "location_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        # Price extraction
-        "extracted_price_type": {"type": ["string", "null"]},
-        "extracted_price_min": {"type": ["number", "null"]},
-        "extracted_price_max": {"type": ["number", "null"]},
-        "price_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        # Venue extraction
-        "extracted_venue_name": {"type": ["string", "null"]},
-        "extracted_address_line": {"type": ["string", "null"]},
-        "extracted_city": {"type": ["string", "null"]},
-        "extracted_postal_code": {"type": ["string", "null"]},
-        "venue_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        # Contact / organizer
-        "extracted_organizer_website": {"type": ["string", "null"]},
-        "extracted_contact_email": {"type": ["string", "null"]},
-        "extracted_contact_phone": {"type": ["string", "null"]},
-        "contact_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        "extracted_organizer_directions": {"type": ["string", "null"]},
-        # Improved description for event page
-        "improved_description": {"type": ["string", "null"]},
-        "description_improvement_confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        # Cancellation
-        "is_cancelled_or_postponed": {"type": ["boolean", "null"]}
+        "location_confidence": {"type": "number", "minimum": 0, "maximum": 1}
     },
     "additionalProperties": True
 }

@@ -31,25 +31,6 @@ function sanitizePriceType(val: string | null | undefined): PriceType {
   return 'unknown';
 }
 
-/** Erlaubt nur <p>, </p>, <strong>, </strong>, <br/> für AI-improved_description. Entfernt alle anderen Tags und Attribute. */
-export function sanitizeImprovedDescriptionHtml(html: string): string {
-  if (!html || typeof html !== 'string') return '';
-  const maxLen = 8000;
-  let s = html.trim().slice(0, maxLen);
-  // 1) Erlaubte Tags behalten, Attribute entfernen
-  s = s.replace(/<\s*p\s*[^>]*>/gi, '<p>').replace(/<\s*\/p\s*[^>]*>/gi, '</p>');
-  s = s.replace(/<\s*strong\s*[^>]*>/gi, '<strong>').replace(/<\s*\/strong\s*[^>]*>/gi, '</strong>');
-  s = s.replace(/<\s*br\s*[^>]*\/?\s*>/gi, '<br/>');
-  // 2) Alle übrigen Tags entfernen (z. B. script, style, div). Lookahead prüft Zeichen direkt nach "<".
-  s = s.replace(/<(?!p>|\/p>|strong>|\/strong>|br\/>)[^>]+>/g, '');
-  return s.trim() || '';
-}
-
-/** Entfernt HTML-Tags für description_short (reiner Text). */
-export function stripHtmlToText(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
 const KEY_FIELDS_FOR_FILL_STATUS = ['location_address', 'start_datetime', 'end_datetime', 'ai_summary_short'] as const;
 
 function buildFieldFillStatus(
@@ -166,9 +147,6 @@ export interface CanonicalCandidate {
       extracted_contact_phone?: string | null;
       contact_confidence?: number;
       extracted_organizer_directions?: string | null;
-      // AI-improved description for event page (simple HTML)
-      improved_description?: string | null;
-      description_improvement_confidence?: number;
       // AI-extracted cancellation
       is_cancelled_or_postponed?: boolean;
     };
@@ -658,22 +636,11 @@ export async function processSingleCandidate(
   if (!availabilityStatus && aiClassification?.is_cancelled_or_postponed) {
     availabilityStatus = 'cancelled';
   }
-
-  // AI-überarbeitete Beschreibung für Eventseite (Grammatik, Absätze, Hervorhebungen, ohne Fülltext)
-  let descriptionShort = candidate.data.description?.substring(0, 500) || null;
-  let descriptionLong = candidate.data.description || null;
-  if (aiClassification?.improved_description && (aiClassification.description_improvement_confidence ?? 0) >= 0.6) {
-    const sanitized = sanitizeImprovedDescriptionHtml(aiClassification.improved_description);
-    if (sanitized) {
-      descriptionLong = sanitized;
-      descriptionShort = stripHtmlToText(sanitized).substring(0, 500) || descriptionShort;
-    }
-  }
   
   const eventData = {
     title: candidate.data.title,
-    description_short: descriptionShort,
-    description_long: descriptionLong,
+    description_short: candidate.data.description?.substring(0, 500) || null,
+    description_long: candidate.data.description || null,
     start_datetime: startDatetime,
     end_datetime: endDatetime,
     timezone_original: candidate.data.timezone_original || null,

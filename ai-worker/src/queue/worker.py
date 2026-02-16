@@ -356,8 +356,6 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 extracted_contact_phone=classification_result.extracted_contact_phone,
                 contact_confidence=classification_result.contact_confidence or 0.0,
                 extracted_organizer_directions=classification_result.extracted_organizer_directions,
-                improved_description=classification_result.improved_description,
-                description_improvement_confidence=classification_result.description_improvement_confidence or 0.0,
                 # Cancellation
                 is_cancelled_or_postponed=classification_result.is_cancelled_or_postponed,
                 # AI-generated summaries

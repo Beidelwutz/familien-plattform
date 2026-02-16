@@ -770,7 +770,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
 
   // OpenAI: Block Batch if no connection or quota exceeded
   let openaiOk = true;
-  let workerReachable = true; // false = diagnostics failed because worker unreachable
   let lastPendingCount = 0;
 
   // Heartbeat tracking for reliability
@@ -1332,10 +1331,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
     if (isProcessing) {
       el.startBatchBtn.disabled = true;
       el.btnHint.textContent = 'Verarbeitung laeuft...';
-      el.btnHint.classList.remove('hidden');
-    } else if (!workerReachable) {
-      el.startBatchBtn.disabled = true;
-      el.btnHint.textContent = 'AI Worker nicht erreichbar – Batch nicht moeglich';
       el.btnHint.classList.remove('hidden');
     } else if (!openaiOk) {
       el.startBatchBtn.disabled = true;
@@ -2726,10 +2721,8 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       const { data, success } = await res.json();
       
       if (!success || !data.reachable) {
-        workerReachable = false;
         throw new Error('AI-Worker nicht erreichbar');
       }
-      workerReachable = true;
 
       // Worker (inline in Header)
       if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500';
@@ -2765,8 +2758,6 @@ const API_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:4000';
       updateButtonState(lastPendingCount);
     } catch (e) {
       console.error('Diagnostics error:', e);
-      const isWorkerUnreachable = /nicht erreichbar|failed to fetch|fetch diagnostics/i.test(String(e?.message || e));
-      if (isWorkerUnreachable) workerReachable = false;
       openaiOk = false;
       updateButtonState(lastPendingCount);
       if (workerDot) workerDot.className = 'w-1.5 h-1.5 rounded-full bg-red-500';

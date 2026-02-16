@@ -101,10 +101,6 @@ class ClassificationResult:
     # AI-extracted cancellation / availability
     is_cancelled_or_postponed: Optional[bool] = None
     
-    # AI-improved description for event page (grammar, structure, emphasis, no filler)
-    improved_description: Optional[str] = None  # Simple HTML: <p>, <strong>, <br/>
-    description_improvement_confidence: float = 0.0
-    
     # Flags for processing
     flags: dict = field(default_factory=lambda: {
         "sensitive_content": False,
@@ -259,18 +255,6 @@ AUFGABEN:
     - is_cancelled_or_postponed: true/false
     - Suche nach: "abgesagt", "entfällt", "verschoben", "ausverkauft", "fällt aus"
 
-20. BESCHREIBUNG FÜR EVENTSEITE ÜBERARBEITEN (improved_description):
-    - Überarbeite die Event-Beschreibung so, dass sie auf der Eventseite gut lesbar ist.
-    - Korrigiere Grammatik und Rechtschreibung.
-    - Hebe wichtige Begriffe (z.B. Veranstaltungstitel, Ort, Altersangabe, Besonderheiten) mit <strong>...</strong> hervor.
-    - Gliedere in klare Absätze: umschließe jeden Absatz mit <p>...</p>. Mehrere Absätze nacheinander.
-    - Entferne Fülltexte, Wiederholungen und Sinnloses – jeder Satz soll Mehrwert haben.
-    - Behalte alle sachlichen Infos (Datum, Uhrzeit, Ort, Anmeldung, Preis, Kontakt, Altersangabe).
-    - Ausgabe NUR mit erlaubten Tags: <p>, </p>, <strong>, </strong>, <br/>. Keine anderen HTML-Tags.
-    - improved_description: die überarbeitete Beschreibung als einfaches HTML (max 6000 Zeichen).
-    - description_improvement_confidence: 0.0-1.0 wie gut die Überarbeitung gelungen ist.
-    - Wenn die Originalbeschreibung schon sehr kurz oder unbrauchbar ist, gib null für improved_description und 0.0 für description_improvement_confidence.
-
 Antworte NUR mit diesem JSON:
 {{
   "categories": ["kategorie1", "kategorie2"],
@@ -315,9 +299,7 @@ Antworte NUR mit diesem JSON:
   "extracted_contact_phone": null,
   "contact_confidence": 0.8,
   "extracted_organizer_directions": "Im Prinz-Max-Palais, Eingang über den Innenhof.",
-  "is_cancelled_or_postponed": false,
-  "improved_description": "<p>Die <strong>Kinder- und Jugendbibliothek</strong> im Prinz-Max-Palais lädt ein.</p><p>Ort: Kaiserstraße 42, 76131 Karlsruhe. <strong>Eintritt frei.</strong></p>",
-  "description_improvement_confidence": 0.85
+  "is_cancelled_or_postponed": false
 }}"""
 
 
@@ -369,9 +351,7 @@ Bitte antworte NUR mit validem JSON im korrekten Format:
   "extracted_contact_phone": null,
   "contact_confidence": 0.0,
   "extracted_organizer_directions": null,
-  "is_cancelled_or_postponed": false,
-  "improved_description": null,
-  "description_improvement_confidence": 0.0
+  "is_cancelled_or_postponed": false
 }}"""
 
 
@@ -735,9 +715,6 @@ class EventClassifier:
             extracted_contact_phone=data.get("extracted_contact_phone"),
             contact_confidence=data.get("contact_confidence", 0.0),
             extracted_organizer_directions=data.get("extracted_organizer_directions"),
-            # Improved description for event page
-            improved_description=data.get("improved_description"),
-            description_improvement_confidence=data.get("description_improvement_confidence", 0.0),
             # Cancellation
             is_cancelled_or_postponed=data.get("is_cancelled_or_postponed"),
             # Metadata

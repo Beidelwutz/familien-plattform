@@ -11,7 +11,6 @@ import { sendEventApprovedEmail, sendEventRejectedEmail } from '../lib/email.js'
 import { AI_THRESHOLDS, calculateCompleteness } from '../lib/eventCompleteness.js';
 import { canPublish } from '../lib/eventQuery.js';
 import { logger } from '../lib/logger.js';
-import { sanitizeImprovedDescriptionHtml, stripHtmlToText } from '../lib/merge.js';
 import { redis, isRedisAvailable } from '../lib/redis.js';
 import { logAdminAction, AuditAction } from '../lib/adminAudit.js';
 
@@ -3399,17 +3398,6 @@ router.post('/process-pending-ai', async (req: AuthRequest, res: Response, next:
             if (extEmail && typeof extEmail === 'string' && extEmail.trim()) updateData.contact_email = extEmail.trim();
             if (extPhone && typeof extPhone === 'string' && extPhone.trim()) updateData.contact_phone = extPhone.trim();
             if (extDirections && typeof extDirections === 'string' && extDirections.trim()) updateData.organizer_directions = extDirections.trim();
-          }
-          const descImproveConf = (classification as any).description_improvement_confidence ?? 0;
-          if (descImproveConf >= 0.6) {
-            const improved = (classification as any).improved_description;
-            if (improved && typeof improved === 'string' && improved.trim()) {
-              const sanitized = sanitizeImprovedDescriptionHtml(improved.trim());
-              if (sanitized) {
-                updateData.description_long = sanitized;
-                updateData.description_short = stripHtmlToText(sanitized).substring(0, 500);
-              }
-            }
           }
           
           // Update field_provenance for AI-set fields

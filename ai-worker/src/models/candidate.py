@@ -149,10 +149,6 @@ class AIClassification:
     # AI-extracted cancellation / availability
     is_cancelled_or_postponed: Optional[bool] = None
     
-    # AI-improved description for event page (simple HTML)
-    improved_description: Optional[str] = None
-    description_improvement_confidence: float = 0.0
-    
     # AI-generated summaries
     ai_summary_short: Optional[str] = None  # max 300 chars
     ai_summary_highlights: list[str] = field(default_factory=list)  # max 3 items
