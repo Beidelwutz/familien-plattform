@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     
     # AI Feature Flags
     enable_ai: bool = True  # Global AI kill switch
-    ai_low_cost_mode: bool = False  # Use cheaper/smaller models
+    ai_low_cost_mode: bool = True  # Use cheaper/smaller models (gpt-4o-mini); set False for gpt-4o
     ai_max_retries: int = 2  # Max retries for failed AI calls
     
     # AI Budget (nur App-seitig: stoppt Batch bei Überschreitung; OpenAI-Limit separat unter platform.openai.com einstellen)

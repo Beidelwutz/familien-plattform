@@ -362,7 +362,7 @@ class EventClassifier:
     MAX_TITLE_LENGTH = 200
     MAX_DESCRIPTION_LENGTH = 8000
     MAX_LOCATION_LENGTH = 300
-    MAX_DETAIL_PAGE_TEXT_LENGTH = 4000
+    MAX_DETAIL_PAGE_TEXT_LENGTH = 2500
     
     # Confidence thresholds for model escalation
     ESCALATE_CONFIDENCE_MIN = 0.60
@@ -458,7 +458,8 @@ class EventClassifier:
         return result
     
     def _should_escalate(self, result: ClassificationResult) -> bool:
-        """Check if result should be escalated to stronger model."""
+        """Check if result should be escalated to stronger model.
+        Escalation only for safety/quality flags, not for confidence gray zone (saves cost)."""
         # Don't escalate if already using strong model or low-cost mode is off
         if self.settings.ai_low_cost_mode is False:
             return False
@@ -471,10 +472,7 @@ class EventClassifier:
         if result.flags.get("needs_escalation", False):
             return True
         
-        # Escalate if confidence in gray zone
-        if self.ESCALATE_CONFIDENCE_MIN <= result.confidence <= self.ESCALATE_CONFIDENCE_MAX:
-            return True
-        
+        # No longer escalate on confidence gray zone to reduce double API calls
         return False
     
     def _sanitize_input(self, text: str, max_length: int) -> str:

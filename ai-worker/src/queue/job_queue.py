@@ -262,14 +262,9 @@ class JobQueue:
     # ==================== Cost Guard ====================
     
     def _get_cost_tracker(self):
-        """Lazy load cost tracker to avoid circular imports."""
-        if self._cost_tracker is None:
-            from src.monitoring.ai_cost_tracker import AICostTracker
-            self._cost_tracker = AICostTracker(
-                daily_limit_usd=self._settings.ai_daily_limit_usd,
-                monthly_limit_usd=self._settings.ai_monthly_limit_usd
-            )
-        return self._cost_tracker
+        """Use app-wide cost tracker (same as classifier/scorer) so budget sees crawl-job usage."""
+        from src.monitoring.ai_cost_tracker import get_cost_tracker
+        return get_cost_tracker()
     
     async def check_budget_for_ai_job(self) -> tuple[bool, bool, str]:
         """

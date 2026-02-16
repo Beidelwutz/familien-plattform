@@ -443,6 +443,15 @@ class PlanGenerator:
                 if success:
                     valid, validation_error = validate_plan(data)
                     if valid:
+                        try:
+                            usage = getattr(response, "usage", None)
+                            if usage is not None:
+                                inp = getattr(usage, "prompt_tokens", 0) or getattr(usage, "input_tokens", 0)
+                                out = getattr(usage, "completion_tokens", 0) or getattr(usage, "output_tokens", 0)
+                                from src.monitoring.ai_cost_tracker import get_cost_tracker
+                                get_cost_tracker().log_usage(model=model, operation="plan", input_tokens=inp, output_tokens=out)
+                        except Exception:
+                            pass
                         return self._create_plan_from_ai(data, request, weather, model)
                     error = validation_error
                 
@@ -487,6 +496,15 @@ class PlanGenerator:
                 if success:
                     valid, validation_error = validate_plan(data)
                     if valid:
+                        try:
+                            usage = getattr(response, "usage", None)
+                            if usage is not None:
+                                inp = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
+                                out = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
+                                from src.monitoring.ai_cost_tracker import get_cost_tracker
+                                get_cost_tracker().log_usage(model=model, operation="plan", input_tokens=inp, output_tokens=out)
+                        except Exception:
+                            pass
                         return self._create_plan_from_ai(data, request, weather, model)
                     error = validation_error
                 

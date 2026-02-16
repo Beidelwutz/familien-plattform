@@ -31,6 +31,7 @@ from src.models.candidate import (
     IngestBatchRequest,
 )
 from src.config import get_settings
+from src.monitoring.ai_cost_tracker import get_cost_tracker
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -368,17 +369,27 @@ async def enrich_with_ai(candidates: list[CanonicalCandidate]) -> list[Canonical
                 prompt_version=classification_result.prompt_version or "4.0.0",
             )
             
-            # Step 3: Scoring
-            scoring_result = await event_scorer.score(event_data)
-            
-            scores = AIScores(
-                relevance=scoring_result.relevance_score,
-                quality=scoring_result.quality_score,
-                family_fit=scoring_result.family_fit_score,
-                stressfree=scoring_result.stressfree_score,
-                confidence=scoring_result.confidence or 0.0,
-                model=scoring_result.model or 'unknown',
-            )
+            # Step 3: Scoring (skip API call for rule fast-track to save cost)
+            rule_fast_track = rule_result.is_relevant is True and rule_result.confidence >= 0.9
+            if rule_fast_track:
+                scores = AIScores(
+                    relevance=85,
+                    quality=70,
+                    family_fit=85,
+                    stressfree=70,
+                    confidence=rule_result.confidence,
+                    model="rule_fast_track",
+                )
+            else:
+                scoring_result = await event_scorer.score(event_data)
+                scores = AIScores(
+                    relevance=scoring_result.relevance_score,
+                    quality=scoring_result.quality_score,
+                    family_fit=scoring_result.family_fit_score,
+                    stressfree=scoring_result.stressfree_score,
+                    confidence=scoring_result.confidence or 0.0,
+                    model=scoring_result.model or "unknown",
+                )
             
             # Update candidate with AI suggestions
             candidate.ai = AISuggestions(
@@ -824,12 +835,21 @@ async def process_crawl_job(payload: dict) -> dict:
         for event in unique_events
     ]
     
-    # Step 4: Optional AI Enrichment
+    # Step 4: Optional AI Enrichment (skip if budget exceeded)
     if enable_ai:
-        if ingest_run_id:
-            await update_ingest_run(ingest_run_id, progress_message="KI-Anreicherung…")
-        logger.info("Running AI enrichment...")
-        candidates = await enrich_with_ai(candidates)
+        budget = get_cost_tracker().check_budget()
+        if not budget.can_proceed:
+            logger.warning(f"AI enrichment skipped: {budget.message}")
+            if ingest_run_id:
+                await update_ingest_run(
+                    ingest_run_id,
+                    progress_message=f"KI-Anreicherung übersprungen: {budget.message}",
+                )
+        else:
+            if ingest_run_id:
+                await update_ingest_run(ingest_run_id, progress_message="KI-Anreicherung…")
+            logger.info("Running AI enrichment...")
+            candidates = await enrich_with_ai(candidates)
 
     # Step 5: Dry-run → return candidates without ingesting
     if dry_run:
